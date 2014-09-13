@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -58,6 +59,23 @@ static void datasave(void);
 static void friendcreate(int32_t);
 
 static void
+masterout(const char *fmt, ...)
+{
+	FILE *fp;
+	va_list ap;
+
+	fp = fopen("master_out", "a");
+	if (!fp) {
+		perror("fopen");
+		exit(1);
+	}
+	va_start(ap, fmt);
+	vfprintf(fp, fmt, ap);
+	va_end(ap);
+	fclose(fp);
+}
+
+static void
 cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 {
 	struct friend *f;
@@ -74,14 +92,14 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 
 	if (n == 0) {
 		if (status == 0)
-			printf("Anonymous went offline\n");
+			masterout("Anonymous went offline\n");
 		else
-			printf("Anonymous came online\n");
+			masterout("Anonymous came online\n");
 	} else {
 		if (status == 0)
-			printf("%s went offline\n", name);
+			masterout("%s went offline\n", name);
 		else
-			printf("%s came online\n", name);
+			masterout("%s came online\n", name);
 	}
 
 	TAILQ_FOREACH(f, &friendhead, entry)
@@ -127,9 +145,9 @@ cb_friend_request(Tox *tox, const uint8_t *id, const uint8_t *data, uint16_t len
 	msg[len] = '\0';
 	tox_add_friend_norequest(tox, id);
 	if (len > 0)
-		printf("Accepted friend request with msg: %s\n", msg);
+		masterout("Accepted friend request with msg: %s\n", msg);
 	else
-		printf("Accepted friend request\n");
+		masterout("Accepted friend request\n");
 	datasave();
 }
 
@@ -158,9 +176,9 @@ cb_name_change(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *use
 			if (memcmp(f->namestr, name, len + 1) == 0)
 				break;
 			if (f->namestr[0] == '\0') {
-				printf("%s -> %s\n", "Anonymous", name);
+				masterout("%s -> %s\n", "Anonymous", name);
 			} else {
-				printf("%s -> %s\n", f->namestr, name);
+				masterout("%s -> %s\n", f->namestr, name);
 			}
 			memcpy(f->namestr, name, len + 1);
 			break;
@@ -191,7 +209,7 @@ cb_status_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 			fputs(status, fp);
 			fputc('\n', fp);
 			fclose(fp);
-			printf("%s current status to %s\n", f->namestr, status);
+			masterout("%s current status to %s\n", f->namestr, status);
 			break;
 		}
 	}
@@ -300,11 +318,10 @@ toxinit(void)
 	tox_set_user_status(tox, TOX_USERSTATUS_NONE);
 
 	tox_get_address(tox, address);
-	printf("ID: ");
+	masterout("ID: ");
 	for (i = 0; i < TOX_FRIEND_ADDRESS_SIZE; i++)
-		printf("%02x", address[i]);
-	putchar('\n');
-
+		masterout("%02x", address[i]);
+	masterout("\n");
 
 	return 0;
 }
@@ -422,14 +439,14 @@ loop(void)
 	while (1) {
 		if (tox_isconnected(tox) == 1) {
 			if (connected == 0) {
-				printf("Connected to DHT\n");
+				masterout("Connected to DHT\n");
 				connected = 1;
 			}
 		} else {
 			t1 = time(NULL);
 			if (t1 > t0 + 5) {
 				t0 = time(NULL);
-				printf("Connecting to DHT...\n");
+				masterout("Connecting to DHT...\n");
 				toxconnect();
 			}
 		}
