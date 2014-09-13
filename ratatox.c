@@ -242,6 +242,7 @@ cb_status_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 
 	memcpy(status, data, len);
 	status[len] = '\0';
+
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
 			snprintf(path, sizeof(path), "%s/status", f->idstr);
@@ -496,6 +497,7 @@ loop(void)
 			}
 		}
 		tox_do(tox);
+
 		FD_ZERO(&rfds);
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			for (i = 0; i < NR_FIFOS; i++) {
@@ -504,6 +506,7 @@ loop(void)
 				FD_SET(f->fd[i], &rfds);
 			}
 		}
+
 		tv.tv_sec = 0;
 		tv.tv_usec = tox_do_interval(tox) * 1000;
 		n = select(fdmax + 1, &rfds, NULL, NULL,
@@ -514,6 +517,7 @@ loop(void)
 			perror("select");
 			exit(1);
 		}
+
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			for (i = 0; i < NR_FIFOS; i++) {
 				if (FD_ISSET(f->fd[i], &rfds) == 0)
