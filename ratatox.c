@@ -166,8 +166,7 @@ cb_friend_message(Tox *tox, int32_t fid, const uint8_t *data, uint16_t len, void
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			snprintf(path, sizeof(path), "%s:%d/text_out",
-				 f->namestr, f->fid);
+			snprintf(path, sizeof(path), "%s/text_out", f->idstr);
 			fp = fopen(path, "a");
 			if (!fp) {
 				perror("fopen");
