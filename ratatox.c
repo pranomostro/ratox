@@ -284,7 +284,7 @@ dataload(void)
 	size_t sz;
 	uint8_t *data;
 
-	fp = fopen("toxcli.data", "r");
+	fp = fopen("ratatox.data", "r");
 	if (!fp)
 		return;
 
@@ -299,7 +299,7 @@ dataload(void)
 	}
 
 	if (fread(data, 1, sz, fp) != sz) {
-		fprintf(stderr, "failed to read toxcli.data\n");
+		fprintf(stderr, "failed to read ratatox.data\n");
 		exit(1);
 	}
 	tox_load(tox, data, sz);
@@ -315,9 +315,9 @@ datasave(void)
 	size_t sz;
 	uint8_t *data;
 
-	fp = fopen("toxcli.data", "w");
+	fp = fopen("ratatox.data", "w");
 	if (!fp) {
-		fprintf(stderr, "can't open toxcli.data for writing\n");
+		fprintf(stderr, "can't open ratatox.data for writing\n");
 		exit(1);
 	}
 
@@ -330,7 +330,7 @@ datasave(void)
 
 	tox_save(tox, data);
 	if (fwrite(data, 1, sz, fp) != sz) {
-		fprintf(stderr, "failed to write toxcli.data\n");
+		fprintf(stderr, "failed to write ratatox.data\n");
 		exit(1);
 	}
 
