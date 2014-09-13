@@ -525,6 +525,7 @@ loop(void)
 				switch (i) {
 				case TEXT_IN_FIFO:
 					send_friend_text(f);
+					break;
 				default:
 					fputs("Unhandled FIFO read\n", stderr);
 				}
