@@ -112,7 +112,7 @@ struct friend {
 	TAILQ_ENTRY(friend) entry;
 };
 
-static TAILQ_HEAD(friendhead, friend) friendhead;
+static TAILQ_HEAD(friendhead, friend) friendhead = TAILQ_HEAD_INITIALIZER(friendhead);
 
 static Tox *tox;
 static void dataload(void);
@@ -454,8 +454,6 @@ friendload(void)
 	uint32_t i, j;
 	int n;
 	char name[TOX_MAX_NAME_LENGTH + 1];
-
-	TAILQ_INIT(&friendhead);
 
 	sz = tox_count_friendlist(tox);
 	fids = malloc(sz);
