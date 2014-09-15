@@ -85,6 +85,8 @@ static void friendload(void);
 static int cmdrun(void);
 static int doaccept(char *, size_t);
 static int dofriend(char *, size_t);
+static int doid(char *, size_t);
+static int doname(char *, size_t);
 static int dohelp(char *, size_t);
 static void loop(void);
 
@@ -447,7 +449,7 @@ toxinit(void)
 	tox_callback_friend_request(tox, cb_friend_request, NULL);
 	tox_callback_name_change(tox, cb_name_change, NULL);
 	tox_callback_status_message(tox, cb_status_message, NULL);
-	tox_set_name(tox, "TLH", strlen("TLH"));
+	tox_set_name(tox, "ratatox", strlen("ratatox"));
 	tox_set_user_status(tox, TOX_USERSTATUS_NONE);
 
 	tox_get_address(tox, address);
@@ -571,8 +573,10 @@ struct cmd {
 	int (*cb)(char *, size_t);
 	const char *usage;
 } cmds[] = {
-	{ .cmd = "a", .cb = doaccept, .usage = "usage: a [ID]\tAccept or list pending requests\n" },
-	{ .cmd = "f", .cb = dofriend, .usage = "usage: f ID\tSend friend request to ID\n" },
+	{ .cmd = "a", .cb = doaccept, .usage = "usage: a [id]\tAccept or list pending requests\n" },
+	{ .cmd = "f", .cb = dofriend, .usage = "usage: f id\tSend friend request to ID\n" },
+	{ .cmd = "i", .cb = doid,     .usage = "usage: i\tShow ID\n" },
+	{ .cmd = "n", .cb = doname,   .usage = "usage: n [name]\tChange or show current name\n" },
 	{ .cmd = "h", .cb = dohelp,   .usage = NULL },
 };
 
@@ -581,12 +585,12 @@ doaccept(char *cmd, size_t sz)
 {
 	struct request *req, *tmp;
 	char *args[2];
-	int n;
+	int r;
 	int found = 0;
 
-	n = tokenize(cmd, args, 2);
+	r = tokenize(cmd, args, 2);
 
-	if (n == 1) {
+	if (r == 1) {
 		TAILQ_FOREACH(req, &reqhead, entry) {
 			printf("Pending request from %s with message: %s\n",
 			       req->idstr, req->msgstr);
@@ -648,6 +652,41 @@ dofriend(char *cmd, size_t sz)
 		printf("Friend request sent\n");
 		break;
 	}
+	return 0;
+}
+
+static int
+doid(char *cmd, size_t sz)
+{
+	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
+	int i;
+
+	tox_get_address(tox, address);
+	for (i = 0; i < TOX_FRIEND_ADDRESS_SIZE; i++)
+		printf("%02x", address[i]);
+	printf("\n");
+	return 0;
+}
+
+static int
+doname(char *cmd, size_t sz)
+{
+	char *args[2];
+	char name[TOX_MAX_NAME_LENGTH + 1];
+	uint8_t len;
+	int r;
+
+	r = tokenize(cmd, args, 2);
+
+	if (r == 1) {
+		len = tox_get_self_name(tox, name);
+		name[len] = '\0';
+		printf("%s\n", name);
+	} else {
+		tox_set_name(tox, args[1], strlen(args[1]));
+		datasave();
+	}
+
 	return 0;
 }
 
