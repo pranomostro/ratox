@@ -449,8 +449,6 @@ toxinit(void)
 	tox_callback_friend_request(tox, cb_friend_request, NULL);
 	tox_callback_name_change(tox, cb_name_change, NULL);
 	tox_callback_status_message(tox, cb_status_message, NULL);
-	tox_set_name(tox, "ratatox", strlen("ratatox"));
-	tox_set_user_status(tox, TOX_USERSTATUS_NONE);
 
 	tox_get_address(tox, address);
 	printf("ID: ");
