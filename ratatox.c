@@ -203,6 +203,7 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 	FILE *fp;
 	struct friend *f;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
+	uint8_t statusmsg[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
 	uint8_t *nick;
 	int n;
 
@@ -219,6 +220,14 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
 			blabla(f, "online", "w", status == 0 ? "0\n" : "1\n");
+			if (status == 1) {
+				blabla(f, "name", "w", "%s\n", name);
+				n = tox_get_status_message_size(tox, fid);
+				if (n > TOX_MAX_STATUSMESSAGE_LENGTH + 1)
+					n = TOX_MAX_STATUSMESSAGE_LENGTH;
+				statusmsg[n] = '\0';
+				blabla(f, "statusmsg", "w", "%s\n", statusmsg);
+			}
 			return;
 		}
 	}
