@@ -298,11 +298,8 @@ cb_name_change(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *use
 			blabla(f, "name", "w", "%s\n", name);
 			if (memcmp(f->namestr, name, len + 1) == 0)
 				break;
-			if (f->namestr[0] == '\0') {
-				printf("%s -> %s\n", "Anonymous", name);
-			} else {
-				printf("%s -> %s\n", f->namestr, name);
-			}
+			printf("%s -> %s\n", f->namestr[0] == '\0' ?
+			       (uint8_t *)"Anonymous" : f->namestr, name);
 			memcpy(f->namestr, name, len + 1);
 			break;
 		}
