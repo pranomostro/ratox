@@ -500,6 +500,7 @@ str2id(uint8_t *idstr, uint8_t *id)
 static void
 friendcreate(int32_t fid)
 {
+	FILE *fp;
 	struct friend *f;
 	char path[PATH_MAX];
 	int i;
@@ -543,6 +544,15 @@ friendcreate(int32_t fid)
 		}
 		f->fd[i] = r;
 	}
+
+	snprintf(path, sizeof(path), "%s/text_out", f->idstr);
+	fp = fopen(path, "a");
+	if (!fp) {
+		perror("fopen");
+		exit(1);
+	}
+	fclose(fp);
+
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
 }
 
