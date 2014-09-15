@@ -17,6 +17,7 @@
 
 #include <tox/tox.h>
 
+#include "arg.h"
 #include "queue.h"
 
 #define LEN(x) (sizeof (x) / sizeof *(x))
@@ -62,6 +63,8 @@ struct request {
 	char *msgstr;
 	TAILQ_ENTRY(request) entry;
 };
+
+char *argv0;
 
 static TAILQ_HEAD(friendhead, friend) friendhead = TAILQ_HEAD_INITIALIZER(friendhead);
 static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
@@ -791,7 +794,7 @@ loop(void)
 }
 
 int
-main(void)
+main(int argc, char *argv[])
 {
 	printbanner();
 	toxinit();
