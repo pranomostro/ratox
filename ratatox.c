@@ -88,6 +88,7 @@ static int dofriend(char *, size_t);
 static int doid(char *, size_t);
 static int doname(char *, size_t);
 static int dohelp(char *, size_t);
+static void blabla(struct friend *, const char *, const char *, const char *, ...);
 static void loop(void);
 
 static char qsep[] = " \t\r\n";
@@ -203,7 +204,6 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 	struct friend *f;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
 	uint8_t *nick;
-	char path[PATH_MAX];
 	int n;
 
 	n = tox_get_name(tox, fid, name);
@@ -216,20 +216,15 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 	printf("%s %s\n", n == 0 ? (uint8_t *)"Anonymous" : name,
 	       status == 0 ? "went offline" : "came online");
 
-	snprintf(path, sizeof(path), "%s/online", f->idstr);
-	fp = fopen(path, "w");
-	if (!fp) {
-		perror("fopen");
-		exit(1);
-	}
-	fputs(status == 0 ? "0\n" : "1\n", fp);
-	fclose(fp);
-
-	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->fid == fid)
+	TAILQ_FOREACH(f, &friendhead, entry) {
+		if (f->fid == fid) {
+			blabla(f, "online", "w", status == 0 ? "0\n" : "1\n");
 			return;
+		}
+	}
 
 	friendcreate(fid);
+	blabla(f, "online", "w", status == 0 ? "0\n" : "1\n");
 }
 
 static void
@@ -238,22 +233,13 @@ cb_friend_message(Tox *tox, int32_t fid, const uint8_t *data, uint16_t len, void
 	FILE *fp;
 	struct friend *f;
 	uint8_t msg[len + 1];
-	char path[PATH_MAX];
 
 	memcpy(msg, data, len);
 	msg[len] = '\0';
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			snprintf(path, sizeof(path), "%s/text_out", f->idstr);
-			fp = fopen(path, "a");
-			if (!fp) {
-				perror("fopen");
-				exit(1);
-			}
-			fputs(msg, fp);
-			fputc('\n', fp);
-			fclose(fp);
+			blabla(f, "text_out", "a", "%s\n", msg);
 			break;
 		}
 	}
@@ -292,7 +278,6 @@ static void
 cb_name_change(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *user)
 {
 	FILE *fp;
-	char path[PATH_MAX];
 	struct friend *f;
 	uint8_t name[len + 1];
 
@@ -301,15 +286,7 @@ cb_name_change(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *use
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			snprintf(path, sizeof(path), "%s/name", f->idstr);
-			fp = fopen(path, "w");
-			if (!fp) {
-				perror("fopen");
-				exit(1);
-			}
-			fputs(name, fp);
-			fputc('\n', fp);
-			fclose(fp);
+			blabla(f, "name", "w", "%s\n", name);
 			if (memcmp(f->namestr, name, len + 1) == 0)
 				break;
 			if (f->namestr[0] == '\0') {
@@ -328,25 +305,16 @@ static void
 cb_status_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *udata)
 {
 	FILE *fp;
-	char path[PATH_MAX];
 	struct friend *f;
-	uint8_t status[len + 1];
+	uint8_t statusmsg[len + 1];
 
-	memcpy(status, data, len);
-	status[len] = '\0';
+	memcpy(statusmsg, data, len);
+	statusmsg[len] = '\0';
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			snprintf(path, sizeof(path), "%s/statusmsg", f->idstr);
-			fp = fopen(path, "w");
-			if (!fp) {
-				perror("fopen");
-				exit(1);
-			}
-			fputs(status, fp);
-			fputc('\n', fp);
-			fclose(fp);
-			printf("%s current status to %s\n", f->namestr, status);
+			blabla(f, "statusmsg", "w", "%s\n", statusmsg);
+			printf("%s current status to %s\n", f->namestr, statusmsg);
 			break;
 		}
 	}
@@ -503,8 +471,8 @@ static void
 friendcreate(int32_t fid)
 {
 	FILE *fp;
-	struct friend *f;
 	char path[PATH_MAX];
+	struct friend *f;
 	int i;
 	int r;
 
@@ -547,23 +515,8 @@ friendcreate(int32_t fid)
 		f->fd[i] = r;
 	}
 
-	snprintf(path, sizeof(path), "%s/text_out", f->idstr);
-	fp = fopen(path, "a");
-	if (!fp) {
-		perror("fopen");
-		exit(1);
-	}
-	fclose(fp);
-
-	snprintf(path, sizeof(path), "%s/online", f->idstr);
-	fp = fopen(path, "w");
-	if (!fp) {
-		perror("fopen");
-		exit(1);
-	}
-	/* friend is offline by default */
-	fputs("0\n", fp);
-	fclose(fp);
+	blabla(f, "text_out", "a", "");
+	blabla(f, "online", "w", "0\n");
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
 }
@@ -755,6 +708,26 @@ again:
 
 	fprintf(stderr, "Unknown command '%s', type h for help\n", cmd);
 	return -1;
+}
+
+static void
+blabla(struct friend *f, const char *file, const char *mode,
+       const char *fmt, ...)
+{
+	FILE *fp;
+	char path[PATH_MAX];
+	va_list ap;
+
+	snprintf(path, sizeof(path), "%s/%s", f->idstr, file);
+	fp = fopen(path, mode);
+	if (!fp) {
+		perror("fopen");
+		exit(1);
+	}
+	va_start(ap, fmt);
+	vfprintf(fp, fmt, ap);
+	va_end(ap);
+	fclose(fp);
 }
 
 static void
