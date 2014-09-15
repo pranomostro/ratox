@@ -77,6 +77,7 @@ static void cb_friend_message(Tox *, int32_t, const uint8_t *, uint16_t, void *)
 static void cb_friend_request(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
 static void cb_name_change(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cb_status_message(Tox *, int32_t, const uint8_t *, uint16_t, void *);
+static void cb_user_status(Tox *, int32_t, uint8_t, void *);
 static void send_friend_text(struct friend *);
 static void dataload(void);
 static void datasave(void);
@@ -183,7 +184,7 @@ printout(const char *fmt, ...)
 }
 
 static void
-cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
+cb_conn_status(Tox *m, int32_t fid, uint8_t status, void *udata)
 {
 	struct friend *f;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
@@ -210,7 +211,7 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 }
 
 static void
-cb_friend_message(Tox *tox, int32_t fid, const uint8_t *data, uint16_t len, void *udata)
+cb_friend_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *udata)
 {
 	struct friend *f;
 	uint8_t msg[len + 1];
@@ -231,7 +232,7 @@ cb_friend_message(Tox *tox, int32_t fid, const uint8_t *data, uint16_t len, void
 }
 
 static void
-cb_friend_request(Tox *tox, const uint8_t *id, const uint8_t *data, uint16_t len, void *udata)
+cb_friend_request(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, void *udata)
 {
 	struct request *req;
 
@@ -299,6 +300,26 @@ cb_status_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 		}
 	}
 	datasave();
+}
+
+static void
+cb_user_status(Tox *m, int32_t fid, uint8_t status, void *udata)
+{
+	struct friend *f;
+	char *statusstr[] = { "none", "away", "busy" };
+
+	if (status >= LEN(statusstr)) {
+		fprintf(stderr, "received invalid user status: %d\n", status);
+		return;
+	}
+
+	TAILQ_FOREACH(f, &friendhead, entry) {
+		if (f->fid == fid) {
+			printout("%s changed user status: %s\n", f->namestr,
+			         statusstr[status]);
+			break;
+		}
+	}
 }
 
 static void
@@ -403,6 +424,7 @@ toxinit(void)
 	tox_callback_friend_request(tox, cb_friend_request, NULL);
 	tox_callback_name_change(tox, cb_name_change, NULL);
 	tox_callback_status_message(tox, cb_status_message, NULL);
+	tox_callback_user_status(tox, cb_user_status, NULL);
 
 	tox_get_address(tox, address);
 	printf("ID: ");
