@@ -80,7 +80,7 @@ static int toxinit(void);
 static int toxconnect(void);
 static void id2str(uint8_t *, uint8_t *);
 static void str2id(uint8_t *, uint8_t *);
-static void friendcreate(int32_t);
+static struct friend *friendcreate(int32_t);
 static void friendload(void);
 static int cmdrun(void);
 static int doaccept(char *, size_t);
@@ -223,7 +223,7 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 		}
 	}
 
-	friendcreate(fid);
+	f = friendcreate(fid);
 	blabla(f, "online", "w", status == 0 ? "0\n" : "1\n");
 }
 
@@ -467,7 +467,7 @@ str2id(uint8_t *idstr, uint8_t *id)
 		sscanf(p, "%2hhx", &id[i]);
 }
 
-static void
+static struct friend *
 friendcreate(int32_t fid)
 {
 	FILE *fp;
@@ -519,6 +519,8 @@ friendcreate(int32_t fid)
 	blabla(f, "online", "w", "0\n");
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
+
+	return f;
 }
 
 static void
