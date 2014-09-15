@@ -217,23 +217,21 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 	printf("%s %s\n", n == 0 ? (uint8_t *)"Anonymous" : name,
 	       status == 0 ? "went offline" : "came online");
 
-	TAILQ_FOREACH(f, &friendhead, entry) {
-		if (f->fid == fid) {
-			blabla(f, "online", "w", status == 0 ? "0\n" : "1\n");
-			if (status == 1) {
-				blabla(f, "name", "w", "%s\n", name);
-				n = tox_get_status_message_size(tox, fid);
-				if (n > TOX_MAX_STATUSMESSAGE_LENGTH + 1)
-					n = TOX_MAX_STATUSMESSAGE_LENGTH;
-				statusmsg[n] = '\0';
-				blabla(f, "statusmsg", "w", "%s\n", statusmsg);
-			}
-			return;
-		}
-	}
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->fid == fid)
+			goto out;
 
 	f = friendcreate(fid);
+out:
 	blabla(f, "online", "w", status == 0 ? "0\n" : "1\n");
+	if (status == 1) {
+		blabla(f, "name", "w", "%s\n", name);
+		n = tox_get_status_message_size(tox, fid);
+		if (n > TOX_MAX_STATUSMESSAGE_LENGTH + 1)
+			n = TOX_MAX_STATUSMESSAGE_LENGTH;
+		statusmsg[n] = '\0';
+		blabla(f, "statusmsg", "w", "%s\n", statusmsg);
+	}
 }
 
 static void
