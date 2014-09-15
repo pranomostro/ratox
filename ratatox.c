@@ -71,7 +71,7 @@ static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
 
 static Tox *tox;
 
-static void printbanner(void);
+static void printrat(void);
 static void cb_conn_status(Tox *, int32_t, uint8_t, void *);
 static void cb_friend_message(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cb_friend_request(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
@@ -155,7 +155,7 @@ tokenize(char *s, char **args, int maxargs)
 }
 
 static void
-printbanner(void)
+printrat(void)
 {
 	printf("\033[31m");
 	printf("                       ,     .\n");
@@ -823,7 +823,7 @@ loop(void)
 int
 main(int argc, char *argv[])
 {
-	printbanner();
+	printrat();
 	printf("Type h for help\n");
 	toxinit();
 	friendload();
