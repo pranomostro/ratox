@@ -569,11 +569,11 @@ friendload(void)
 struct cmd {
 	const char *cmd;
 	int (*cb)(char *, size_t);
-	const char *helpstr;
+	const char *usage;
 } cmds[] = {
-	{ .cmd = "a", .cb = doaccept, .helpstr = "usage: a [ID]\tAccept or list pending requests\n" },
-	{ .cmd = "f", .cb = dofriend, .helpstr = "usage: f ID\tSend friend request to ID\n" },
-	{ .cmd = "h", .cb = dohelp,   .helpstr = NULL },
+	{ .cmd = "a", .cb = doaccept, .usage = "usage: a [ID]\tAccept or list pending requests\n" },
+	{ .cmd = "f", .cb = dofriend, .usage = "usage: f ID\tSend friend request to ID\n" },
+	{ .cmd = "h", .cb = dohelp,   .usage = NULL },
 };
 
 static int
@@ -657,8 +657,8 @@ dohelp(char *cmd, size_t sz)
 	size_t i;
 
 	for (i = 0; i < LEN(cmds); i++)
-		if (cmds[i].helpstr)
-			printf("%s", cmds[i].helpstr);
+		if (cmds[i].usage)
+			printf("%s", cmds[i].usage);
 	return 0;
 }
 
