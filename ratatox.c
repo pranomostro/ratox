@@ -663,7 +663,7 @@ dofriend(char *cmd, size_t sz)
 		printf("Friend request sent\n");
 		break;
 	}
-	davesave();
+	datasave();
 	return 0;
 }
 
