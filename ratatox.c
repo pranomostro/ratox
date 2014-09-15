@@ -518,7 +518,7 @@ friendcreate(int32_t fid)
 	blabla(f, "online", "w",
 	       tox_get_friend_connection_status(tox, fid) == 0 ? "0\n" : "1\n");
 	r = tox_get_status_message_size(tox, fid);
-	if (r > TOX_MAX_STATUSMESSAGE_LENGTH + 1)
+	if (r > TOX_MAX_STATUSMESSAGE_LENGTH)
 		r = TOX_MAX_STATUSMESSAGE_LENGTH;
 	statusmsg[r] = '\0';
 	blabla(f, "statusmsg", "w", "%s\n", statusmsg);
