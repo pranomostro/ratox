@@ -226,6 +226,7 @@ cb_friend_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 			t = time(NULL);
 			strftime(buft, sizeof(buft), "%F %R", localtime(&t));
 			writeparam(f, "text_out", "a", "%s %s\n", buft, msg);
+			printout("%s %s\n", f->namestr, msg);
 			break;
 		}
 	}
