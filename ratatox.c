@@ -20,6 +20,7 @@
 #include "queue.h"
 
 #define LEN(x) (sizeof (x) / sizeof *(x))
+#define DATAFILE "ratatox.data"
 
 struct bootstrapnode {
 	char *addr;
@@ -75,7 +76,6 @@ static void cb_status_message(Tox *, int32_t, const uint8_t *, uint16_t, void *)
 static void send_friend_text(struct friend *);
 static void dataload(void);
 static void datasave(void);
-static void toxrestore(void);
 static int toxinit(void);
 static int toxconnect(void);
 static void id2str(uint8_t *, uint8_t *);
@@ -204,16 +204,16 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 	struct friend *f;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
 	uint8_t *nick;
-	int n;
+	int r;
 
-	n = tox_get_name(tox, fid, name);
-	if (n < 0) {
+	r = tox_get_name(tox, fid, name);
+	if (r < 0) {
 		fprintf(stderr, "tox_get_name() on fid %d failed\n", fid);
 		exit(1);
 	}
-	name[n] = '\0';
+	name[r] = '\0';
 
-	printf("%s %s\n", n == 0 ? (uint8_t *)"Anonymous" : name,
+	printf("%s %s\n", r == 0 ? (uint8_t *)"Anonymous" : name,
 	       status == 0 ? "went offline" : "came online");
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
@@ -310,7 +310,7 @@ cb_status_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
 			blabla(f, "statusmsg", "w", "%s\n", statusmsg);
-			printf("%s current status to %s\n", f->namestr, statusmsg);
+			printf("%s has status: %s\n", f->namestr, statusmsg);
 			break;
 		}
 	}
@@ -342,8 +342,9 @@ dataload(void)
 	FILE *fp;
 	size_t sz;
 	uint8_t *data;
+	int r;
 
-	fp = fopen("ratatox.data", "r");
+	fp = fopen(DATAFILE, "r");
 	if (!fp)
 		return;
 
@@ -357,11 +358,17 @@ dataload(void)
 		exit(1);
 	}
 
-	if (fread(data, 1, sz, fp) != sz) {
-		fprintf(stderr, "failed to read ratatox.data\n");
+	if (fread(data, 1, sz, fp) != sz || ferror(fp)) {
+		fprintf(stderr, "failed to read %s\n", DATAFILE);
 		exit(1);
 	}
-	tox_load(tox, data, sz);
+	r = tox_load(tox, data, sz);
+	if (r < 0) {
+		fprintf(stderr, "tox_load() failed\n");
+		exit(1);
+	}
+	if (r == 1)
+		printf("Found encrypted data in %s\n", DATAFILE);
 
 	free(data);
 	fclose(fp);
@@ -374,9 +381,9 @@ datasave(void)
 	size_t sz;
 	uint8_t *data;
 
-	fp = fopen("ratatox.data", "w");
+	fp = fopen(DATAFILE, "w");
 	if (!fp) {
-		fprintf(stderr, "can't open ratatox.data for writing\n");
+		fprintf(stderr, "can't open %s for writing\n", DATAFILE);
 		exit(1);
 	}
 
@@ -388,20 +395,13 @@ datasave(void)
 	}
 
 	tox_save(tox, data);
-	if (fwrite(data, 1, sz, fp) != sz) {
-		fprintf(stderr, "failed to write ratatox.data\n");
+	if (fwrite(data, 1, sz, fp) != sz || ferror(fp)) {
+		fprintf(stderr, "failed to write %s\n", DATAFILE);
 		exit(1);
 	}
 
 	free(data);
 	fclose(fp);
-}
-
-static void
-toxrestore(void)
-{
-	dataload();
-	datasave();
 }
 
 static int
@@ -410,8 +410,10 @@ toxinit(void)
 	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
 	int i;
 
+	/* IPv4 only */
 	tox = tox_new(0);
-	toxrestore();
+	dataload();
+	datasave();
 	tox_callback_connection_status(tox, cb_conn_status, NULL);
 	tox_callback_friend_message(tox, cb_friend_message, NULL);
 	tox_callback_friend_request(tox, cb_friend_request, NULL);
