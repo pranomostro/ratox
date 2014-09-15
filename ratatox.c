@@ -189,7 +189,7 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 	r = tox_get_name(tox, fid, name);
 	if (r < 0) {
 		fprintf(stderr, "tox_get_name() on fid %d failed\n", fid);
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	name[r] = '\0';
 
@@ -231,7 +231,7 @@ cb_friend_request(Tox *tox, const uint8_t *id, const uint8_t *data, uint16_t len
 	req = calloc(1, sizeof(*req));
 	if (!req) {
 		perror("calloc");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	memcpy(req->id, id, TOX_CLIENT_ID_SIZE);
 	id2str(req->id, req->idstr);
@@ -240,7 +240,7 @@ cb_friend_request(Tox *tox, const uint8_t *id, const uint8_t *data, uint16_t len
 		req->msgstr = malloc(len + 1);
 		if (!req->msgstr) {
 			perror("malloc");
-			exit(1);
+			exit(EXIT_FAILURE);
 		}
 		memcpy(req->msgstr, data, len);
 		req->msgstr[len] = '\0';
@@ -306,7 +306,7 @@ again:
 		if (errno == EINTR)
 			goto again;
 		perror("read");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	if (buf[n - 1] == '\n')
 		n--;
@@ -332,17 +332,17 @@ dataload(void)
 	data = malloc(sz);
 	if (!data) {
 		perror("malloc");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	if (fread(data, 1, sz, fp) != sz || ferror(fp)) {
 		fprintf(stderr, "failed to read %s\n", DATAFILE);
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	r = tox_load(tox, data, sz);
 	if (r < 0) {
 		fprintf(stderr, "tox_load() failed\n");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	if (r == 1)
 		printf("Found encrypted data in %s\n", DATAFILE);
@@ -361,20 +361,20 @@ datasave(void)
 	fp = fopen(DATAFILE, "w");
 	if (!fp) {
 		fprintf(stderr, "can't open %s for writing\n", DATAFILE);
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	sz = tox_size(tox);
 	data = malloc(sz);
 	if (!data) {
 		perror("malloc");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	tox_save(tox, data);
 	if (fwrite(data, 1, sz, fp) != sz || ferror(fp)) {
 		fprintf(stderr, "failed to write %s\n", DATAFILE);
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	free(data);
@@ -454,13 +454,13 @@ friendcreate(int32_t fid)
 	f = calloc(1, sizeof(*f));
 	if (!f) {
 		perror("calloc");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	r = tox_get_name(tox, fid, f->namestr);
 	if (r < 0) {
 		fprintf(stderr, "tox_get_name() on fid %d failed\n", fid);
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	f->namestr[r] = '\0';
 
@@ -471,7 +471,7 @@ friendcreate(int32_t fid)
 	r = mkdir(f->idstr, 0755);
 	if (r < 0 && errno != EEXIST) {
 		perror("mkdir");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	for (i = 0; i < LEN(fifos); i++) {
@@ -480,12 +480,12 @@ friendcreate(int32_t fid)
 		r = mkfifo(path, fifos[i].mode);
 		if (r < 0 && errno != EEXIST) {
 			perror("mkfifo");
-			exit(1);
+			exit(EXIT_FAILURE);
 		}
 		r = open(path, fifos[i].flags, 0);
 		if (r < 0) {
 			perror("open");
-			exit(1);
+			exit(EXIT_FAILURE);
 		}
 		f->fd[i] = r;
 	}
@@ -516,7 +516,7 @@ friendload(void)
 	fids = malloc(sz);
 	if (!fids) {
 		perror("malloc");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	tox_get_friendlist(tox, fids, sz);
@@ -674,7 +674,7 @@ again:
 		if (errno == EINTR)
 			goto again;
 		perror("read");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	if (n == 0)
 		return 0;
@@ -705,7 +705,7 @@ blabla(struct friend *f, const char *file, const char *mode,
 	fp = fopen(path, mode);
 	if (!fp) {
 		perror("fopen");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	va_start(ap, fmt);
 	vfprintf(fp, fmt, ap);
@@ -762,7 +762,7 @@ loop(void)
 			if (errno == EINTR)
 				continue;
 			perror("select");
-			exit(1);
+			exit(EXIT_FAILURE);
 		}
 		if (n == 0)
 			continue;
@@ -793,5 +793,5 @@ main(void)
 	toxinit();
 	friendload();
 	loop();
-	return 0;
+	return EXIT_SUCCESS;
 }
