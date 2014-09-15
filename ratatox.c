@@ -153,6 +153,7 @@ tokenize(char *s, char **args, int maxargs)
 static void
 printbanner(void)
 {
+	printf("\033[31m");
 	printf("                       ,     .\n");
 	printf("                       (\\,;,/)\n");
 	printf("                        (o o)\\//,\n");
@@ -160,6 +161,7 @@ printbanner(void)
 	printf("                         `+'(  (   \\    )\n");
 	printf("                            //  \\   |_./\n");
 	printf("                          '~' '~----'\tratatox v0.0\n");
+	printf("\033[0m");
 }
 
 static void
