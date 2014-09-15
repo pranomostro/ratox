@@ -199,9 +199,11 @@ tokenize(char *s, char **args, int maxargs)
 static void
 cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 {
+	FILE *fp;
 	struct friend *f;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
 	uint8_t *nick;
+	char path[PATH_MAX];
 	int n;
 
 	n = tox_get_name(tox, fid, name);
@@ -211,17 +213,17 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 	}
 	name[n] = '\0';
 
-	if (n == 0) {
-		if (status == 0)
-			printf("Anonymous went offline\n");
-		else
-			printf("Anonymous came online\n");
-	} else {
-		if (status == 0)
-			printf("%s went offline\n", name);
-		else
-			printf("%s came online\n", name);
+	printf("%s %s\n", n == 0 ? (uint8_t *)"Anonymous" : name,
+	       status == 0 ? "went offline" : "came online");
+
+	snprintf(path, sizeof(path), "%s/online", f->idstr);
+	fp = fopen(path, "w");
+	if (!fp) {
+		perror("fopen");
+		exit(1);
 	}
+	fputs(status == 0 ? "0\n" : "1\n", fp);
+	fclose(fp);
 
 	TAILQ_FOREACH(f, &friendhead, entry)
 		if (f->fid == fid)
@@ -551,6 +553,16 @@ friendcreate(int32_t fid)
 		perror("fopen");
 		exit(1);
 	}
+	fclose(fp);
+
+	snprintf(path, sizeof(path), "%s/online", f->idstr);
+	fp = fopen(path, "w");
+	if (!fp) {
+		perror("fopen");
+		exit(1);
+	}
+	/* friend is offline by default */
+	fputs("0\n", fp);
 	fclose(fp);
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
