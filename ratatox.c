@@ -87,11 +87,11 @@ static void str2id(char *, uint8_t *);
 static struct friend *friendcreate(int32_t);
 static void friendload(void);
 static int cmdrun(void);
-static int doaccept(char *, size_t);
-static int dofriend(char *, size_t);
-static int doid(char *, size_t);
-static int doname(char *, size_t);
-static int dohelp(char *, size_t);
+static int cmdaccept(char *, size_t);
+static int cmdfriend(char *, size_t);
+static int cmdid(char *, size_t);
+static int cmdname(char *, size_t);
+static int cmdhelp(char *, size_t);
 static void writeparam(struct friend *, const char *, const char *, const char *, ...);
 static void loop(void);
 
@@ -539,15 +539,15 @@ struct cmd {
 	int (*cb)(char *, size_t);
 	const char *usage;
 } cmds[] = {
-	{ .cmd = "a", .cb = doaccept, .usage = "usage: a [id]\tAccept or list pending requests\n" },
-	{ .cmd = "f", .cb = dofriend, .usage = "usage: f id\tSend friend request to ID\n" },
-	{ .cmd = "i", .cb = doid,     .usage = "usage: i\tShow ID\n" },
-	{ .cmd = "n", .cb = doname,   .usage = "usage: n [name]\tChange or show current name\n" },
-	{ .cmd = "h", .cb = dohelp,   .usage = NULL },
+	{ .cmd = "a", .cb = cmdaccept, .usage = "usage: a [id]\tAccept or list pending requests\n" },
+	{ .cmd = "f", .cb = cmdfriend, .usage = "usage: f id\tSend friend request to ID\n" },
+	{ .cmd = "i", .cb = cmdid,     .usage = "usage: i\tShow ID\n" },
+	{ .cmd = "n", .cb = cmdname,   .usage = "usage: n [name]\tChange or show current name\n" },
+	{ .cmd = "h", .cb = cmdhelp,   .usage = NULL },
 };
 
 static int
-doaccept(char *cmd, size_t sz)
+cmdaccept(char *cmd, size_t sz)
 {
 	struct request *req, *tmp;
 	char *args[2];
@@ -583,7 +583,7 @@ doaccept(char *cmd, size_t sz)
 }
 
 static int
-dofriend(char *cmd, size_t sz)
+cmdfriend(char *cmd, size_t sz)
 {
 	char *args[2];
 	uint8_t id[TOX_FRIEND_ADDRESS_SIZE];
@@ -623,7 +623,7 @@ dofriend(char *cmd, size_t sz)
 }
 
 static int
-doid(char *cmd, size_t sz)
+cmdid(char *cmd, size_t sz)
 {
 	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
 	int i;
@@ -636,7 +636,7 @@ doid(char *cmd, size_t sz)
 }
 
 static int
-doname(char *cmd, size_t sz)
+cmdname(char *cmd, size_t sz)
 {
 	char *args[2];
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
@@ -658,7 +658,7 @@ doname(char *cmd, size_t sz)
 }
 
 static int
-dohelp(char *cmd, size_t sz)
+cmdhelp(char *cmd, size_t sz)
 {
 	size_t i;
 
