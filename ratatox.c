@@ -614,6 +614,7 @@ doaccept(char *cmd, size_t sz)
 			if (strcmp(req->idstr, args[1]) == 0) {
 				tox_add_friend_norequest(tox, req->id);
 				printf("Accepted friend request for %s\n", req->idstr);
+				datasave();
 				TAILQ_REMOVE(&reqhead, req, entry);
 				free(req->msgstr);
 				free(req);
@@ -662,6 +663,7 @@ dofriend(char *cmd, size_t sz)
 		printf("Friend request sent\n");
 		break;
 	}
+	davesave();
 	return 0;
 }
 
