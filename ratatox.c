@@ -590,7 +590,7 @@ dofriend(char *cmd, size_t sz)
 	}
 	str2id(args[1], id);
 
-	r = tox_add_friend(tox, id, msgstr, strlen(msgstr));
+	r = tox_add_friend(tox, id, msgstr, strlen((const char *)msgstr));
 	switch (r) {
 	case TOX_FAERR_TOOLONG:
 		fprintf(stderr, "Message is too long\n");
