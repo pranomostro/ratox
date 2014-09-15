@@ -294,7 +294,7 @@ cb_status_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
 			writeparam(f, "statusmsg", "w", "%s\n", statusmsg);
-			printout("%s has status: %s\n", f->namestr, statusmsg);
+			printout("%s changed status: %s\n", f->namestr, statusmsg);
 			break;
 		}
 	}
