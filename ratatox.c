@@ -226,7 +226,8 @@ cb_friend_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 			t = time(NULL);
 			strftime(buft, sizeof(buft), "%F %R", localtime(&t));
 			writeparam(f, "text_out", "a", "%s %s\n", buft, msg);
-			printout("%s %s\n", f->namestr, msg);
+			printout("%s %s\n",
+				 f->namestr[0] == '\0' ? "Anonymous" : f->namestr, msg);
 			break;
 		}
 	}
@@ -296,7 +297,8 @@ cb_status_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
 			writeparam(f, "statusmsg", "w", "%s\n", statusmsg);
-			printout("%s changed status: %s\n", f->namestr, statusmsg);
+			printout("%s changed status: %s\n",
+				 f->namestr[0] == '\0' ? "Anonymous" : f->namestr, statusmsg);
 			break;
 		}
 	}
@@ -316,7 +318,8 @@ cb_user_status(Tox *m, int32_t fid, uint8_t status, void *udata)
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			printout("%s changed user status: %s\n", f->namestr,
+			printout("%s changed user status: %s\n",
+				 f->namestr[0] == '\0' ? "Anonymous" : f->namestr,
 			         statusstr[status]);
 			break;
 		}
