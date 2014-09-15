@@ -164,7 +164,7 @@ printrat(void)
 	printf("                         \\ /     \\,\n");
 	printf("                         `+'(  (   \\    )\n");
 	printf("                            //  \\   |_./\n");
-	printf("                          '~' '~----'\tratatox v0.0\n");
+	printf("                          '~' '~----'\tratatox v"VERSION"\n");
 	printf("\033[0m");
 }
 

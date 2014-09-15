@@ -7,6 +7,6 @@ MANPREFIX = $(PREFIX)/share/man
 
 CC = cc
 LD = $(CC)
-CPPFLAGS =
+CPPFLAGS = -DVERSION=\"${VERSION}\"
 CFLAGS   = -I/usr/local/include -Wall -Wunused $(CPPFLAGS)
 LDFLAGS  = -L/usr/local/lib -ltoxcore
