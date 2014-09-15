@@ -68,6 +68,7 @@ static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
 
 static Tox *tox;
 
+static void printbanner(void);
 static void cb_conn_status(Tox *, int32_t, uint8_t, void *);
 static void cb_friend_message(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cb_friend_request(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
@@ -147,6 +148,18 @@ tokenize(char *s, char **args, int maxargs)
 	}
 
 	return nargs;
+}
+
+static void
+printbanner(void)
+{
+	printf("                       ,     .\n");
+	printf("                       (\\,;,/)\n");
+	printf("                        (o o)\\//,\n");
+	printf("                         \\ /     \\,\n");
+	printf("                         `+'(  (   \\    )\n");
+	printf("                            //  \\   |_./\n");
+	printf("                          '~' '~----'\tratatox v0.0\n");
 }
 
 static void
@@ -759,6 +772,7 @@ loop(void)
 int
 main(void)
 {
+	printbanner();
 	toxinit();
 	friendload();
 	loop();
