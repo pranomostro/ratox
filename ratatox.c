@@ -23,7 +23,7 @@
 #define DATAFILE "ratatox.data"
 
 struct bootstrapnode {
-	char *addr;
+	const char *addr;
 	uint16_t port;
 	uint8_t key[TOX_CLIENT_ID_SIZE];
 };
@@ -45,11 +45,11 @@ static struct fifo {
 
 struct friend {
 	/* null terminated name */
-	uint8_t namestr[TOX_MAX_NAME_LENGTH + 1];
+	char namestr[TOX_MAX_NAME_LENGTH + 1];
 	int fid;
 	uint8_t id[TOX_CLIENT_ID_SIZE];
 	/* null terminated id */
-	uint8_t idstr[2 * TOX_CLIENT_ID_SIZE + 1];
+	char idstr[2 * TOX_CLIENT_ID_SIZE + 1];
 	int fd[NR_FIFOS];
 	TAILQ_ENTRY(friend) entry;
 };
@@ -57,9 +57,9 @@ struct friend {
 struct request {
 	uint8_t id[TOX_CLIENT_ID_SIZE];
 	/* null terminated id */
-	uint8_t idstr[2 * TOX_CLIENT_ID_SIZE + 1];
+	char idstr[2 * TOX_CLIENT_ID_SIZE + 1];
 	/* null terminated friend request message */
-	uint8_t *msgstr;
+	char *msgstr;
 	TAILQ_ENTRY(request) entry;
 };
 
@@ -79,8 +79,8 @@ static void dataload(void);
 static void datasave(void);
 static int toxinit(void);
 static int toxconnect(void);
-static void id2str(uint8_t *, uint8_t *);
-static void str2id(uint8_t *, uint8_t *);
+static void id2str(uint8_t *, char *);
+static void str2id(char *, uint8_t *);
 static struct friend *friendcreate(int32_t);
 static void friendload(void);
 static int cmdrun(void);
@@ -89,7 +89,7 @@ static int dofriend(char *, size_t);
 static int doid(char *, size_t);
 static int doname(char *, size_t);
 static int dohelp(char *, size_t);
-static void blabla(struct friend *, const char *, const char *, const char *, ...);
+static void writeparam(struct friend *, const char *, const char *, const char *, ...);
 static void loop(void);
 
 static char qsep[] = " \t\r\n";
@@ -198,7 +198,7 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			blabla(f, "online", "w", status == 0 ? "0\n" : "1\n");
+			writeparam(f, "online", "w", status == 0 ? "0\n" : "1\n");
 			return;
 		}
 	}
@@ -217,7 +217,7 @@ cb_friend_message(Tox *tox, int32_t fid, const uint8_t *data, uint16_t len, void
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			blabla(f, "text_out", "a", "%s\n", msg);
+			writeparam(f, "text_out", "a", "%s\n", msg);
 			break;
 		}
 	}
@@ -263,11 +263,11 @@ cb_name_change(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *use
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			blabla(f, "name", "w", "%s\n", name);
+			writeparam(f, "name", "w", "%s\n", name);
 			if (memcmp(f->namestr, name, len + 1) == 0)
 				break;
 			printout("%s -> %s\n", f->namestr[0] == '\0' ?
-				 (uint8_t *)"Anonymous" : f->namestr, name);
+				 "Anonymous" : f->namestr, name);
 			memcpy(f->namestr, name, len + 1);
 			break;
 		}
@@ -286,7 +286,7 @@ cb_status_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			blabla(f, "statusmsg", "w", "%s\n", statusmsg);
+			writeparam(f, "statusmsg", "w", "%s\n", statusmsg);
 			printout("%s has status: %s\n", f->namestr, statusmsg);
 			break;
 		}
@@ -420,9 +420,9 @@ toxconnect(void)
 }
 
 static void
-id2str(uint8_t *id, uint8_t *idstr)
+id2str(uint8_t *id, char *idstr)
 {
-	uint8_t hex[] = "0123456789abcdef";
+	char hex[] = "0123456789abcdef";
 	int i;
 
 	for (i = 0; i < TOX_CLIENT_ID_SIZE; i++) {
@@ -433,7 +433,7 @@ id2str(uint8_t *id, uint8_t *idstr)
 }
 
 static void
-str2id(uint8_t *idstr, uint8_t *id)
+str2id(char *idstr, uint8_t *id)
 {
 	size_t i, len = strlen(idstr) / 2;
 	char *p = idstr;
@@ -448,7 +448,7 @@ friendcreate(int32_t fid)
 	char path[PATH_MAX];
 	struct friend *f;
 	uint8_t statusmsg[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
-	int i;
+	size_t i;
 	int r;
 
 	f = calloc(1, sizeof(*f));
@@ -490,15 +490,15 @@ friendcreate(int32_t fid)
 		f->fd[i] = r;
 	}
 
-	blabla(f, "name", "w", "%s\n", f->namestr);
-	blabla(f, "online", "w",
+	writeparam(f, "name", "w", "%s\n", f->namestr);
+	writeparam(f, "online", "w",
 	       tox_get_friend_connection_status(tox, fid) == 0 ? "0\n" : "1\n");
 	r = tox_get_status_message_size(tox, fid);
 	if (r > TOX_MAX_STATUSMESSAGE_LENGTH)
 		r = TOX_MAX_STATUSMESSAGE_LENGTH;
 	statusmsg[r] = '\0';
-	blabla(f, "statusmsg", "w", "%s\n", statusmsg);
-	blabla(f, "text_out", "a", "");
+	writeparam(f, "statusmsg", "w", "%s\n", statusmsg);
+	writeparam(f, "text_out", "a", "");
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
 
@@ -694,7 +694,7 @@ again:
 }
 
 static void
-blabla(struct friend *f, const char *file, const char *mode,
+writeparam(struct friend *f, const char *file, const char *mode,
        const char *fmt, ...)
 {
 	FILE *fp;
