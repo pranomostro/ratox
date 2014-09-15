@@ -165,6 +165,21 @@ printbanner(void)
 }
 
 static void
+printout(const char *fmt, ...)
+{
+	va_list ap;
+	char buft[64];
+	time_t t;
+
+	va_start(ap, fmt);
+	t = time(NULL);
+	strftime(buft, sizeof(buft), "%F %R", localtime(&t));
+	printf("%s ", buft);
+	vfprintf(stdout, fmt, ap);
+	va_end(ap);
+}
+
+static void
 cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 {
 	struct friend *f;
@@ -178,8 +193,8 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 	}
 	name[r] = '\0';
 
-	printf("%s %s\n", r == 0 ? (uint8_t *)"Anonymous" : name,
-	       status == 0 ? "went offline" : "came online");
+	printout("%s %s\n", r == 0 ? (uint8_t *)"Anonymous" : name,
+		 status == 0 ? "went offline" : "came online");
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
@@ -233,8 +248,8 @@ cb_friend_request(Tox *tox, const uint8_t *id, const uint8_t *data, uint16_t len
 
 	TAILQ_INSERT_TAIL(&reqhead, req, entry);
 
-	printf("Pending request from %s with message: %s\n",
-	       req->idstr, req->msgstr);
+	printout("Pending request from %s with message: %s\n",
+		 req->idstr, req->msgstr);
 }
 
 static void
@@ -251,8 +266,8 @@ cb_name_change(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *use
 			blabla(f, "name", "w", "%s\n", name);
 			if (memcmp(f->namestr, name, len + 1) == 0)
 				break;
-			printf("%s -> %s\n", f->namestr[0] == '\0' ?
-			       (uint8_t *)"Anonymous" : f->namestr, name);
+			printout("%s -> %s\n", f->namestr[0] == '\0' ?
+				 (uint8_t *)"Anonymous" : f->namestr, name);
 			memcpy(f->namestr, name, len + 1);
 			break;
 		}
@@ -272,7 +287,7 @@ cb_status_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
 			blabla(f, "statusmsg", "w", "%s\n", statusmsg);
-			printf("%s has status: %s\n", f->namestr, statusmsg);
+			printout("%s has status: %s\n", f->namestr, statusmsg);
 			break;
 		}
 	}
@@ -536,8 +551,8 @@ doaccept(char *cmd, size_t sz)
 
 	if (r == 1) {
 		TAILQ_FOREACH(req, &reqhead, entry) {
-			printf("Pending request from %s with message: %s\n",
-			       req->idstr, req->msgstr);
+			printout("Pending request from %s with message: %s\n",
+				 req->idstr, req->msgstr);
 			found = 1;
 		}
 		if (found == 0)
@@ -547,7 +562,7 @@ doaccept(char *cmd, size_t sz)
 			tmp = TAILQ_NEXT(req, entry);
 			if (strcmp(req->idstr, args[1]) == 0) {
 				tox_add_friend_norequest(tox, req->id);
-				printf("Accepted friend request for %s\n", req->idstr);
+				printout("Accepted friend request for %s\n", req->idstr);
 				datasave();
 				TAILQ_REMOVE(&reqhead, req, entry);
 				free(req->msgstr);
@@ -593,7 +608,7 @@ dofriend(char *cmd, size_t sz)
 		fprintf(stderr, "Unknown error while sending your request\n");
 		break;
 	default:
-		printf("Friend request sent\n");
+		printout("Friend request sent\n");
 		break;
 	}
 	datasave();
@@ -710,19 +725,19 @@ loop(void)
 	struct timeval tv;
 
 	t0 = time(NULL);
-	printf("Connecting to DHT...\n");
+	printout("Connecting to DHT...\n");
 	toxconnect();
 	while (1) {
 		if (tox_isconnected(tox) == 1) {
 			if (connected == 0) {
-				printf("Connected to DHT\n");
+				printout("Connected to DHT\n");
 				connected = 1;
 			}
 		} else {
 			t1 = time(NULL);
 			if (t1 > t0 + 5) {
 				t0 = time(NULL);
-				printf("Connecting to DHT...\n");
+				printout("Connecting to DHT...\n");
 				toxconnect();
 			}
 		}
