@@ -690,7 +690,7 @@ again:
 			if (cmd[1] == '\0' || isspace((int)cmd[1]))
 				return (*cmds[i].cb)(cmd, strlen(cmd));
 
-	fprintf(stderr, "Unknown command: %s\n", cmd);
+	fprintf(stderr, "Unknown command '%s', type h for help\n", cmd);
 	return -1;
 }
 
