@@ -763,6 +763,7 @@ loop(void)
 				connected = 1;
 			}
 		} else {
+			connected = 0;
 			t1 = time(NULL);
 			if (t1 > t0 + 5) {
 				t0 = time(NULL);
