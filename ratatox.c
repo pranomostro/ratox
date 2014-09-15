@@ -335,7 +335,7 @@ cb_status_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			snprintf(path, sizeof(path), "%s/status", f->idstr);
+			snprintf(path, sizeof(path), "%s/statusmsg", f->idstr);
 			fp = fopen(path, "w");
 			if (!fp) {
 				perror("fopen");
