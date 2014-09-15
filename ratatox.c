@@ -824,6 +824,7 @@ int
 main(int argc, char *argv[])
 {
 	printbanner();
+	printf("Type h for help\n");
 	toxinit();
 	friendload();
 	loop();
