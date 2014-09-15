@@ -132,54 +132,6 @@ qtoken(char *s, char *sep)
 	return t;
 }
 
-static char *
-etoken(char *t, char *sep)
-{
-	int quoting;
-
-	/* move to end of next token */
-	quoting = 0;
-	while(*t!='\0' && (quoting || strchr(sep, *t)==NULL)) {
-		if(*t != '\'') {
-			t++;
-			continue;
-		}
-		/* *t is a quote */
-		if(!quoting) {
-			quoting = 1;
-			t++;
-			continue;
-		}
-		/* quoting and we're on a quote */
-		if(t[1] != '\'') {
-			/* end of quoted section; absorb closing quote */
-			t++;
-			quoting = 0;
-			continue;
-		}
-		/* doubled quote; fold one quote into two */
-		t += 2;
-	}
-	return t;
-}
-
-static int
-gettokens(char *s, char **args, int maxargs, char *sep)
-{
-	int nargs;
-
-	for(nargs=0; nargs<maxargs; nargs++) {
-		while(*s!='\0' && strchr(sep, *s)!=NULL)
-			*s++ = '\0';
-		if(*s == '\0')
-			break;
-		args[nargs] = s;
-		s = etoken(s, sep);
-	}
-
-	return nargs;
-}
-
 static int
 tokenize(char *s, char **args, int maxargs)
 {
@@ -200,10 +152,8 @@ tokenize(char *s, char **args, int maxargs)
 static void
 cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 {
-	FILE *fp;
 	struct friend *f;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
-	uint8_t *nick;
 	int r;
 
 	r = tox_get_name(tox, fid, name);
@@ -229,7 +179,6 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 static void
 cb_friend_message(Tox *tox, int32_t fid, const uint8_t *data, uint16_t len, void *udata)
 {
-	FILE *fp;
 	struct friend *f;
 	uint8_t msg[len + 1];
 
@@ -276,7 +225,6 @@ cb_friend_request(Tox *tox, const uint8_t *id, const uint8_t *data, uint16_t len
 static void
 cb_name_change(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *user)
 {
-	FILE *fp;
 	struct friend *f;
 	uint8_t name[len + 1];
 
@@ -300,7 +248,6 @@ cb_name_change(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *use
 static void
 cb_status_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *udata)
 {
-	FILE *fp;
 	struct friend *f;
 	uint8_t statusmsg[len + 1];
 
@@ -468,7 +415,6 @@ str2id(uint8_t *idstr, uint8_t *id)
 static struct friend *
 friendcreate(int32_t fid)
 {
-	FILE *fp;
 	char path[PATH_MAX];
 	struct friend *f;
 	uint8_t statusmsg[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
@@ -534,9 +480,7 @@ friendload(void)
 {
 	int32_t *fids;
 	uint32_t sz;
-	uint32_t i, j;
-	int n;
-	char name[TOX_MAX_NAME_LENGTH + 1];
+	uint32_t i;
 
 	sz = tox_count_friendlist(tox);
 	fids = malloc(sz);
@@ -549,6 +493,8 @@ friendload(void)
 
 	for (i = 0; i < sz; i++)
 		friendcreate(fids[i]);
+
+	free(fids);
 }
 
 struct cmd {
@@ -604,7 +550,6 @@ dofriend(char *cmd, size_t sz)
 {
 	char *args[2];
 	uint8_t id[TOX_FRIEND_ADDRESS_SIZE];
-	uint8_t idstr[2 * TOX_FRIEND_ADDRESS_SIZE + 1];
 	char *msgstr = "ratatox is awesome!";
 	int r;
 
