@@ -365,6 +365,8 @@ again:
 		perror("read");
 		exit(1);
 	}
+	if (buf[n - 1] == '\n')
+		n--;
 	tox_send_message(tox, f->fid, buf, n);
 }
 
