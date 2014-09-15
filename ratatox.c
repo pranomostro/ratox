@@ -203,7 +203,6 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 	FILE *fp;
 	struct friend *f;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
-	uint8_t statusmsg[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
 	uint8_t *nick;
 	int n;
 
@@ -217,21 +216,14 @@ cb_conn_status(Tox *tox, int32_t fid, uint8_t status, void *udata)
 	printf("%s %s\n", n == 0 ? (uint8_t *)"Anonymous" : name,
 	       status == 0 ? "went offline" : "came online");
 
-	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->fid == fid)
-			goto out;
-
-	f = friendcreate(fid);
-out:
-	blabla(f, "online", "w", status == 0 ? "0\n" : "1\n");
-	if (status == 1) {
-		blabla(f, "name", "w", "%s\n", name);
-		n = tox_get_status_message_size(tox, fid);
-		if (n > TOX_MAX_STATUSMESSAGE_LENGTH + 1)
-			n = TOX_MAX_STATUSMESSAGE_LENGTH;
-		statusmsg[n] = '\0';
-		blabla(f, "statusmsg", "w", "%s\n", statusmsg);
+	TAILQ_FOREACH(f, &friendhead, entry) {
+		if (f->fid == fid) {
+			blabla(f, "online", "w", status == 0 ? "0\n" : "1\n");
+			return;
+		}
 	}
+
+	friendcreate(fid);
 }
 
 static void
@@ -477,6 +469,7 @@ friendcreate(int32_t fid)
 	FILE *fp;
 	char path[PATH_MAX];
 	struct friend *f;
+	uint8_t statusmsg[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
 	int i;
 	int r;
 
@@ -519,8 +512,15 @@ friendcreate(int32_t fid)
 		f->fd[i] = r;
 	}
 
+	blabla(f, "name", "w", "%s\n", f->namestr);
+	blabla(f, "online", "w",
+	       tox_get_friend_connection_status(tox, fid) == 0 ? "0\n" : "1\n");
+	r = tox_get_status_message_size(tox, fid);
+	if (r > TOX_MAX_STATUSMESSAGE_LENGTH + 1)
+		r = TOX_MAX_STATUSMESSAGE_LENGTH;
+	statusmsg[r] = '\0';
+	blabla(f, "statusmsg", "w", "%s\n", statusmsg);
 	blabla(f, "text_out", "a", "");
-	blabla(f, "online", "w", "0\n");
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
 
