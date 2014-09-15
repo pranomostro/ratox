@@ -622,7 +622,7 @@ dofriend(char *cmd, size_t sz)
 
 	r = tokenize(cmd, args, 2);
 	if (r != 2) {
-		printf("Command error, type h for help\n");
+		fprintf(stderr, "Command error, type h for help\n");
 		return -1;
 	}
 	str2id(args[1], id);
@@ -630,19 +630,19 @@ dofriend(char *cmd, size_t sz)
 	r = tox_add_friend(tox, id, msgstr, strlen(msgstr));
 	switch (r) {
 	case TOX_FAERR_TOOLONG:
-		printf("Message is too long\n");
+		fprintf(stderr, "Message is too long\n");
 		break;
 	case TOX_FAERR_NOMESSAGE:
-		printf("Please add a message to your request\n");
+		fprintf(stderr, "Please add a message to your request\n");
 		break;
 	case TOX_FAERR_OWNKEY:
-		printf("That appears to be your own ID\n");
+		fprintf(stderr, "That appears to be your own ID\n");
 		break;
 	case TOX_FAERR_ALREADYSENT:
-		printf("Friend request already sent\n");
+		fprintf(stderr, "Friend request already sent\n");
 		break;
 	case TOX_FAERR_UNKNOWN:
-		printf("Unknown error while sending your request\n");
+		fprintf(stderr, "Unknown error while sending your request\n");
 		break;
 	default:
 		printf("Friend request sent\n");
@@ -658,7 +658,7 @@ dohelp(char *cmd, size_t sz)
 
 	for (i = 0; i < LEN(cmds); i++)
 		if (cmds[i].usage)
-			printf("%s", cmds[i].usage);
+			fprintf(stderr, "%s", cmds[i].usage);
 	return 0;
 }
 
@@ -760,7 +760,7 @@ loop(void)
 					send_friend_text(f);
 					break;
 				default:
-					fputs("Unhandled FIFO read\n", stderr);
+					fprintf(stderr, "Unhandled FIFO read\n");
 				}
 			}
 		}
