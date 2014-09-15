@@ -33,6 +33,7 @@ struct node {
 
 enum {
 	TEXT_IN_FIFO,
+	FILE_IN_FIFO,
 	NR_FIFOS
 };
 
@@ -42,6 +43,23 @@ static struct fifo {
 	mode_t mode;
 } fifos[] = {
 	{ .name = "text_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644 },
+	{ .name = "file_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644 }
+};
+
+enum {
+	TRANSFER_NONE,
+	TRANSFER_INITIATED,
+	TRANSFER_INPROGRESS,
+	TRANSFER_DONE
+};
+
+struct transfer {
+	uint8_t fnum;
+	uint8_t *buf;
+	ssize_t chunksz;
+	ssize_t n;
+	int leftover;
+	int state;
 };
 
 struct friend {
@@ -52,6 +70,7 @@ struct friend {
 	/* null terminated id */
 	char idstr[2 * TOX_CLIENT_ID_SIZE + 1];
 	int fd[NR_FIFOS];
+	struct transfer t;
 	TAILQ_ENTRY(friend) entry;
 };
 
@@ -78,6 +97,8 @@ static void cb_friend_request(Tox *, const uint8_t *, const uint8_t *, uint16_t,
 static void cb_name_change(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cb_status_message(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cb_user_status(Tox *, int32_t, uint8_t, void *);
+static void cb_file_control(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
+static void send_friend_file(struct friend *);
 static void send_friend_text(struct friend *);
 static void dataload(void);
 static void datasave(void);
@@ -327,6 +348,90 @@ cb_user_status(Tox *m, int32_t fid, uint8_t status, void *udata)
 }
 
 static void
+cb_file_control(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrltype,
+	const uint8_t *data, uint16_t len, void *udata)
+{
+	struct friend *f;
+
+	switch (ctrltype) {
+	case TOX_FILECONTROL_ACCEPT:
+		if (rec_sen == 1) {
+			TAILQ_FOREACH(f, &friendhead, entry) {
+				if (f->fid != fid)
+					continue;
+				f->t.fnum = fnum;
+				f->t.chunksz = tox_file_data_size(tox, fnum);
+				f->t.buf = malloc(f->t.chunksz);
+				if (!f->t.buf) {
+					perror("malloc");
+					exit(EXIT_FAILURE);
+				}
+				f->t.n = 0;
+				f->t.leftover = 0;
+				f->t.state = TRANSFER_INPROGRESS;
+				break;
+			}
+		}
+		break;
+	case TOX_FILECONTROL_FINISHED:
+		if (rec_sen == 1) {
+			TAILQ_FOREACH(f, &friendhead, entry) {
+				if (f->fid != fid)
+					continue;
+				f->t.state = TRANSFER_DONE;
+				printout("Transfer complete\n");
+				break;
+			}
+		}
+		break;
+	default:
+		fprintf(stderr, "Unhandled file control type: %d\n", ctrltype);
+		break;
+	};
+}
+
+static void
+send_friend_file(struct friend *f)
+{
+	ssize_t n;
+
+	if (f->t.leftover == 0) {
+again:
+		n = read(f->fd[FILE_IN_FIFO], f->t.buf, f->t.chunksz);
+		if (n < 0) {
+			if (errno == EINTR)
+				goto again;
+			/* go back to select until the fd is readable */
+			if (errno == EWOULDBLOCK)
+				return;
+			perror("read");
+			exit(EXIT_FAILURE);
+		}
+		if (n == 0) {
+			tox_file_send_control(tox, f->fid, 0, f->t.fnum,
+					      TOX_FILECONTROL_FINISHED, NULL, 0);
+			f->t.state = TRANSFER_DONE;
+			return;
+		}
+		f->t.n = n;
+		/* relax - allow for tox_do() to do its job */
+		if (tox_file_send_data(tox, f->fid, f->t.fnum, f->t.buf, f->t.n) == -1) {
+			/* remember to resend the last buffer */
+			f->t.leftover = 1;
+			return;
+		}
+		goto again;
+	} else {
+		if (tox_file_send_data(tox, f->fid, f->t.fnum, f->t.buf, f->t.n) == -1) {
+			/* we might be hitting here too hard, maybe relax()? */
+			return;
+		}
+		f->t.leftover = 0;
+		goto again;
+	}
+}
+
+static void
 send_friend_text(struct friend *f)
 {
 	uint8_t buf[TOX_MAX_MESSAGE_LENGTH];
@@ -337,6 +442,9 @@ again:
 	if (n < 0) {
 		if (errno == EINTR)
 			goto again;
+		/* go back to select until the fd is readable */
+		if (errno == EWOULDBLOCK)
+			return;
 		perror("read");
 		exit(EXIT_FAILURE);
 	}
@@ -429,6 +537,7 @@ toxinit(void)
 	tox_callback_name_change(tox, cb_name_change, NULL);
 	tox_callback_status_message(tox, cb_status_message, NULL);
 	tox_callback_user_status(tox, cb_user_status, NULL);
+	tox_callback_file_control(tox, cb_file_control, NULL);
 
 	tox_get_address(tox, address);
 	printf("ID: ");
@@ -798,6 +907,27 @@ loop(void)
 			perror("select");
 			exit(EXIT_FAILURE);
 		}
+
+		/* If we hit the receiver too hard, we will run out of
+		 * local buffer slots.  In that case tox_file_send_data()
+		 * will return -1 and we will have to queue the buffer to
+		 * send it later.  If this is the last buffer read from
+		 * the FIFO, then select() won't make the fd readable again
+		 * so we have to check if there's anything pending to be
+		 * sent.
+		 */
+		TAILQ_FOREACH(f, &friendhead, entry) {
+			if (f->t.state == TRANSFER_NONE)
+				continue;
+			switch (f->t.state) {
+			case TRANSFER_INPROGRESS:
+				send_friend_file(f);
+				if (f->t.state == TRANSFER_DONE)
+					f->t.state = TRANSFER_NONE;
+				break;
+			}
+		}
+
 		if (n == 0)
 			continue;
 
@@ -811,6 +941,21 @@ loop(void)
 				switch (i) {
 				case TEXT_IN_FIFO:
 					send_friend_text(f);
+					break;
+				case FILE_IN_FIFO:
+					switch (f->t.state) {
+					case TRANSFER_NONE:
+						/* prepare a new transfer */
+						f->t.state = TRANSFER_INITIATED;
+						tox_new_file_sender(tox, f->fid,
+							0, (uint8_t *)"file", strlen("file") + 1);
+						break;
+					case TRANSFER_INPROGRESS:
+						send_friend_file(f);
+						if (f->t.state == TRANSFER_DONE)
+							f->t.state = TRANSFER_NONE;
+						break;
+					}
 					break;
 				default:
 					fprintf(stderr, "Unhandled FIFO read\n");
