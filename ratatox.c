@@ -23,7 +23,7 @@
 #define LEN(x) (sizeof (x) / sizeof *(x))
 #define DATAFILE "ratatox.data"
 
-struct bootstrapnode {
+struct node {
 	const char *addr;
 	uint16_t port;
 	uint8_t key[TOX_CLIENT_ID_SIZE];
@@ -438,11 +438,11 @@ toxinit(void)
 static int
 toxconnect(void)
 {
-	struct bootstrapnode *bn;
+	struct node *bn;
 	size_t i;
 
-	for (i = 0; i < LEN(bootstrapnodes); i++) {
-		bn = &bootstrapnodes[i];
+	for (i = 0; i < LEN(nodes); i++) {
+		bn = &nodes[i];
 		tox_bootstrap_from_address(tox, bn->addr, bn->port, bn->key);
 	}
 	return 0;

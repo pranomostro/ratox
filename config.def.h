@@ -1,6 +1,6 @@
 /* See LICENSE file for copyright and license details. */
 
-static struct bootstrapnode bootstrapnodes[] = {
+static struct node nodes[] = {
 	{
 		"95.85.13.245",
 		33445,
