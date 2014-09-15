@@ -457,7 +457,7 @@ friendcreate(int32_t fid)
 		exit(EXIT_FAILURE);
 	}
 
-	r = tox_get_name(tox, fid, f->namestr);
+	r = tox_get_name(tox, fid, (uint8_t *)f->namestr);
 	if (r < 0) {
 		fprintf(stderr, "tox_get_name() on fid %d failed\n", fid);
 		exit(EXIT_FAILURE);
@@ -580,7 +580,7 @@ dofriend(char *cmd, size_t sz)
 {
 	char *args[2];
 	uint8_t id[TOX_FRIEND_ADDRESS_SIZE];
-	char *msgstr = "ratatox is awesome!";
+	uint8_t msgstr[] = "ratatox is awesome!";
 	int r;
 
 	r = tokenize(cmd, args, 2);
@@ -632,8 +632,8 @@ static int
 doname(char *cmd, size_t sz)
 {
 	char *args[2];
-	char name[TOX_MAX_NAME_LENGTH + 1];
-	uint8_t len;
+	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
+	uint16_t len;
 	int r;
 
 	r = tokenize(cmd, args, 2);
@@ -643,7 +643,7 @@ doname(char *cmd, size_t sz)
 		name[len] = '\0';
 		printf("%s\n", name);
 	} else {
-		tox_set_name(tox, args[1], strlen(args[1]));
+		tox_set_name(tox, (uint8_t *)args[1], strlen(args[1]));
 		datasave();
 	}
 
