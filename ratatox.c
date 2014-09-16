@@ -130,7 +130,7 @@ static int cmdrun(void);
 static int cmdaccept(char *, size_t);
 static int cmdfriend(char *, size_t);
 static int cmdhelp(char *, size_t);
-static void writeparam(struct friend *, const char *, const char *, const char *, ...);
+static void writeline(const char *, const char *, const char *, ...);
 static void loop(void);
 
 static char qsep[] = " \t\r\n";
@@ -225,6 +225,7 @@ cb_conn_status(Tox *m, int32_t fid, uint8_t status, void *udata)
 {
 	struct friend *f;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
+	char path[PATH_MAX];
 	int r;
 
 	r = tox_get_name(tox, fid, name);
@@ -239,7 +240,8 @@ cb_conn_status(Tox *m, int32_t fid, uint8_t status, void *udata)
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			writeparam(f, "online", "w", status == 0 ? "0\n" : "1\n");
+			snprintf(path, sizeof(path), "%s/online", f->idstr);
+			writeline(path, "w", status == 0 ? "0\n" : "1\n");
 			return;
 		}
 	}
@@ -253,6 +255,7 @@ cb_friend_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 	struct friend *f;
 	uint8_t msg[len + 1];
 	char buft[64];
+	char path[PATH_MAX];
 	time_t t;
 
 	memcpy(msg, data, len);
@@ -262,7 +265,8 @@ cb_friend_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 		if (f->fid == fid) {
 			t = time(NULL);
 			strftime(buft, sizeof(buft), "%F %R", localtime(&t));
-			writeparam(f, "text_out", "a", "%s %s\n", buft, msg);
+			snprintf(path, sizeof(path), "%s/text_out", f->idstr);
+			writeline(path, "a", "%s %s\n", buft, msg);
 			printout("%s %s\n",
 				 f->namestr[0] == '\0' ? "Anonymous" : f->namestr, msg);
 			break;
@@ -304,13 +308,15 @@ cb_name_change(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *use
 {
 	struct friend *f;
 	uint8_t name[len + 1];
+	char path[PATH_MAX];
 
 	memcpy(name, data, len);
 	name[len] = '\0';
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			writeparam(f, "name", "w", "%s\n", name);
+			snprintf(path, sizeof(path), "%s/name", f->idstr);
+			writeline(path, "w", "%s\n", name);
 			if (memcmp(f->namestr, name, len + 1) == 0)
 				break;
 			printout("%s -> %s\n", f->namestr[0] == '\0' ?
@@ -327,13 +333,15 @@ cb_status_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 {
 	struct friend *f;
 	uint8_t statusmsg[len + 1];
+	char path[PATH_MAX];
 
 	memcpy(statusmsg, data, len);
 	statusmsg[len] = '\0';
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			writeparam(f, "statusmsg", "w", "%s\n", statusmsg);
+			snprintf(path, sizeof(path), "%s/statusmsg", f->idstr);
+			writeline(path, "w", "%s\n", statusmsg);
 			printout("%s changed status: %s\n",
 				 f->namestr[0] == '\0' ? "Anonymous" : f->namestr, statusmsg);
 			break;
@@ -565,14 +573,7 @@ localinit(void)
 	if (r > TOX_MAX_NAME_LENGTH)
 		r = TOX_MAX_NAME_LENGTH;
 	name[r] = '\0';
-	fp = fopen("name_out", "w");
-	if (!fp) {
-		perror("fopen");
-		exit(EXIT_FAILURE);
-	}
-	fputs(name, fp);
-	fputc('\n', fp);
-	fclose(fp);
+	writeline("name_out", "w", "%s\n", name);
 
 	/* Dump ID */
 	fp = fopen("id", "w");
@@ -690,15 +691,18 @@ friendcreate(int32_t fid)
 		f->fd[i] = r;
 	}
 
-	writeparam(f, "name", "w", "%s\n", f->namestr);
-	writeparam(f, "online", "w",
-	       tox_get_friend_connection_status(tox, fid) == 0 ? "0\n" : "1\n");
+	snprintf(path, sizeof(path), "%s/name", f->idstr);
+	writeline(path, "w", "%s\n", f->namestr);
+	snprintf(path, sizeof(path), "%s/online", f->idstr);
+	writeline(path, "w", tox_get_friend_connection_status(tox, fid) == 0 ? "0\n" : "1\n");
 	r = tox_get_status_message_size(tox, fid);
 	if (r > TOX_MAX_STATUSMESSAGE_LENGTH)
 		r = TOX_MAX_STATUSMESSAGE_LENGTH;
 	statusmsg[r] = '\0';
-	writeparam(f, "statusmsg", "w", "%s\n", statusmsg);
-	writeparam(f, "text_out", "a", "");
+	snprintf(path, sizeof(path), "%s/statusmsg", f->idstr);
+	writeline(path, "w", "%s\n", statusmsg);
+	snprintf(path, sizeof(path), "%s/textout", f->idstr);
+	writeline(path, "a", "");
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
 
@@ -857,14 +861,12 @@ again:
 }
 
 static void
-writeparam(struct friend *f, const char *file, const char *mode,
-       const char *fmt, ...)
+writeline(const char *path, const char *mode,
+	  const char *fmt, ...)
 {
 	FILE *fp;
-	char path[PATH_MAX];
 	va_list ap;
 
-	snprintf(path, sizeof(path), "%s/%s", f->idstr, file);
 	fp = fopen(path, mode);
 	if (!fp) {
 		perror("fopen");
@@ -879,7 +881,6 @@ writeparam(struct friend *f, const char *file, const char *mode,
 static void
 changename(void *data)
 {
-	FILE *fp;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
 	int r;
 
@@ -897,15 +898,9 @@ again:
 		r--;
 	name[r] = '\0';
 	tox_set_name(tox, name, r);
+	datasave();
 	printout("Changed name to %s\n", name);
-	fp = fopen("name_out", "w");
-	if (!fp) {
-		perror("fopen");
-		exit(EXIT_FAILURE);
-	}
-	fputs(name, fp);
-	fputc('\n', fp);
-	fclose(fp);
+	writeline("name_out", "w", "%s\n", name);
 }
 
 static void
