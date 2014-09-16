@@ -112,14 +112,14 @@ static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
 static Tox *tox;
 
 static void printrat(void);
-static void cb_conn_status(Tox *, int32_t, uint8_t, void *);
-static void cb_friend_message(Tox *, int32_t, const uint8_t *, uint16_t, void *);
-static void cb_friend_request(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
-static void cb_name_change(Tox *, int32_t, const uint8_t *, uint16_t, void *);
-static void cb_status_message(Tox *, int32_t, const uint8_t *, uint16_t, void *);
-static void cb_user_status(Tox *, int32_t, uint8_t, void *);
-static void cb_file_control(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
-static void send_friend_file(struct friend *);
+static void cbconnstatus(Tox *, int32_t, uint8_t, void *);
+static void cbfriendmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
+static void cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
+static void cbnamechange(Tox *, int32_t, const uint8_t *, uint16_t, void *);
+static void cbstatusmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
+static void cbuserstatus(Tox *, int32_t, uint8_t, void *);
+static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
+static void sendfriendfile(struct friend *);
 static void dataload(void);
 static void datasave(void);
 static int localinit(void);
@@ -224,7 +224,7 @@ printout(const char *fmt, ...)
 }
 
 static void
-cb_conn_status(Tox *m, int32_t fid, uint8_t status, void *udata)
+cbconnstatus(Tox *m, int32_t fid, uint8_t status, void *udata)
 {
 	struct friend *f;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
@@ -253,7 +253,7 @@ cb_conn_status(Tox *m, int32_t fid, uint8_t status, void *udata)
 }
 
 static void
-cb_friend_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *udata)
+cbfriendmessage(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *udata)
 {
 	struct friend *f;
 	uint8_t msg[len + 1];
@@ -278,7 +278,7 @@ cb_friend_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 }
 
 static void
-cb_friend_request(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, void *udata)
+cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, void *udata)
 {
 	struct request *req;
 
@@ -307,7 +307,7 @@ cb_friend_request(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, 
 }
 
 static void
-cb_name_change(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *user)
+cbnamechange(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *user)
 {
 	struct friend *f;
 	uint8_t name[len + 1];
@@ -332,7 +332,7 @@ cb_name_change(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *use
 }
 
 static void
-cb_status_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *udata)
+cbstatusmessage(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *udata)
 {
 	struct friend *f;
 	uint8_t statusmsg[len + 1];
@@ -354,7 +354,7 @@ cb_status_message(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *
 }
 
 static void
-cb_user_status(Tox *m, int32_t fid, uint8_t status, void *udata)
+cbuserstatus(Tox *m, int32_t fid, uint8_t status, void *udata)
 {
 	struct friend *f;
 	char *statusstr[] = { "none", "away", "busy" };
@@ -375,7 +375,7 @@ cb_user_status(Tox *m, int32_t fid, uint8_t status, void *udata)
 }
 
 static void
-cb_file_control(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrltype,
+cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrltype,
 	const uint8_t *data, uint16_t len, void *udata)
 {
 	struct friend *f;
@@ -417,7 +417,7 @@ cb_file_control(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 }
 
 static void
-send_friend_file(struct friend *f)
+sendfriendfile(struct friend *f)
 {
 	ssize_t n;
 
@@ -459,7 +459,7 @@ send_friend_file(struct friend *f)
 }
 
 static void
-send_friend_text(struct friend *f)
+sendfriendtext(struct friend *f)
 {
 	uint8_t buf[TOX_MAX_MESSAGE_LENGTH];
 	ssize_t n;
@@ -609,13 +609,13 @@ toxinit(void)
 	tox = tox_new(0);
 	dataload();
 	datasave();
-	tox_callback_connection_status(tox, cb_conn_status, NULL);
-	tox_callback_friend_message(tox, cb_friend_message, NULL);
-	tox_callback_friend_request(tox, cb_friend_request, NULL);
-	tox_callback_name_change(tox, cb_name_change, NULL);
-	tox_callback_status_message(tox, cb_status_message, NULL);
-	tox_callback_user_status(tox, cb_user_status, NULL);
-	tox_callback_file_control(tox, cb_file_control, NULL);
+	tox_callback_connection_status(tox, cbconnstatus, NULL);
+	tox_callback_friend_message(tox, cbfriendmessage, NULL);
+	tox_callback_friend_request(tox, cbfriendrequest, NULL);
+	tox_callback_name_change(tox, cbnamechange, NULL);
+	tox_callback_status_message(tox, cbstatusmessage, NULL);
+	tox_callback_user_status(tox, cbuserstatus, NULL);
+	tox_callback_file_control(tox, cbfilecontrol, NULL);
 	return 0;
 }
 
@@ -1032,7 +1032,7 @@ loop(void)
 				continue;
 			switch (f->t.state) {
 			case TRANSFER_INPROGRESS:
-				send_friend_file(f);
+				sendfriendfile(f);
 				if (f->t.state == TRANSFER_DONE) {
 					printout("Transfer complete\n");
 					f->t.state = TRANSFER_NONE;
@@ -1060,7 +1060,7 @@ loop(void)
 					continue;
 				switch (i) {
 				case TEXT_IN_FIFO:
-					send_friend_text(f);
+					sendfriendtext(f);
 					break;
 				case FILE_IN_FIFO:
 					switch (f->t.state) {
@@ -1073,7 +1073,7 @@ loop(void)
 							 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
 						break;
 					case TRANSFER_INPROGRESS:
-						send_friend_file(f);
+						sendfriendfile(f);
 						if (f->t.state == TRANSFER_DONE) {
 							printout("Transfer complete\n");
 							f->t.state = TRANSFER_NONE;
