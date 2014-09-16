@@ -972,6 +972,7 @@ loop(void)
 						f->t.state = TRANSFER_INITIATED;
 						tox_new_file_sender(tox, f->fid,
 							0, (uint8_t *)"file", strlen("file") + 1);
+						printout("Initiated transfer...\n");
 						break;
 					case TRANSFER_INPROGRESS:
 						send_friend_file(f);
