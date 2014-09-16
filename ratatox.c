@@ -394,38 +394,41 @@ send_friend_file(struct friend *f)
 {
 	ssize_t n;
 
-	if (f->t.pending == 0) {
-again:
+	while (1) {
+		/* attempt to transmit the pending buffer */
+		if (f->t.pending == 1) {
+			if (tox_file_send_data(tox, f->fid, f->t.fnum, f->t.buf, f->t.n) == -1) {
+				/* bad luck - we will try again later */
+				break;
+			}
+			f->t.pending = 0;
+			break;
+		}
+		/* grab another buffer from the FIFO */
 		n = read(f->fd[FILE_IN_FIFO], f->t.buf, f->t.chunksz);
 		if (n < 0) {
 			if (errno == EINTR)
-				goto again;
-			/* go back to select until the fd is readable */
+				continue;
+			/* go back to select() until the fd is readable */
 			if (errno == EWOULDBLOCK)
-				return;
+				break;
 			perror("read");
 			exit(EXIT_FAILURE);
 		}
+		/* we are done */
 		if (n == 0) {
 			tox_file_send_control(tox, f->fid, 0, f->t.fnum,
 					      TOX_FILECONTROL_FINISHED, NULL, 0);
 			f->t.state = TRANSFER_DONE;
-			return;
+			break;
 		}
+		/* store transfer size in case we can't send it right now */
 		f->t.n = n;
 		if (tox_file_send_data(tox, f->fid, f->t.fnum, f->t.buf, f->t.n) == -1) {
-			/* remember to resend the last buffer */
+			/* ok we will have to send it later, flip state */
 			f->t.pending = 1;
 			return;
 		}
-		goto again;
-	} else {
-		if (tox_file_send_data(tox, f->fid, f->t.fnum, f->t.buf, f->t.n) == -1) {
-			/* we might be hitting here too hard, maybe relax()? */
-			return;
-		}
-		f->t.pending = 0;
-		goto again;
 	}
 }
 
@@ -440,7 +443,7 @@ again:
 	if (n < 0) {
 		if (errno == EINTR)
 			goto again;
-		/* go back to select until the fd is readable */
+		/* go back to select() until the fd is readable */
 		if (errno == EWOULDBLOCK)
 			return;
 		perror("read");
