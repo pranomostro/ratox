@@ -31,19 +31,34 @@ struct node {
 
 #include "config.h"
 
-enum {
-	TEXT_IN_FIFO,
-	FILE_IN_FIFO,
-	NR_FIFOS
-};
-
-static struct fifo {
+struct fifo {
 	const char *name;
 	int flags;
 	mode_t mode;
-} fifos[] = {
+};
+
+enum {
+	NAME_FIFO,
+	NR_GFIFOS
+};
+
+/* Global FIFOs for modifying our own state, they go in $(PWD)/{name,status}_in */
+static struct fifo gfifos[] = {
+	{ .name = "name_in",    .flags = O_RDONLY | O_NONBLOCK, .mode = 0644 },
+};
+
+static int globalfd[NR_GFIFOS];
+
+enum {
+	TEXT_IN_FIFO,
+	FILE_IN_FIFO,
+	NR_FFIFOS
+};
+
+/* Friend related FIFOs, they go in <friend-id/{text,file}_in */
+static struct fifo ffifos[] = {
 	{ .name = "text_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644 },
-	{ .name = "file_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644 }
+	{ .name = "file_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644 },
 };
 
 enum {
@@ -69,7 +84,7 @@ struct friend {
 	uint8_t id[TOX_CLIENT_ID_SIZE];
 	/* null terminated id */
 	char idstr[2 * TOX_CLIENT_ID_SIZE + 1];
-	int fd[NR_FIFOS];
+	int fd[NR_FFIFOS];
 	struct transfer t;
 	TAILQ_ENTRY(friend) entry;
 };
@@ -102,6 +117,7 @@ static void send_friend_file(struct friend *);
 static void send_friend_text(struct friend *);
 static void dataload(void);
 static void datasave(void);
+static int localinit(void);
 static int toxinit(void);
 static int toxconnect(void);
 static void id2str(uint8_t *, char *);
@@ -111,8 +127,6 @@ static void friendload(void);
 static int cmdrun(void);
 static int cmdaccept(char *, size_t);
 static int cmdfriend(char *, size_t);
-static int cmdid(char *, size_t);
-static int cmdname(char *, size_t);
 static int cmdhelp(char *, size_t);
 static void writeparam(struct friend *, const char *, const char *, const char *, ...);
 static void loop(void);
@@ -522,11 +536,60 @@ datasave(void)
 }
 
 static int
+localinit(void)
+{
+	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
+	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
+	FILE *fp;
+	int r;
+	size_t i;
+
+	for (i = 0; i < LEN(gfifos); i++) {
+		r = mkfifo(gfifos[i].name, gfifos[i].mode);
+		if (r < 0 && errno != EEXIST) {
+			perror("mkfifo");
+			exit(EXIT_FAILURE);
+		}
+		r = open(gfifos[i].name, gfifos[i].flags, 0);
+		if (r < 0) {
+			perror("open");
+			exit(EXIT_FAILURE);
+		}
+		globalfd[i] = r;
+	}
+
+	/* Dump current name */
+	r = tox_get_self_name(tox, name);
+	if (r > TOX_MAX_NAME_LENGTH)
+		r = TOX_MAX_NAME_LENGTH;
+	name[r] = '\0';
+	fp = fopen("name_out", "w");
+	if (!fp) {
+		perror("fopen");
+		exit(EXIT_FAILURE);
+	}
+	fputs(name, fp);
+	fputc('\n', fp);
+	fclose(fp);
+
+	/* Dump ID */
+	fp = fopen("id", "w");
+	if (!fp) {
+		perror("fopen");
+		exit(EXIT_FAILURE);
+	}
+	tox_get_address(tox, address);
+	for (i = 0; i < TOX_FRIEND_ADDRESS_SIZE; i++)
+		fprintf(fp, "%02x", address[i]);
+	fputc('\n', fp);
+	fclose(fp);
+
+	return 0;
+}
+
+static int
 toxinit(void)
 {
-	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
-	int i;
-
 	/* IPv4 only */
 	tox = tox_new(0);
 	dataload();
@@ -538,13 +601,6 @@ toxinit(void)
 	tox_callback_status_message(tox, cb_status_message, NULL);
 	tox_callback_user_status(tox, cb_user_status, NULL);
 	tox_callback_file_control(tox, cb_file_control, NULL);
-
-	tox_get_address(tox, address);
-	printf("ID: ");
-	for (i = 0; i < TOX_FRIEND_ADDRESS_SIZE; i++)
-		printf("%02x", address[i]);
-	printf("\n");
-
 	return 0;
 }
 
@@ -616,15 +672,15 @@ friendcreate(int32_t fid)
 		exit(EXIT_FAILURE);
 	}
 
-	for (i = 0; i < LEN(fifos); i++) {
+	for (i = 0; i < LEN(ffifos); i++) {
 		snprintf(path, sizeof(path), "%s/%s", f->idstr,
-			 fifos[i].name);
-		r = mkfifo(path, fifos[i].mode);
+			 ffifos[i].name);
+		r = mkfifo(path, ffifos[i].mode);
 		if (r < 0 && errno != EEXIST) {
 			perror("mkfifo");
 			exit(EXIT_FAILURE);
 		}
-		r = open(path, fifos[i].flags, 0);
+		r = open(path, ffifos[i].flags, 0);
 		if (r < 0) {
 			perror("open");
 			exit(EXIT_FAILURE);
@@ -676,8 +732,6 @@ struct cmd {
 } cmds[] = {
 	{ .cmd = "a", .cb = cmdaccept, .usage = "usage: a [id]\tAccept or list pending requests\n" },
 	{ .cmd = "f", .cb = cmdfriend, .usage = "usage: f id\tSend friend request to ID\n" },
-	{ .cmd = "i", .cb = cmdid,     .usage = "usage: i\tShow ID\n" },
-	{ .cmd = "n", .cb = cmdname,   .usage = "usage: n [name]\tChange or show current name\n" },
 	{ .cmd = "h", .cb = cmdhelp,   .usage = NULL },
 };
 
@@ -758,41 +812,6 @@ cmdfriend(char *cmd, size_t sz)
 }
 
 static int
-cmdid(char *cmd, size_t sz)
-{
-	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
-	int i;
-
-	tox_get_address(tox, address);
-	for (i = 0; i < TOX_FRIEND_ADDRESS_SIZE; i++)
-		printf("%02x", address[i]);
-	printf("\n");
-	return 0;
-}
-
-static int
-cmdname(char *cmd, size_t sz)
-{
-	char *args[2];
-	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
-	uint16_t len;
-	int r;
-
-	r = tokenize(cmd, args, 2);
-
-	if (r == 1) {
-		len = tox_get_self_name(tox, name);
-		name[len] = '\0';
-		printf("%s\n", name);
-	} else {
-		tox_set_name(tox, (uint8_t *)args[1], strlen(args[1]));
-		datasave();
-	}
-
-	return 0;
-}
-
-static int
 cmdhelp(char *cmd, size_t sz)
 {
 	size_t i;
@@ -858,10 +877,11 @@ writeparam(struct friend *f, const char *file, const char *mode,
 static void
 loop(void)
 {
+	FILE *fp;
 	struct friend *f;
 	time_t t0, t1;
 	int connected = 0;
-	int i, n;
+	int i, n, r;
 	int fdmax;
 	fd_set rfds;
 	struct timeval tv;
@@ -890,10 +910,16 @@ loop(void)
 		FD_SET(STDIN_FILENO, &rfds);
 		fdmax = STDIN_FILENO;
 
+		for (i = 0; i < NR_GFIFOS; i++) {
+			FD_SET(globalfd[i], &rfds);
+			if (globalfd[i] > fdmax)
+				fdmax = globalfd[i];
+		}
+
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			/* Only monitor friends that are online */
 			if (tox_get_friend_connection_status(tox, f->fid) == 1) {
-				for (i = 0; i < NR_FIFOS; i++) {
+				for (i = 0; i < NR_FFIFOS; i++) {
 					FD_SET(f->fd[i], &rfds);
 					if (f->fd[i] > fdmax)
 						fdmax = f->fd[i];
@@ -957,8 +983,39 @@ loop(void)
 		if (FD_ISSET(STDIN_FILENO, &rfds) != 0)
 			cmdrun();
 
+		for (i = 0; i < NR_GFIFOS; i++) {
+			if (FD_ISSET(globalfd[i], &rfds) == 0)
+				continue;
+			if (strcmp(gfifos[i].name, "name_in") == 0) {
+				uint8_t name[TOX_MAX_NAME_LENGTH + 1];
+again:
+				r = read(globalfd[i], name, TOX_MAX_NAME_LENGTH);
+				if (r < 0) {
+					if (errno == EINTR)
+						goto again;
+					if (errno == EWOULDBLOCK)
+						continue;
+					perror("read");
+					continue;
+				}
+				if (name[r - 1] == '\n')
+					r--;
+				name[r] = '\0';
+				tox_set_name(tox, name, r);
+				printout("Changed name to %s\n", name);
+				fp = fopen("name_out", "w");
+				if (!fp) {
+					perror("fopen");
+					exit(EXIT_FAILURE);
+				}
+				fputs(name, fp);
+				fputc('\n', fp);
+				fclose(fp);
+			}
+		}
+
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			for (i = 0; i < NR_FIFOS; i++) {
+			for (i = 0; i < NR_FFIFOS; i++) {
 				if (FD_ISSET(f->fd[i], &rfds) == 0)
 					continue;
 				switch (i) {
@@ -999,6 +1056,7 @@ main(int argc, char *argv[])
 	printrat();
 	printf("Type h for help\n");
 	toxinit();
+	localinit();
 	friendload();
 	loop();
 	return EXIT_SUCCESS;
