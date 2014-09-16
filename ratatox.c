@@ -56,9 +56,9 @@ enum {
 struct transfer {
 	uint8_t fnum;
 	uint8_t *buf;
-	ssize_t chunksz;
+	int chunksz;
 	ssize_t n;
-	int leftover;
+	int pending;
 	int state;
 };
 
@@ -367,7 +367,7 @@ cb_file_control(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 					exit(EXIT_FAILURE);
 				}
 				f->t.n = 0;
-				f->t.leftover = 0;
+				f->t.pending = 0;
 				f->t.state = TRANSFER_INPROGRESS;
 				break;
 			}
@@ -395,7 +395,7 @@ send_friend_file(struct friend *f)
 {
 	ssize_t n;
 
-	if (f->t.leftover == 0) {
+	if (f->t.pending == 0) {
 again:
 		n = read(f->fd[FILE_IN_FIFO], f->t.buf, f->t.chunksz);
 		if (n < 0) {
@@ -417,7 +417,7 @@ again:
 		/* relax - allow for tox_do() to do its job */
 		if (tox_file_send_data(tox, f->fid, f->t.fnum, f->t.buf, f->t.n) == -1) {
 			/* remember to resend the last buffer */
-			f->t.leftover = 1;
+			f->t.pending = 1;
 			return;
 		}
 		goto again;
@@ -426,7 +426,7 @@ again:
 			/* we might be hitting here too hard, maybe relax()? */
 			return;
 		}
-		f->t.leftover = 0;
+		f->t.pending = 0;
 		goto again;
 	}
 }
@@ -918,6 +918,8 @@ loop(void)
 		 */
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			if (f->t.state == TRANSFER_NONE)
+				continue;
+			if (f->t.pending == 0)
 				continue;
 			switch (f->t.state) {
 			case TRANSFER_INPROGRESS:
