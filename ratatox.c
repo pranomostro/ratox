@@ -379,7 +379,6 @@ cb_file_control(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 				if (f->fid != fid)
 					continue;
 				f->t.state = TRANSFER_DONE;
-				printout("Transfer complete\n");
 				break;
 			}
 		}
@@ -414,7 +413,6 @@ again:
 			return;
 		}
 		f->t.n = n;
-		/* relax - allow for tox_do() to do its job */
 		if (tox_file_send_data(tox, f->fid, f->t.fnum, f->t.buf, f->t.n) == -1) {
 			/* remember to resend the last buffer */
 			f->t.pending = 1;
@@ -924,8 +922,10 @@ loop(void)
 			switch (f->t.state) {
 			case TRANSFER_INPROGRESS:
 				send_friend_file(f);
-				if (f->t.state == TRANSFER_DONE)
+				if (f->t.state == TRANSFER_DONE) {
+					printout("Transfer complete\n");
 					f->t.state = TRANSFER_NONE;
+				}
 				break;
 			}
 		}
@@ -954,8 +954,10 @@ loop(void)
 						break;
 					case TRANSFER_INPROGRESS:
 						send_friend_file(f);
-						if (f->t.state == TRANSFER_DONE)
+						if (f->t.state == TRANSFER_DONE) {
+							printout("Transfer complete\n");
 							f->t.state = TRANSFER_NONE;
+						}
 						break;
 					}
 					break;
