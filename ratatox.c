@@ -35,6 +35,7 @@ struct fifo {
 	const char *name;
 	int flags;
 	mode_t mode;
+	void (*cb)(void);
 };
 
 enum {
@@ -42,9 +43,11 @@ enum {
 	NR_GFIFOS
 };
 
+static void changename(void);
+
 /* Global FIFOs for modifying our own state, they go in $(PWD)/{name,status}_in */
 static struct fifo gfifos[] = {
-	{ .name = "name_in",    .flags = O_RDONLY | O_NONBLOCK, .mode = 0644 },
+	{ .name = "name_in",    .flags = O_RDONLY | O_NONBLOCK, .mode = 0644, .cb = changename },
 };
 
 static int globalfd[NR_GFIFOS];
@@ -875,13 +878,44 @@ writeparam(struct friend *f, const char *file, const char *mode,
 }
 
 static void
-loop(void)
+changename(void)
 {
 	FILE *fp;
+	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
+	int r;
+
+again:
+	r = read(globalfd[NAME_FIFO], name, TOX_MAX_NAME_LENGTH);
+	if (r < 0) {
+		if (errno == EINTR)
+			goto again;
+		if (errno == EWOULDBLOCK)
+			return;
+		perror("read");
+		return;
+	}
+	if (name[r - 1] == '\n')
+		r--;
+	name[r] = '\0';
+	tox_set_name(tox, name, r);
+	printout("Changed name to %s\n", name);
+	fp = fopen("name_out", "w");
+	if (!fp) {
+		perror("fopen");
+		exit(EXIT_FAILURE);
+	}
+	fputs(name, fp);
+	fputc('\n', fp);
+	fclose(fp);
+}
+
+static void
+loop(void)
+{
 	struct friend *f;
 	time_t t0, t1;
 	int connected = 0;
-	int i, n, r;
+	int i, n;
 	int fdmax;
 	fd_set rfds;
 	struct timeval tv;
@@ -986,32 +1020,7 @@ loop(void)
 		for (i = 0; i < NR_GFIFOS; i++) {
 			if (FD_ISSET(globalfd[i], &rfds) == 0)
 				continue;
-			if (strcmp(gfifos[i].name, "name_in") == 0) {
-				uint8_t name[TOX_MAX_NAME_LENGTH + 1];
-again:
-				r = read(globalfd[i], name, TOX_MAX_NAME_LENGTH);
-				if (r < 0) {
-					if (errno == EINTR)
-						goto again;
-					if (errno == EWOULDBLOCK)
-						continue;
-					perror("read");
-					continue;
-				}
-				if (name[r - 1] == '\n')
-					r--;
-				name[r] = '\0';
-				tox_set_name(tox, name, r);
-				printout("Changed name to %s\n", name);
-				fp = fopen("name_out", "w");
-				if (!fp) {
-					perror("fopen");
-					exit(EXIT_FAILURE);
-				}
-				fputs(name, fp);
-				fputc('\n', fp);
-				fclose(fp);
-			}
+			(*gfifos[i].cb)();
 		}
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
