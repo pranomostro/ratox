@@ -35,7 +35,7 @@ struct fifo {
 	const char *name;
 	int flags;
 	mode_t mode;
-	void (*cb)(void);
+	void (*cb)(void *);
 };
 
 enum {
@@ -43,7 +43,7 @@ enum {
 	NR_GFIFOS
 };
 
-static void changename(void);
+static void changename(void *);
 
 /* Global FIFOs for modifying our own state, they go in $(PWD)/{name,status}_in */
 static struct fifo gfifos[] = {
@@ -117,7 +117,6 @@ static void cb_status_message(Tox *, int32_t, const uint8_t *, uint16_t, void *)
 static void cb_user_status(Tox *, int32_t, uint8_t, void *);
 static void cb_file_control(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
 static void send_friend_file(struct friend *);
-static void send_friend_text(struct friend *);
 static void dataload(void);
 static void datasave(void);
 static int localinit(void);
@@ -878,7 +877,7 @@ writeparam(struct friend *f, const char *file, const char *mode,
 }
 
 static void
-changename(void)
+changename(void *data)
 {
 	FILE *fp;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
@@ -1020,7 +1019,7 @@ loop(void)
 		for (i = 0; i < NR_GFIFOS; i++) {
 			if (FD_ISSET(globalfd[i], &rfds) == 0)
 				continue;
-			(*gfifos[i].cb)();
+			(*gfifos[i].cb)(NULL);
 		}
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
