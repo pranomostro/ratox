@@ -41,16 +41,19 @@ struct fifo {
 enum {
 	NAME_FIFO,
 	STATUS_FIFO,
+	FRIENDREQ_FIFO,
 	NR_GFIFOS
 };
 
 static void setname(void *);
 static void setstatusmsg(void *);
+static void sendfriendreq(void *);
 
 /* Global FIFOs for modifying our own state, they go in $(PWD)/{name,status}_in */
 static struct fifo gfifos[] = {
-	{ .name = "name_in",      .flags = O_RDONLY | O_NONBLOCK, .mode = 0644, .cb = setname      },
-	{ .name = "statusmsg_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644, .cb = setstatusmsg },
+	{ .name = "name_in",      .flags = O_RDONLY | O_NONBLOCK, .mode = 0644, .cb = setname       },
+	{ .name = "statusmsg_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644, .cb = setstatusmsg  },
+	{ .name = "friendreq_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644, .cb = sendfriendreq },
 };
 
 static int globalfd[NR_GFIFOS];
@@ -131,7 +134,6 @@ static struct friend *friendcreate(int32_t);
 static void friendload(void);
 static int cmdrun(void);
 static int cmdaccept(char *, size_t);
-static int cmdfriend(char *, size_t);
 static int cmdhelp(char *, size_t);
 static void writeline(const char *, const char *, const char *, ...);
 static void loop(void);
@@ -749,7 +751,6 @@ struct cmd {
 	const char *usage;
 } cmds[] = {
 	{ .cmd = "a", .cb = cmdaccept, .usage = "usage: a [id]\tAccept or list pending requests\n" },
-	{ .cmd = "f", .cb = cmdfriend, .usage = "usage: f id\tSend friend request to ID\n" },
 	{ .cmd = "h", .cb = cmdhelp,   .usage = NULL },
 };
 
@@ -786,46 +787,6 @@ cmdaccept(char *cmd, size_t sz)
 		}
 	}
 
-	return 0;
-}
-
-static int
-cmdfriend(char *cmd, size_t sz)
-{
-	char *args[2];
-	uint8_t id[TOX_FRIEND_ADDRESS_SIZE];
-	uint8_t msgstr[] = "ratatox is awesome!";
-	int r;
-
-	r = tokenize(cmd, args, 2);
-	if (r != 2) {
-		fprintf(stderr, "Command error, type h for help\n");
-		return -1;
-	}
-	str2id(args[1], id);
-
-	r = tox_add_friend(tox, id, msgstr, strlen((const char *)msgstr));
-	switch (r) {
-	case TOX_FAERR_TOOLONG:
-		fprintf(stderr, "Message is too long\n");
-		break;
-	case TOX_FAERR_NOMESSAGE:
-		fprintf(stderr, "Please add a message to your request\n");
-		break;
-	case TOX_FAERR_OWNKEY:
-		fprintf(stderr, "That appears to be your own ID\n");
-		break;
-	case TOX_FAERR_ALREADYSENT:
-		fprintf(stderr, "Friend request already sent\n");
-		break;
-	case TOX_FAERR_UNKNOWN:
-		fprintf(stderr, "Unknown error while sending your request\n");
-		break;
-	default:
-		printout("Friend request sent\n");
-		break;
-	}
-	datasave();
 	return 0;
 }
 
@@ -938,6 +899,63 @@ again:
 	datasave();
 	printout("Changed status message to %s\n", statusmsg);
 	writeline("statusmsg_out", "w", "%s\n", statusmsg);
+}
+
+static void
+sendfriendreq(void *data)
+{
+	char *p;
+	uint8_t id[TOX_FRIEND_ADDRESS_SIZE];
+	uint8_t buf[BUFSIZ], *msg = "ratatox is awesome!";
+	int r;
+
+again:
+	r = read(globalfd[FRIENDREQ_FIFO], buf, sizeof(buf) - 1);
+	if (r < 0) {
+		if (errno == EINTR)
+			goto again;
+		if (errno == EWOULDBLOCK)
+			return;
+		perror("read");
+		return;
+	}
+	buf[r] = '\0';
+
+	for (p = buf; *p && isspace(*p) == 0; p++)
+		;
+	if (*p != '\0') {
+		*p = '\0';
+		while (isspace(*p++) != 0)
+			;
+		if (*p != '\0')
+			msg = p;
+		if (msg[strlen(msg) - 1] == '\n')
+			msg[strlen(msg) - 1] = '\0';
+	}
+	str2id(buf, id);
+
+	r = tox_add_friend(tox, id, buf, strlen(buf));
+	switch (r) {
+	case TOX_FAERR_TOOLONG:
+		fprintf(stderr, "Message is too long\n");
+		break;
+	case TOX_FAERR_NOMESSAGE:
+		fprintf(stderr, "Please add a message to your request\n");
+		break;
+	case TOX_FAERR_OWNKEY:
+		fprintf(stderr, "That appears to be your own ID\n");
+		break;
+	case TOX_FAERR_ALREADYSENT:
+		fprintf(stderr, "Friend request already sent\n");
+		break;
+	case TOX_FAERR_UNKNOWN:
+		fprintf(stderr, "Unknown error while sending your request\n");
+		break;
+	default:
+		printout("Friend request sent\n");
+		break;
+	}
+	datasave();
 }
 
 static void
