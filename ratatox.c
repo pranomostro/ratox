@@ -402,7 +402,6 @@ send_friend_file(struct friend *f)
 				break;
 			}
 			f->t.pending = 0;
-			break;
 		}
 		/* grab another buffer from the FIFO */
 		n = read(f->fd[FILE_IN_FIFO], f->t.buf, f->t.chunksz);
