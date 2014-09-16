@@ -951,6 +951,12 @@ again:
 	case TOX_FAERR_UNKNOWN:
 		fprintf(stderr, "Unknown error while sending your request\n");
 		break;
+	case TOX_FAERR_BADCHECKSUM:
+		fprintf(stderr, "Bad checksum while verifying address\n");
+		break;
+	case TOX_FAERR_SETNEWNOSPAM:
+		fprintf(stderr, "Friend already added but nospam doesn't match\n");
+		break;
 	default:
 		printout("Friend request sent\n");
 		break;
