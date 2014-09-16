@@ -579,6 +579,7 @@ localinit(void)
 	name[r] = '\0';
 	writeline("name_out", "w", "%s\n", name);
 
+	/* Dump status message */
 	r = tox_get_self_status_message(tox, statusmsg,
 					sizeof(statusmsg) - 1);
 	if (r > sizeof(statusmsg) - 1)
