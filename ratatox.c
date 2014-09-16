@@ -891,10 +891,13 @@ loop(void)
 		fdmax = STDIN_FILENO;
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			for (i = 0; i < NR_FIFOS; i++) {
-				FD_SET(f->fd[i], &rfds);
-				if (f->fd[i] > fdmax)
-					fdmax = f->fd[i];
+			/* Only monitor friends that are online */
+			if (tox_get_friend_connection_status(tox, f->fid) == 1) {
+				for (i = 0; i < NR_FIFOS; i++) {
+					FD_SET(f->fd[i], &rfds);
+					if (f->fd[i] > fdmax)
+						fdmax = f->fd[i];
+				}
 			}
 		}
 
@@ -917,6 +920,8 @@ loop(void)
 		 * sent.
 		 */
 		TAILQ_FOREACH(f, &friendhead, entry) {
+			if (tox_get_friend_connection_status(tox, f->fid) == 0)
+				continue;
 			if (f->t.state == TRANSFER_NONE)
 				continue;
 			if (f->t.pending == 0)
