@@ -40,14 +40,17 @@ struct fifo {
 
 enum {
 	NAME_FIFO,
+	STATUS_FIFO,
 	NR_GFIFOS
 };
 
-static void changename(void *);
+static void setname(void *);
+static void setstatusmsg(void *);
 
 /* Global FIFOs for modifying our own state, they go in $(PWD)/{name,status}_in */
 static struct fifo gfifos[] = {
-	{ .name = "name_in",    .flags = O_RDONLY | O_NONBLOCK, .mode = 0644, .cb = changename },
+	{ .name = "name_in",      .flags = O_RDONLY | O_NONBLOCK, .mode = 0644, .cb = setname      },
+	{ .name = "statusmsg_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644, .cb = setstatusmsg },
 };
 
 static int globalfd[NR_GFIFOS];
@@ -550,6 +553,7 @@ localinit(void)
 {
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
 	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
+	uint8_t statusmsg[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
 	FILE *fp;
 	int r;
 	size_t i;
@@ -570,10 +574,17 @@ localinit(void)
 
 	/* Dump current name */
 	r = tox_get_self_name(tox, name);
-	if (r > TOX_MAX_NAME_LENGTH)
-		r = TOX_MAX_NAME_LENGTH;
+	if (r > sizeof(name) - 1)
+		r = sizeof(name) - 1;
 	name[r] = '\0';
 	writeline("name_out", "w", "%s\n", name);
+
+	r = tox_get_self_status_message(tox, statusmsg,
+					sizeof(statusmsg) - 1);
+	if (r > sizeof(statusmsg) - 1)
+		r = sizeof(statusmsg) - 1;
+	statusmsg[r] = '\0';
+	writeline("statusmsg_out", "w", "%s\n", statusmsg);
 
 	/* Dump ID */
 	fp = fopen("id", "w");
@@ -696,8 +707,8 @@ friendcreate(int32_t fid)
 	snprintf(path, sizeof(path), "%s/online", f->idstr);
 	writeline(path, "w", tox_get_friend_connection_status(tox, fid) == 0 ? "0\n" : "1\n");
 	r = tox_get_status_message_size(tox, fid);
-	if (r > TOX_MAX_STATUSMESSAGE_LENGTH)
-		r = TOX_MAX_STATUSMESSAGE_LENGTH;
+	if (r > sizeof(statusmsg) - 1)
+		r = sizeof(statusmsg) - 1;
 	statusmsg[r] = '\0';
 	snprintf(path, sizeof(path), "%s/statusmsg", f->idstr);
 	writeline(path, "w", "%s\n", statusmsg);
@@ -879,13 +890,13 @@ writeline(const char *path, const char *mode,
 }
 
 static void
-changename(void *data)
+setname(void *data)
 {
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
 	int r;
 
 again:
-	r = read(globalfd[NAME_FIFO], name, TOX_MAX_NAME_LENGTH);
+	r = read(globalfd[NAME_FIFO], name, sizeof(name) - 1);
 	if (r < 0) {
 		if (errno == EINTR)
 			goto again;
@@ -901,6 +912,31 @@ again:
 	datasave();
 	printout("Changed name to %s\n", name);
 	writeline("name_out", "w", "%s\n", name);
+}
+
+static void
+setstatusmsg(void *data)
+{
+	uint8_t statusmsg[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
+	int r;
+
+again:
+	r = read(globalfd[STATUS_FIFO], statusmsg, sizeof(statusmsg) - 1);
+	if (r < 0) {
+		if (errno == EINTR)
+			goto again;
+		if (errno == EWOULDBLOCK)
+			return;
+		perror("read");
+		return;
+	}
+	if (statusmsg[r - 1] == '\n')
+		r--;
+	statusmsg[r] = '\0';
+	tox_set_status_message(tox, statusmsg, r);
+	datasave();
+	printout("Changed status message to %s\n", statusmsg);
+	writeline("statusmsg_out", "w", "%s\n", statusmsg);
 }
 
 static void
