@@ -928,6 +928,7 @@ loop(void)
 				if (f->t.state == TRANSFER_DONE) {
 					printout("Transfer complete\n");
 					f->t.state = TRANSFER_NONE;
+					free(f->t.buf);
 				}
 				break;
 			}
@@ -960,6 +961,7 @@ loop(void)
 						if (f->t.state == TRANSFER_DONE) {
 							printout("Transfer complete\n");
 							f->t.state = TRANSFER_NONE;
+							free(f->t.buf);
 						}
 						break;
 					}
