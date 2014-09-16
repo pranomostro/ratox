@@ -911,6 +911,19 @@ loop(void)
 			exit(EXIT_FAILURE);
 		}
 
+		/* Check for broken transfers, i.e. the friend went offline
+		 * in the middle of a transfer.
+		 */
+		TAILQ_FOREACH(f, &friendhead, entry) {
+			if (tox_get_friend_connection_status(tox, f->fid) == 0) {
+				if (f->t.state != TRANSFER_NONE) {
+					printout("Stale transfer detected, friend offline\n");
+					f->t.state = TRANSFER_NONE;
+					free(f->t.buf);
+				}
+			}
+		}
+
 		/* If we hit the receiver too hard, we will run out of
 		 * local buffer slots.  In that case tox_file_send_data()
 		 * will return -1 and we will have to queue the buffer to
