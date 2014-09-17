@@ -21,7 +21,7 @@
 #include "queue.h"
 
 #define LEN(x) (sizeof (x) / sizeof *(x))
-#define DATAFILE "ratatox.data"
+#define DATAFILE ".ratatox.data"
 
 struct node {
 	const char *addr;
