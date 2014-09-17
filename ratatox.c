@@ -1031,7 +1031,7 @@ loop(void)
 	struct friend *f;
 	time_t t0, t1;
 	int connected = 0;
-	int i, m, n;
+	int i, n;
 	int fdmax;
 	fd_set rfds;
 	struct timeval tv;
@@ -1061,12 +1061,9 @@ loop(void)
 		fdmax = STDIN_FILENO;
 
 		for (i = 0; i < LEN(gslots); i++) {
-			for (m = 0; m < LEN(gfiles); m++) {
-				FD_SET(gslots[i].fd[m], &rfds);
-				if (gslots[i].fd[m] > fdmax) {
-					fdmax = gslots[i].fd[m];
-				}
-			}
+			FD_SET(gslots[i].fd[IN], &rfds);
+			if (gslots[i].fd[IN] > fdmax)
+				fdmax = gslots[i].fd[IN];
 		}
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
