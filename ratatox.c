@@ -633,6 +633,7 @@ localinit(void)
 	if (r > sizeof(name) - 1)
 		r = sizeof(name) - 1;
 	name[r] = '\0';
+	ftruncate(gslots[NAME].fd[OUT], 0);
 	dprintf(gslots[NAME].fd[OUT], "%s\n", name);
 
 	/* Dump status message */
@@ -641,6 +642,7 @@ localinit(void)
 	if (r > sizeof(statusmsg) - 1)
 		r = sizeof(statusmsg) - 1;
 	statusmsg[r] = '\0';
+	ftruncate(gslots[STATUS].fd[OUT], 0);
 	dprintf(gslots[STATUS].fd[OUT], "%s\n", name);
 
 	/* Dump ID */
@@ -927,6 +929,7 @@ again:
 	tox_set_name(tox, name, r);
 	datasave();
 	printout("Changed name to %s\n", name);
+	ftruncate(gslots[NAME].fd[OUT], 0);
 	dprintf(gslots[NAME].fd[OUT], "%s\n", name);
 }
 
@@ -952,6 +955,7 @@ again:
 	tox_set_status_message(tox, statusmsg, r);
 	datasave();
 	printout("Changed status message to %s\n", statusmsg);
+	ftruncate(gslots[STATUS].fd[OUT], 0);
 	dprintf(gslots[STATUS].fd[OUT], "%s\n", statusmsg);
 }
 
@@ -989,6 +993,8 @@ again:
 	str2id(buf, id);
 
 	r = tox_add_friend(tox, id, buf, strlen(buf));
+	if (r < 0)
+		ftruncate(gslots[REQUEST].fd[ERR], 0);
 	switch (r) {
 	case TOX_FAERR_TOOLONG:
 		dprintf(gslots[REQUEST].fd[ERR], "Message is too long\n");
