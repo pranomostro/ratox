@@ -49,6 +49,7 @@ struct slot {
 	const char *name;
 	void (*cb)(void *);
 	int outtype;
+	int outmode;
 	int fd[NR_GFILES];
 };
 
@@ -70,9 +71,9 @@ static void setstatusmsg(void *);
 static void sendfriendreq(void *);
 
 static struct slot gslots[] = {
-	[NAME]    = { .name = "name",	 .cb = setname,	      .outtype = STATIC},
-	[STATUS]  = { .name = "status",	 .cb = setstatusmsg,  .outtype = STATIC},
-	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outtype = FOLDER}
+	[NAME]    = { .name = "name",	 .cb = setname,	      .outtype = STATIC },
+	[STATUS]  = { .name = "status",	 .cb = setstatusmsg,  .outtype = STATIC },
+	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outtype = FOLDER, .outmode = 0755 },
 };
 
 static struct file gfiles[] = {
@@ -616,7 +617,7 @@ localinit(void)
 					}
 					gslots[i].fd[m] = r;
 				} else if (gslots[i].outtype == FOLDER) {
-					r = mkdir(gfiles[m].name, gfiles[m].mode);
+					r = mkdir(gfiles[m].name, gslots[i].outmode);
 					if (r < 0 && errno != EEXIST) {
 						perror("mkdir");
 						exit(EXIT_FAILURE);
