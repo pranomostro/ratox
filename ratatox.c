@@ -597,7 +597,7 @@ localinit(void)
 	}
 	tox_get_address(tox, address);
 	for (i = 0; i < TOX_FRIEND_ADDRESS_SIZE; i++)
-		fprintf(fp, "%02x", address[i]);
+		fprintf(fp, "%02X", address[i]);
 	fputc('\n', fp);
 	fclose(fp);
 
@@ -637,7 +637,7 @@ toxconnect(void)
 static void
 id2str(uint8_t *id, char *idstr)
 {
-	char hex[] = "0123456789abcdef";
+	char hex[] = "0123456789ABCDEF";
 	int i;
 
 	for (i = 0; i < TOX_CLIENT_ID_SIZE; i++) {
