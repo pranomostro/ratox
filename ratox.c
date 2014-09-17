@@ -965,7 +965,7 @@ sendfriendreq(void *data)
 {
 	char *p;
 	uint8_t id[TOX_FRIEND_ADDRESS_SIZE];
-	uint8_t buf[BUFSIZ], *msg = "ratox is awesome!";
+	char buf[BUFSIZ], *msg = "ratox is awesome!";
 	int r;
 
 again:
@@ -993,7 +993,7 @@ again:
 	}
 	str2id(buf, id);
 
-	r = tox_add_friend(tox, id, buf, strlen(buf));
+	r = tox_add_friend(tox, id, (uint8_t *)buf, strlen(buf));
 	if (r < 0)
 		ftruncate(gslots[REQUEST].fd[ERR], 0);
 	switch (r) {
