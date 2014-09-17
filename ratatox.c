@@ -715,7 +715,7 @@ friendcreate(int32_t fid)
 	statusmsg[r] = '\0';
 	snprintf(path, sizeof(path), "%s/statusmsg", f->idstr);
 	writeline(path, "w", "%s\n", statusmsg);
-	snprintf(path, sizeof(path), "%s/textout", f->idstr);
+	snprintf(path, sizeof(path), "%s/text_out", f->idstr);
 	writeline(path, "a", "");
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
