@@ -31,32 +31,55 @@ struct node {
 
 #include "config.h"
 
-struct fifo {
+struct file {
+	int type;
 	const char *name;
 	int flags;
 	mode_t mode;
-	void (*cb)(void *);
 };
 
 enum {
-	NAME_FIFO,
-	STATUS_FIFO,
-	FRIENDREQ_FIFO,
-	NR_GFIFOS
+	IN,
+	OUT,
+	ERR,
+	NR_GFILES
+};
+
+struct slot {
+	const char *name;
+	void (*cb)(void *);
+	int outtype;
+	int fd[NR_GFILES];
+};
+
+enum {
+	NAME,
+	STATUS,
+	REQUEST,
+};
+
+enum {
+	FIFO,
+	OUT_F,
+	STATIC,
+	FOLDER
 };
 
 static void setname(void *);
 static void setstatusmsg(void *);
 static void sendfriendreq(void *);
 
-/* Global FIFOs for modifying our own state, they go in $(PWD)/{name,status}_in */
-static struct fifo gfifos[] = {
-	{ .name = "name_in",      .flags = O_RDONLY | O_NONBLOCK, .mode = 0644, .cb = setname       },
-	{ .name = "statusmsg_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644, .cb = setstatusmsg  },
-	{ .name = "friendreq_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644, .cb = sendfriendreq },
+static struct slot gslots[] = {
+	[NAME]    = { .name = "name",	 .cb = setname,	      .outtype = STATIC},
+	[STATUS]  = { .name = "status",	 .cb = setstatusmsg,  .outtype = STATIC},
+	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outtype = FOLDER}
 };
 
-static int globalfd[NR_GFIFOS];
+static struct file gfiles[] = {
+	{ .type = FIFO,  .name = "in",  .flags = O_RDONLY | O_NONBLOCK,        .mode = 0644},
+	{ .type = OUT_F, .name = "out", .flags = O_WRONLY | O_TRUNC | O_CREAT, .mode = 0644},
+	{ .type = OUT_F, .name = "err", .flags = O_WRONLY | O_TRUNC | O_CREAT, .mode = 0644},
+};
 
 enum {
 	TEXT_IN_FIFO,
@@ -65,9 +88,9 @@ enum {
 };
 
 /* Friend related FIFOs, they go in <friend-id/{text,file}_in */
-static struct fifo ffifos[] = {
-	{ .name = "text_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644 },
-	{ .name = "file_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644 },
+static struct file ffifos[] = {
+	{ .type = FIFO, .name = "text_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644 },
+	{ .type = FIFO, .name = "file_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644 },
 };
 
 enum {
@@ -558,20 +581,51 @@ localinit(void)
 	uint8_t statusmsg[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
 	FILE *fp;
 	int r;
-	size_t i;
+	size_t i, m;
 
-	for (i = 0; i < LEN(gfifos); i++) {
-		r = mkfifo(gfifos[i].name, gfifos[i].mode);
+	for (i = 0; i < LEN(gslots); i++) {
+		r = mkdir(gslots[i].name, 0755);
 		if (r < 0 && errno != EEXIST) {
-			perror("mkfifo");
+			perror("mkdir");
 			exit(EXIT_FAILURE);
 		}
-		r = open(gfifos[i].name, gfifos[i].flags, 0);
+		r = chdir(gslots[i].name);
 		if (r < 0) {
-			perror("open");
+			perror("chdir");
 			exit(EXIT_FAILURE);
 		}
-		globalfd[i] = r;
+		for (m = 0; m < LEN(gfiles); m++) {
+			if (gfiles[m].type == FIFO) {
+				r = mkfifo(gfiles[m].name, gfiles[m].mode);
+				if (r < 0 && errno != EEXIST) {
+					perror("mkfifo");
+					exit(EXIT_FAILURE);
+				}
+				r = open(gfiles[m].name, gfiles[m].flags, 0);
+				if (r < 0) {
+					perror("open");
+					exit(EXIT_FAILURE);
+				}
+				gslots[i].fd[m] = r;
+			} else if (gfiles[m].type == OUT_F) {
+				if (gslots[i].outtype == STATIC) {
+					r = open(gfiles[m].name, gfiles[m].flags, gfiles[m].mode);
+					if (r < 0) {
+						perror("open");
+						exit(EXIT_FAILURE);
+					}
+					gslots[i].fd[m] = r;
+				} else if (gslots[i].outtype == FOLDER) {
+					r = mkdir(gfiles[m].name, gfiles[m].mode);
+					if (r < 0 && errno != EEXIST) {
+						perror("mkdir");
+						exit(EXIT_FAILURE);
+					}
+					gslots[i].fd[m] = 0;
+				}
+			}
+		}
+		chdir("..");
 	}
 
 	/* Dump current name */
@@ -579,7 +633,7 @@ localinit(void)
 	if (r > sizeof(name) - 1)
 		r = sizeof(name) - 1;
 	name[r] = '\0';
-	writeline("name_out", "w", "%s\n", name);
+	dprintf(gslots[NAME].fd[OUT], "%s\n", name);
 
 	/* Dump status message */
 	r = tox_get_self_status_message(tox, statusmsg,
@@ -587,7 +641,7 @@ localinit(void)
 	if (r > sizeof(statusmsg) - 1)
 		r = sizeof(statusmsg) - 1;
 	statusmsg[r] = '\0';
-	writeline("statusmsg_out", "w", "%s\n", statusmsg);
+	dprintf(gslots[STATUS].fd[OUT], "%s\n", name);
 
 	/* Dump ID */
 	fp = fopen("id", "w");
@@ -858,7 +912,7 @@ setname(void *data)
 	int r;
 
 again:
-	r = read(globalfd[NAME_FIFO], name, sizeof(name) - 1);
+	r = read(gslots[NAME].fd[IN], name, sizeof(name) - 1);
 	if (r < 0) {
 		if (errno == EINTR)
 			goto again;
@@ -873,7 +927,7 @@ again:
 	tox_set_name(tox, name, r);
 	datasave();
 	printout("Changed name to %s\n", name);
-	writeline("name_out", "w", "%s\n", name);
+	dprintf(gslots[NAME].fd[OUT], "%s\n", name);
 }
 
 static void
@@ -883,7 +937,7 @@ setstatusmsg(void *data)
 	int r;
 
 again:
-	r = read(globalfd[STATUS_FIFO], statusmsg, sizeof(statusmsg) - 1);
+	r = read(gslots[STATUS].fd[IN], statusmsg, sizeof(statusmsg) - 1);
 	if (r < 0) {
 		if (errno == EINTR)
 			goto again;
@@ -898,7 +952,7 @@ again:
 	tox_set_status_message(tox, statusmsg, r);
 	datasave();
 	printout("Changed status message to %s\n", statusmsg);
-	writeline("statusmsg_out", "w", "%s\n", statusmsg);
+	dprintf(gslots[STATUS].fd[OUT], "%s\n", statusmsg);
 }
 
 static void
@@ -910,7 +964,7 @@ sendfriendreq(void *data)
 	int r;
 
 again:
-	r = read(globalfd[FRIENDREQ_FIFO], buf, sizeof(buf) - 1);
+	r = read(gslots[REQUEST].fd[IN], buf, sizeof(buf) - 1);
 	if (r < 0) {
 		if (errno == EINTR)
 			goto again;
@@ -937,25 +991,25 @@ again:
 	r = tox_add_friend(tox, id, buf, strlen(buf));
 	switch (r) {
 	case TOX_FAERR_TOOLONG:
-		fprintf(stderr, "Message is too long\n");
+		dprintf(gslots[REQUEST].fd[ERR], "Message is too long\n");
 		break;
 	case TOX_FAERR_NOMESSAGE:
-		fprintf(stderr, "Please add a message to your request\n");
+		dprintf(gslots[REQUEST].fd[ERR], "Please add a message to your request\n");
 		break;
 	case TOX_FAERR_OWNKEY:
-		fprintf(stderr, "That appears to be your own ID\n");
+		dprintf(gslots[REQUEST].fd[ERR], "That appears to be your own ID\n");
 		break;
 	case TOX_FAERR_ALREADYSENT:
-		fprintf(stderr, "Friend request already sent\n");
+		dprintf(gslots[REQUEST].fd[ERR], "Friend request already sent\n");
 		break;
 	case TOX_FAERR_UNKNOWN:
-		fprintf(stderr, "Unknown error while sending your request\n");
+		dprintf(gslots[REQUEST].fd[ERR], "Unknown error while sending your request\n");
 		break;
 	case TOX_FAERR_BADCHECKSUM:
-		fprintf(stderr, "Bad checksum while verifying address\n");
+		dprintf(gslots[REQUEST].fd[ERR], "Bad checksum while verifying address\n");
 		break;
 	case TOX_FAERR_SETNEWNOSPAM:
-		fprintf(stderr, "Friend already added but nospam doesn't match\n");
+		dprintf(gslots[REQUEST].fd[ERR], "Friend already added but nospam doesn't match\n");
 		break;
 	default:
 		printout("Friend request sent\n");
@@ -970,7 +1024,7 @@ loop(void)
 	struct friend *f;
 	time_t t0, t1;
 	int connected = 0;
-	int i, n;
+	int i, m, n;
 	int fdmax;
 	fd_set rfds;
 	struct timeval tv;
@@ -999,10 +1053,13 @@ loop(void)
 		FD_SET(STDIN_FILENO, &rfds);
 		fdmax = STDIN_FILENO;
 
-		for (i = 0; i < NR_GFIFOS; i++) {
-			FD_SET(globalfd[i], &rfds);
-			if (globalfd[i] > fdmax)
-				fdmax = globalfd[i];
+		for (i = 0; i < LEN(gslots); i++) {
+			for (m = 0; m < LEN(gfiles); m++) {
+				FD_SET(gslots[i].fd[m], &rfds);
+				if (gslots[i].fd[m] > fdmax) {
+					fdmax = gslots[i].fd[m];
+				}
+			}
 		}
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
@@ -1072,10 +1129,10 @@ loop(void)
 		if (FD_ISSET(STDIN_FILENO, &rfds) != 0)
 			cmdrun();
 
-		for (i = 0; i < NR_GFIFOS; i++) {
-			if (FD_ISSET(globalfd[i], &rfds) == 0)
+		for (i = 0; i < LEN(gslots); i++) {
+			if (FD_ISSET(gslots[i].fd[IN], &rfds) == 0)
 				continue;
-			(*gfifos[i].cb)(NULL);
+			(*gslots[i].cb)(NULL);
 		}
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
