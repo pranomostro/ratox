@@ -77,7 +77,7 @@ static struct slot gslots[] = {
 };
 
 static struct file gfiles[] = {
-	{ .type = FIFO,  .name = "in",  .flags = O_RDONLY | O_NONBLOCK,        .mode = 0644},
+	{ .type = FIFO,  .name = "in",  .flags = O_RDWR | O_NONBLOCK,          .mode = 0644},
 	{ .type = OUT_F, .name = "out", .flags = O_WRONLY | O_TRUNC | O_CREAT, .mode = 0644},
 	{ .type = OUT_F, .name = "err", .flags = O_WRONLY | O_TRUNC | O_CREAT, .mode = 0644},
 };
@@ -90,8 +90,8 @@ enum {
 
 /* Friend related FIFOs, they go in <friend-id/{text,file}_in */
 static struct file ffifos[] = {
-	{ .type = FIFO, .name = "text_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644 },
-	{ .type = FIFO, .name = "file_in", .flags = O_RDONLY | O_NONBLOCK, .mode = 0644 },
+	{ .type = FIFO, .name = "text_in", .flags = O_RDWR | O_NONBLOCK, .mode = 0644 },
+	{ .type = FIFO, .name = "file_in", .flags = O_RDWR | O_NONBLOCK, .mode = 0644 },
 };
 
 enum {
