@@ -3,7 +3,7 @@ include config.mk
 .POSIX:
 .SUFFIXES: .c .o
 
-SRC = ratatox.c
+SRC = ratox.c
 
 OBJ = $(SRC:.c=.o)
 BIN = $(SRC:.c=)
@@ -11,7 +11,7 @@ BIN = $(SRC:.c=)
 all: options bin
 
 options:
-	@echo ratatox build options:
+	@echo ratox build options:
 	@echo "CFLAGS   = $(CFLAGS)"
 	@echo "LDFLAGS  = $(LDFLAGS)"
 	@echo "CC       = $(CC)"

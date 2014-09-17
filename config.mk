@@ -1,4 +1,4 @@
-# ratatox version
+# ratox version
 VERSION = 0.0
 
 # paths

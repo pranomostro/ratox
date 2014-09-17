@@ -21,7 +21,7 @@
 #include "queue.h"
 
 #define LEN(x) (sizeof (x) / sizeof *(x))
-#define DATAFILE ".ratatox.data"
+#define DATAFILE ".ratox.data"
 
 struct node {
 	const char *addr;
@@ -230,7 +230,7 @@ printrat(void)
 	printf("                         \\ /     \\,\n");
 	printf("                         `+'(  (   \\    )\n");
 	printf("                            //  \\   |_./\n");
-	printf("                          '~' '~----'\tratatox v"VERSION"\n");
+	printf("                          '~' '~----'\tratox v"VERSION"\n");
 	printf("\033[0m");
 }
 
@@ -965,7 +965,7 @@ sendfriendreq(void *data)
 {
 	char *p;
 	uint8_t id[TOX_FRIEND_ADDRESS_SIZE];
-	uint8_t buf[BUFSIZ], *msg = "ratatox is awesome!";
+	uint8_t buf[BUFSIZ], *msg = "ratox is awesome!";
 	int r;
 
 again:
