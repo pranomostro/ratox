@@ -49,6 +49,7 @@ struct slot {
 	const char *name;
 	void (*cb)(void *);
 	int outtype;
+	int dirfd;
 	int fd[NR_GFILES];
 };
 
@@ -76,7 +77,7 @@ static struct slot gslots[] = {
 };
 
 static struct file gfiles[] = {
-	{ .type = FIFO,  .name = "in",  .flags = O_RDWR   | O_NONBLOCK,       },
+	{ .type = FIFO,  .name = "in",  .flags = O_RDONLY | O_NONBLOCK,       },
 	{ .type = OUT_F, .name = "out", .flags = O_WRONLY | O_TRUNC | O_CREAT },
 	{ .type = OUT_F, .name = "err", .flags = O_WRONLY | O_TRUNC | O_CREAT },
 };
@@ -549,19 +550,25 @@ localinit(void)
 			perror("mkdir");
 			exit(EXIT_FAILURE);
 		}
-		r = chdir(gslots[i].name);
-		if (r < 0) {
-			perror("chdir");
+		d = opendir(gslots[i].name);
+		if (!d) {
+			perror("opendir");
 			exit(EXIT_FAILURE);
 		}
+		r = dirfd(d);
+		if (r < 0) {
+			perror("dirfd");
+			exit(EXIT_FAILURE);
+		}
+		gslots[i].dirfd = r;
 		for (m = 0; m < LEN(gfiles); m++) {
 			if (gfiles[m].type == FIFO) {
-				r = mkfifo(gfiles[m].name, 0644);
+				r = mkfifoat(gslots[i].dirfd, gfiles[m].name, 0644);
 				if (r < 0 && errno != EEXIST) {
 					perror("mkfifo");
 					exit(EXIT_FAILURE);
 				}
-				r = open(gfiles[m].name, gfiles[m].flags, 0644);
+				r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0644);
 				if (r < 0) {
 					perror("open");
 					exit(EXIT_FAILURE);
@@ -569,33 +576,27 @@ localinit(void)
 				gslots[i].fd[m] = r;
 			} else if (gfiles[m].type == OUT_F) {
 				if (gslots[i].outtype == STATIC) {
-					r = open(gfiles[m].name, gfiles[m].flags, 0644);
+					r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0644);
 					if (r < 0) {
 						perror("open");
 						exit(EXIT_FAILURE);
 					}
 					gslots[i].fd[m] = r;
 				} else if (gslots[i].outtype == FOLDER) {
-					r = mkdir(gfiles[m].name, 0777);
+					r = mkdirat(gslots[i].dirfd, gfiles[m].name, 0777);
 					if (r < 0 && errno != EEXIST) {
 						perror("mkdir");
 						exit(EXIT_FAILURE);
 					}
-					d = opendir(gfiles[m].name);
-					if (!d) {
-						perror("opendir");
-						exit(EXIT_FAILURE);
-					}
-					r = dirfd(d);
+					r = openat(gslots[i].dirfd, gfiles[m].name, O_RDONLY | O_DIRECTORY);
 					if (r < 0) {
-						perror("dirfd");
+						perror("openat");
 						exit(EXIT_FAILURE);
 					}
 					gslots[i].fd[m] = r;
 				}
 			}
 		}
-		chdir("..");
 	}
 
 	/* Dump current name */
@@ -789,6 +790,16 @@ setname(void *data)
 
 again:
 	r = read(gslots[NAME].fd[IN], name, sizeof(name) - 1);
+	if (r == 0) {
+		close(gslots[NAME].fd[IN]);
+		r = openat(gslots[NAME].dirfd, gfiles[IN].name, gfiles[IN].flags, 0644);
+		if (r < 0) {
+			perror("openat");
+			exit(EXIT_FAILURE);
+		}
+		gslots[NAME].fd[IN] = r;
+		return;
+	}
 	if (r < 0) {
 		if (errno == EINTR)
 			goto again;
@@ -815,6 +826,16 @@ setstatus(void *data)
 
 again:
 	r = read(gslots[STATUS].fd[IN], status, sizeof(status) - 1);
+	if (r == 0) {
+		close(gslots[STATUS].fd[IN]);
+		r = openat(gslots[STATUS].dirfd, gfiles[IN].name, gfiles[IN].flags, 0644);
+		if (r < 0) {
+			perror("openat");
+			exit(EXIT_FAILURE);
+		}
+		gslots[STATUS].fd[IN] = r;
+		return;
+	}
 	if (r < 0) {
 		if (errno == EINTR)
 			goto again;
@@ -843,6 +864,16 @@ sendfriendreq(void *data)
 
 again:
 	r = read(gslots[REQUEST].fd[IN], buf, sizeof(buf) - 1);
+	if (r == 0) {
+		close(gslots[REQUEST].fd[IN]);
+		r = openat(gslots[REQUEST].dirfd, gfiles[IN].name, gfiles[IN].flags, 0644);
+		if (r < 0) {
+			perror("openat");
+			exit(EXIT_FAILURE);
+		}
+		gslots[REQUEST].fd[IN] = r;
+		return;
+	}
 	if (r < 0) {
 		if (errno == EINTR)
 			goto again;
