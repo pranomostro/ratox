@@ -94,12 +94,12 @@ enum {
 };
 
 static struct file ffiles[] = {
-	{ .type = FIFO,  .name = "text_in",  .flags = O_RDWR | O_NONBLOCK,           .mode = 0644 },
-	{ .type = FIFO,  .name = "file_in",  .flags = O_RDWR | O_NONBLOCK,           .mode = 0644 },
-	{ .type = OUT_F, .name = "online",   .flags = O_WRONLY | O_TRUNC | O_CREAT,  .mode = 0644 },
-	{ .type = OUT_F, .name = "name",     .flags = O_WRONLY | O_TRUNC | O_CREAT,  .mode = 0644 },
-	{ .type = OUT_F, .name = "status",   .flags = O_WRONLY | O_TRUNC | O_CREAT,  .mode = 0644 },
-	{ .type = OUT_F, .name = "text_out", .flags = O_WRONLY | O_APPEND | O_CREAT, .mode = 0644 },
+	{ .type = FIFO,   .name = "text_in",  .flags = O_RDWR | O_NONBLOCK,           .mode = 0644 },
+	{ .type = FIFO,   .name = "file_in",  .flags = O_RDWR | O_NONBLOCK,           .mode = 0644 },
+	{ .type = STATIC, .name = "online",   .flags = O_WRONLY | O_TRUNC | O_CREAT,  .mode = 0644 },
+	{ .type = STATIC, .name = "name",     .flags = O_WRONLY | O_TRUNC | O_CREAT,  .mode = 0644 },
+	{ .type = STATIC, .name = "status",   .flags = O_WRONLY | O_TRUNC | O_CREAT,  .mode = 0644 },
+	{ .type = STATIC, .name = "text_out", .flags = O_WRONLY | O_APPEND | O_CREAT, .mode = 0644 },
 };
 
 enum {
@@ -733,7 +733,7 @@ friendcreate(int32_t fid)
 				perror("open");
 				exit(EXIT_FAILURE);
 			}
-		} else if (ffiles[i].type == OUT_F) {
+		} else if (ffiles[i].type == STATIC) {
 			r = open(ffiles[i].name, ffiles[i].flags, ffiles[i].mode);
 			if (r < 0) {
 				perror("open");
