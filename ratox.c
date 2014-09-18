@@ -108,6 +108,7 @@ struct transfer {
 	ssize_t n;
 	int pending;
 	int state;
+	time_t lastsent;
 };
 
 struct friend {
@@ -146,6 +147,7 @@ static void cbnamechange(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbstatusmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbuserstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
+static void completefile(struct friend *);
 static void sendfriendfile(struct friend *);
 static void dataload(void);
 static void datasave(void);
@@ -422,6 +424,7 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 				f->t.n = 0;
 				f->t.pending = 0;
 				f->t.state = TRANSFER_INPROGRESS;
+				f->t.lastsent = time(NULL);
 				break;
 			}
 		}
@@ -443,6 +446,13 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 }
 
 static void
+completefile(struct friend *f)
+{
+	tox_file_send_control(tox, f->fid, 0, f->t.fnum,
+			      TOX_FILECONTROL_FINISHED, NULL, 0);
+}
+
+static void
 sendfriendfile(struct friend *f)
 {
 	ssize_t n;
@@ -454,6 +464,7 @@ sendfriendfile(struct friend *f)
 				/* bad luck - we will try again later */
 				break;
 			}
+			f->t.lastsent = time(NULL);
 			f->t.pending = 0;
 		}
 		/* grab another buffer from the FIFO */
@@ -467,13 +478,6 @@ sendfriendfile(struct friend *f)
 			perror("read");
 			exit(EXIT_FAILURE);
 		}
-		/* we are done */
-		if (n == 0) {
-			tox_file_send_control(tox, f->fid, 0, f->t.fnum,
-					      TOX_FILECONTROL_FINISHED, NULL, 0);
-			f->t.state = TRANSFER_DONE;
-			break;
-		}
 		/* store transfer size in case we can't send it right now */
 		f->t.n = n;
 		if (tox_file_send_data(tox, f->fid, f->t.fnum, f->t.buf, f->t.n) == -1) {
@@ -481,6 +485,7 @@ sendfriendfile(struct friend *f)
 			f->t.pending = 1;
 			return;
 		}
+		f->t.lastsent = time(NULL);
 	}
 }
 
@@ -1029,7 +1034,7 @@ static void
 loop(void)
 {
 	struct friend *f;
-	time_t t0, t1;
+	time_t t0, t1, now;
 	int connected = 0;
 	int i, n;
 	int fdmax;
@@ -1069,11 +1074,20 @@ loop(void)
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			/* Only monitor friends that are online */
 			if (tox_get_friend_connection_status(tox, f->fid) == 1) {
-				for (i = 0; i < NR_FFIFOS; i++) {
-					FD_SET(f->fd[i], &rfds);
-					if (f->fd[i] > fdmax)
-						fdmax = f->fd[i];
-				}
+				FD_SET(f->fd[TEXT_IN_FIFO], &rfds);
+				if (f->fd[TEXT_IN_FIFO] > fdmax)
+					fdmax = f->fd[TEXT_IN_FIFO];
+				/* If the transfer has just been initiated
+				 * wait until we have a state change before we start
+				 * polling.  Avoids spinning endlessly while waiting
+				 * for the transfer to be accepted by the other
+				 * party.
+				 */
+				if (f->t.state == TRANSFER_INITIATED)
+					continue;
+				FD_SET(f->fd[FILE_IN_FIFO], &rfds);
+				if (f->fd[FILE_IN_FIFO] > fdmax)
+					fdmax = f->fd[FILE_IN_FIFO];
 			}
 		}
 
@@ -1096,6 +1110,7 @@ loop(void)
 					printout("Stale transfer detected, friend offline\n");
 					f->t.state = TRANSFER_NONE;
 					free(f->t.buf);
+					f->t.buf = NULL;
 				}
 			}
 		}
@@ -1111,18 +1126,37 @@ loop(void)
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			if (tox_get_friend_connection_status(tox, f->fid) == 0)
 				continue;
-			if (f->t.state == TRANSFER_NONE)
+			if (f->t.state != TRANSFER_INPROGRESS)
 				continue;
-			if (f->t.pending == 0)
+			if (f->t.pending == 1)
+				sendfriendfile(f);
+		}
+
+		/* Check for completed file transfers */
+		now = time(NULL);
+		TAILQ_FOREACH(f, &friendhead, entry) {
+			if (tox_get_friend_connection_status(tox, f->fid) == 0)
 				continue;
 			switch (f->t.state) {
+			case TRANSFER_NONE:
+			case TRANSFER_INITIATED:
+				break;
 			case TRANSFER_INPROGRESS:
-				sendfriendfile(f);
-				if (f->t.state == TRANSFER_DONE) {
-					printout("Transfer complete\n");
-					f->t.state = TRANSFER_NONE;
-					free(f->t.buf);
-				}
+				/* We use a 1 second grace period, if no reads
+				 * happen during that period we consider the transfer
+				 * to have completed and signal the end of transmission
+				 * control packet.  If we knew the size of the file
+				 * it would have been easier to do this but since we are
+				 * reading from a FIFO this is not really a possibility.
+				 */
+				if (now > f->t.lastsent + 1)
+					completefile(f);
+				break;
+			case TRANSFER_DONE:
+				printout("Transfer complete\n");
+				f->t.state = TRANSFER_NONE;
+				free(f->t.buf);
+				f->t.buf = NULL;
 				break;
 			}
 		}
@@ -1159,11 +1193,6 @@ loop(void)
 						break;
 					case TRANSFER_INPROGRESS:
 						sendfriendfile(f);
-						if (f->t.state == TRANSFER_DONE) {
-							printout("Transfer complete\n");
-							f->t.state = TRANSFER_NONE;
-							free(f->t.buf);
-						}
 						break;
 					}
 					break;
