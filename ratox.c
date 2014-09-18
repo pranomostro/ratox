@@ -1058,6 +1058,8 @@ loop(void)
 				tox_add_friend_norequest(tox, r->id);
 				printout("Accepted friend request for %s\n", r->idstr);
 				datasave();
+			} else {
+				printout("Rejected friend request for %s\n", r->idstr);
 			}
 			unlinkat(gslots[REQUEST].fd[OUT], r->idstr, 0);
 			close(r->fd);
