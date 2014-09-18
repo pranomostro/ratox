@@ -94,12 +94,12 @@ enum {
 };
 
 static struct file ffiles[] = {
-	{ .type = FIFO,  .name = "text_in",  .flags = O_RDWR | O_NONBLOCK,          .mode = 0644 },
-	{ .type = FIFO,  .name = "file_in",  .flags = O_RDWR | O_NONBLOCK,          .mode = 0644 },
-	{ .type = OUT_F, .name = "online",   .flags = O_WRONLY | O_TRUNC | O_CREAT, .mode = 0644 },
-	{ .type = OUT_F, .name = "name",     .flags = O_WRONLY | O_TRUNC | O_CREAT, .mode = 0644 },
-	{ .type = OUT_F, .name = "status",   .flags = O_WRONLY | O_TRUNC | O_CREAT, .mode = 0644 },
-	{ .type = OUT_F, .name = "text_out", .flags = O_APPEND | O_CREAT,           .mode = 0644 },
+	{ .type = FIFO,  .name = "text_in",  .flags = O_RDWR | O_NONBLOCK,           .mode = 0644 },
+	{ .type = FIFO,  .name = "file_in",  .flags = O_RDWR | O_NONBLOCK,           .mode = 0644 },
+	{ .type = OUT_F, .name = "online",   .flags = O_WRONLY | O_TRUNC | O_CREAT,  .mode = 0644 },
+	{ .type = OUT_F, .name = "name",     .flags = O_WRONLY | O_TRUNC | O_CREAT,  .mode = 0644 },
+	{ .type = OUT_F, .name = "status",   .flags = O_WRONLY | O_TRUNC | O_CREAT,  .mode = 0644 },
+	{ .type = OUT_F, .name = "text_out", .flags = O_WRONLY | O_APPEND | O_CREAT, .mode = 0644 },
 };
 
 enum {
