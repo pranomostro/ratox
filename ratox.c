@@ -561,7 +561,7 @@ localinit(void)
 					perror("mkfifo");
 					exit(EXIT_FAILURE);
 				}
-				r = open(gfiles[m].name, gfiles[m].flags);
+				r = open(gfiles[m].name, gfiles[m].flags, 0644);
 				if (r < 0) {
 					perror("open");
 					exit(EXIT_FAILURE);
@@ -569,7 +569,7 @@ localinit(void)
 				gslots[i].fd[m] = r;
 			} else if (gfiles[m].type == OUT_F) {
 				if (gslots[i].outtype == STATIC) {
-					r = open(gfiles[m].name, gfiles[m].flags);
+					r = open(gfiles[m].name, gfiles[m].flags, 0644);
 					if (r < 0) {
 						perror("open");
 						exit(EXIT_FAILURE);
@@ -726,13 +726,13 @@ friendcreate(int32_t fid)
 				perror("mkfifo");
 				exit(EXIT_FAILURE);
 			}
-			r = open(ffiles[i].name, ffiles[i].flags);
+			r = open(ffiles[i].name, ffiles[i].flags, 0644);
 			if (r < 0) {
 				perror("open");
 				exit(EXIT_FAILURE);
 			}
 		} else if (ffiles[i].type == STATIC) {
-			r = open(ffiles[i].name, ffiles[i].flags);
+			r = open(ffiles[i].name, ffiles[i].flags, 0644);
 			if (r < 0) {
 				perror("open");
 				exit(EXIT_FAILURE);
