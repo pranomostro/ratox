@@ -68,12 +68,12 @@ enum {
 };
 
 static void setname(void *);
-static void setstatusmsg(void *);
+static void setstatus(void *);
 static void sendfriendreq(void *);
 
 static struct slot gslots[] = {
 	[NAME]    = { .name = "name",	 .cb = setname,	      .outtype = STATIC },
-	[STATUS]  = { .name = "status",	 .cb = setstatusmsg,  .outtype = STATIC },
+	[STATUS]  = { .name = "status",	 .cb = setstatus,     .outtype = STATIC },
 	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outtype = FOLDER, .outmode = 0755 },
 };
 
@@ -84,15 +84,22 @@ static struct file gfiles[] = {
 };
 
 enum {
-	TEXT_IN_FIFO,
-	FILE_IN_FIFO,
-	NR_FFIFOS
+	FTEXT_IN,
+	FFILE_IN,
+	FONLINE,
+	FNAME,
+	FSTATUS,
+	FTEXT_OUT,
+	NR_FFILES
 };
 
-/* Friend related FIFOs, they go in <friend-id/{text,file}_in */
-static struct file ffifos[] = {
-	{ .type = FIFO, .name = "text_in", .flags = O_RDWR | O_NONBLOCK, .mode = 0644 },
-	{ .type = FIFO, .name = "file_in", .flags = O_RDWR | O_NONBLOCK, .mode = 0644 },
+static struct file ffiles[] = {
+	{ .type = FIFO,  .name = "text_in",  .flags = O_RDWR | O_NONBLOCK,          .mode = 0644 },
+	{ .type = FIFO,  .name = "file_in",  .flags = O_RDWR | O_NONBLOCK,          .mode = 0644 },
+	{ .type = OUT_F, .name = "online",   .flags = O_WRONLY | O_TRUNC | O_CREAT, .mode = 0644 },
+	{ .type = OUT_F, .name = "name",     .flags = O_WRONLY | O_TRUNC | O_CREAT, .mode = 0644 },
+	{ .type = OUT_F, .name = "status",   .flags = O_WRONLY | O_TRUNC | O_CREAT, .mode = 0644 },
+	{ .type = OUT_F, .name = "text_out", .flags = O_APPEND | O_CREAT,           .mode = 0644 },
 };
 
 enum {
@@ -119,7 +126,7 @@ struct friend {
 	uint8_t id[TOX_CLIENT_ID_SIZE];
 	/* null terminated id */
 	char idstr[2 * TOX_CLIENT_ID_SIZE + 1];
-	int fd[NR_FFIFOS];
+	int fd[NR_FFILES];
 	struct transfer t;
 	TAILQ_ENTRY(friend) entry;
 };
@@ -160,7 +167,6 @@ static void id2str(uint8_t *, char *);
 static void str2id(char *, uint8_t *);
 static struct friend *friendcreate(int32_t);
 static void friendload(void);
-static void writeline(const char *, const char *, const char *, ...);
 static void loop(void);
 
 static void
@@ -197,7 +203,6 @@ cbconnstatus(Tox *m, int32_t fid, uint8_t status, void *udata)
 {
 	struct friend *f;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
-	char path[PATH_MAX];
 	int r;
 
 	r = tox_get_name(tox, fid, name);
@@ -212,8 +217,7 @@ cbconnstatus(Tox *m, int32_t fid, uint8_t status, void *udata)
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			snprintf(path, sizeof(path), "%s/online", f->idstr);
-			writeline(path, "w", status == 0 ? "0\n" : "1\n");
+			dprintf(f->fd[FONLINE], status == 0 ? "0\n" : "1\n");
 			return;
 		}
 	}
@@ -227,7 +231,6 @@ cbfriendmessage(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *ud
 	struct friend *f;
 	uint8_t msg[len + 1];
 	char buft[64];
-	char path[PATH_MAX];
 	time_t t;
 
 	memcpy(msg, data, len);
@@ -237,8 +240,7 @@ cbfriendmessage(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *ud
 		if (f->fid == fid) {
 			t = time(NULL);
 			strftime(buft, sizeof(buft), "%F %R", localtime(&t));
-			snprintf(path, sizeof(path), "%s/text_out", f->idstr);
-			writeline(path, "a", "%s %s\n", buft, msg);
+			dprintf(f->fd[FTEXT_OUT], "%s %s\n", buft, msg);
 			printout("%s %s\n",
 				 f->namestr[0] == '\0' ? "Anonymous" : f->namestr, msg);
 			break;
@@ -293,15 +295,13 @@ cbnamechange(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *user)
 {
 	struct friend *f;
 	uint8_t name[len + 1];
-	char path[PATH_MAX];
 
 	memcpy(name, data, len);
 	name[len] = '\0';
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			snprintf(path, sizeof(path), "%s/name", f->idstr);
-			writeline(path, "w", "%s\n", name);
+			dprintf(f->fd[FNAME], "%s\n", name);
 			if (memcmp(f->namestr, name, len + 1) == 0)
 				break;
 			printout("%s -> %s\n", f->namestr[0] == '\0' ?
@@ -317,18 +317,16 @@ static void
 cbstatusmessage(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *udata)
 {
 	struct friend *f;
-	uint8_t statusmsg[len + 1];
-	char path[PATH_MAX];
+	uint8_t status[len + 1];
 
-	memcpy(statusmsg, data, len);
-	statusmsg[len] = '\0';
+	memcpy(status, data, len);
+	status[len] = '\0';
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
-			snprintf(path, sizeof(path), "%s/statusmsg", f->idstr);
-			writeline(path, "w", "%s\n", statusmsg);
+			dprintf(f->fd[FSTATUS], "%s\n", status);
 			printout("%s changed status: %s\n",
-				 f->namestr[0] == '\0' ? "Anonymous" : f->namestr, statusmsg);
+				 f->namestr[0] == '\0' ? "Anonymous" : f->namestr, status);
 			break;
 		}
 	}
@@ -422,7 +420,7 @@ sendfriendfile(struct friend *f)
 			f->t.pending = 0;
 		}
 		/* grab another buffer from the FIFO */
-		n = read(f->fd[FILE_IN_FIFO], f->t.buf, f->t.chunksz);
+		n = read(f->fd[FFILE_IN], f->t.buf, f->t.chunksz);
 		if (n < 0) {
 			if (errno == EINTR)
 				continue;
@@ -450,7 +448,7 @@ sendfriendtext(struct friend *f)
 	ssize_t n;
 
 again:
-	n = read(f->fd[TEXT_IN_FIFO], buf, sizeof(buf));
+	n = read(f->fd[FTEXT_IN], buf, sizeof(buf));
 	if (n < 0) {
 		if (errno == EINTR)
 			goto again;
@@ -538,7 +536,7 @@ localinit(void)
 {
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
 	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
-	uint8_t statusmsg[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
+	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
 	FILE *fp;
 	DIR *d;
 	int r;
@@ -608,11 +606,11 @@ localinit(void)
 	dprintf(gslots[NAME].fd[OUT], "%s\n", name);
 
 	/* Dump status message */
-	r = tox_get_self_status_message(tox, statusmsg,
-					sizeof(statusmsg) - 1);
-	if (r > sizeof(statusmsg) - 1)
-		r = sizeof(statusmsg) - 1;
-	statusmsg[r] = '\0';
+	r = tox_get_self_status_message(tox, status,
+					sizeof(status) - 1);
+	if (r > sizeof(status) - 1)
+		r = sizeof(status) - 1;
+	status[r] = '\0';
 	ftruncate(gslots[STATUS].fd[OUT], 0);
 	dprintf(gslots[STATUS].fd[OUT], "%s\n", name);
 
@@ -687,9 +685,8 @@ str2id(char *idstr, uint8_t *id)
 static struct friend *
 friendcreate(int32_t fid)
 {
-	char path[PATH_MAX];
 	struct friend *f;
-	uint8_t statusmsg[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
+	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
 	size_t i;
 	int r;
 
@@ -716,34 +713,42 @@ friendcreate(int32_t fid)
 		exit(EXIT_FAILURE);
 	}
 
-	for (i = 0; i < LEN(ffifos); i++) {
-		snprintf(path, sizeof(path), "%s/%s", f->idstr,
-			 ffifos[i].name);
-		r = mkfifo(path, ffifos[i].mode);
-		if (r < 0 && errno != EEXIST) {
-			perror("mkfifo");
-			exit(EXIT_FAILURE);
-		}
-		r = open(path, ffifos[i].flags, 0);
-		if (r < 0) {
-			perror("open");
-			exit(EXIT_FAILURE);
+	r = chdir(f->idstr);
+	if (r < 0) {
+		perror("chdir");
+		exit(EXIT_FAILURE);
+	}
+	for (i = 0; i < LEN(ffiles); i++) {
+		if (ffiles[i].type == FIFO) {
+			r = mkfifo(ffiles[i].name, ffiles[i].mode);
+			if (r < 0 && errno != EEXIST) {
+				perror("mkfifo");
+				exit(EXIT_FAILURE);
+			}
+			r = open(ffiles[i].name, ffiles[i].flags);
+			if (r < 0) {
+				perror("open");
+				exit(EXIT_FAILURE);
+			}
+		} else if (ffiles[i].type == OUT_F) {
+			r = open(ffiles[i].name, ffiles[i].flags, ffiles[i].mode);
+			if (r < 0) {
+				perror("open");
+				exit(EXIT_FAILURE);
+			}
 		}
 		f->fd[i] = r;
 	}
+	chdir("..");
 
-	snprintf(path, sizeof(path), "%s/name", f->idstr);
-	writeline(path, "w", "%s\n", f->namestr);
-	snprintf(path, sizeof(path), "%s/online", f->idstr);
-	writeline(path, "w", tox_get_friend_connection_status(tox, fid) == 0 ? "0\n" : "1\n");
+	dprintf(f->fd[FNAME], "%s\n", f->namestr);
+	dprintf(f->fd[FONLINE], "%s\n",
+		tox_get_friend_connection_status(tox, fid) == 0 ? "0" : "1");
 	r = tox_get_status_message_size(tox, fid);
-	if (r > sizeof(statusmsg) - 1)
-		r = sizeof(statusmsg) - 1;
-	statusmsg[r] = '\0';
-	snprintf(path, sizeof(path), "%s/statusmsg", f->idstr);
-	writeline(path, "w", "%s\n", statusmsg);
-	snprintf(path, sizeof(path), "%s/text_out", f->idstr);
-	writeline(path, "a", "");
+	if (r > sizeof(status) - 1)
+		r = sizeof(status) - 1;
+	status[r] = '\0';
+	dprintf(f->fd[FSTATUS], "%s\n", status);
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
 
@@ -773,24 +778,6 @@ friendload(void)
 }
 
 static void
-writeline(const char *path, const char *mode,
-	  const char *fmt, ...)
-{
-	FILE *fp;
-	va_list ap;
-
-	fp = fopen(path, mode);
-	if (!fp) {
-		perror("fopen");
-		exit(EXIT_FAILURE);
-	}
-	va_start(ap, fmt);
-	vfprintf(fp, fmt, ap);
-	va_end(ap);
-	fclose(fp);
-}
-
-static void
 setname(void *data)
 {
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
@@ -817,13 +804,13 @@ again:
 }
 
 static void
-setstatusmsg(void *data)
+setstatus(void *data)
 {
-	uint8_t statusmsg[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
+	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
 	int r;
 
 again:
-	r = read(gslots[STATUS].fd[IN], statusmsg, sizeof(statusmsg) - 1);
+	r = read(gslots[STATUS].fd[IN], status, sizeof(status) - 1);
 	if (r < 0) {
 		if (errno == EINTR)
 			goto again;
@@ -832,14 +819,14 @@ again:
 		perror("read");
 		return;
 	}
-	if (statusmsg[r - 1] == '\n')
+	if (status[r - 1] == '\n')
 		r--;
-	statusmsg[r] = '\0';
-	tox_set_status_message(tox, statusmsg, r);
+	status[r] = '\0';
+	tox_set_status_message(tox, status, r);
 	datasave();
-	printout("Changed status message to %s\n", statusmsg);
+	printout("Changed status message to %s\n", status);
 	ftruncate(gslots[STATUS].fd[OUT], 0);
-	dprintf(gslots[STATUS].fd[OUT], "%s\n", statusmsg);
+	dprintf(gslots[STATUS].fd[OUT], "%s\n", status);
 }
 
 static void
@@ -957,9 +944,9 @@ loop(void)
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			/* Only monitor friends that are online */
 			if (tox_get_friend_connection_status(tox, f->fid) == 1) {
-				FD_SET(f->fd[TEXT_IN_FIFO], &rfds);
-				if (f->fd[TEXT_IN_FIFO] > fdmax)
-					fdmax = f->fd[TEXT_IN_FIFO];
+				FD_SET(f->fd[FTEXT_IN], &rfds);
+				if (f->fd[FTEXT_IN] > fdmax)
+					fdmax = f->fd[FTEXT_IN];
 				/* If the transfer has just been initiated
 				 * wait until we have a state change before we start
 				 * polling.  Avoids spinning endlessly while waiting
@@ -968,9 +955,9 @@ loop(void)
 				 */
 				if (f->t.state == TRANSFER_INITIATED)
 					continue;
-				FD_SET(f->fd[FILE_IN_FIFO], &rfds);
-				if (f->fd[FILE_IN_FIFO] > fdmax)
-					fdmax = f->fd[FILE_IN_FIFO];
+				FD_SET(f->fd[FFILE_IN], &rfds);
+				if (f->fd[FFILE_IN] > fdmax)
+					fdmax = f->fd[FFILE_IN];
 			}
 		}
 
@@ -1070,14 +1057,14 @@ loop(void)
 		}
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			for (i = 0; i < NR_FFIFOS; i++) {
+			for (i = 0; i < NR_FFILES; i++) {
 				if (FD_ISSET(f->fd[i], &rfds) == 0)
 					continue;
 				switch (i) {
-				case TEXT_IN_FIFO:
+				case FTEXT_IN:
 					sendfriendtext(f);
 					break;
-				case FILE_IN_FIFO:
+				case FFILE_IN:
 					switch (f->t.state) {
 					case TRANSFER_NONE:
 						/* prepare a new transfer */
