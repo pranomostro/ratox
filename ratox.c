@@ -36,7 +36,6 @@ struct file {
 	int type;
 	const char *name;
 	int flags;
-	mode_t mode;
 };
 
 enum {
@@ -50,7 +49,6 @@ struct slot {
 	const char *name;
 	void (*cb)(void *);
 	int outtype;
-	int outmode;
 	int fd[NR_GFILES];
 };
 
@@ -74,13 +72,13 @@ static void sendfriendreq(void *);
 static struct slot gslots[] = {
 	[NAME]    = { .name = "name",	 .cb = setname,	      .outtype = STATIC },
 	[STATUS]  = { .name = "status",	 .cb = setstatus,     .outtype = STATIC },
-	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outtype = FOLDER, .outmode = 0755 },
+	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outtype = FOLDER },
 };
 
 static struct file gfiles[] = {
-	{ .type = FIFO,  .name = "in",  .flags = O_RDWR | O_NONBLOCK,          .mode = 0644},
-	{ .type = OUT_F, .name = "out", .flags = O_WRONLY | O_TRUNC | O_CREAT, .mode = 0644},
-	{ .type = OUT_F, .name = "err", .flags = O_WRONLY | O_TRUNC | O_CREAT, .mode = 0644},
+	{ .type = FIFO,  .name = "in",  .flags = O_RDWR   | O_NONBLOCK,       },
+	{ .type = OUT_F, .name = "out", .flags = O_WRONLY | O_TRUNC | O_CREAT },
+	{ .type = OUT_F, .name = "err", .flags = O_WRONLY | O_TRUNC | O_CREAT },
 };
 
 enum {
@@ -94,12 +92,12 @@ enum {
 };
 
 static struct file ffiles[] = {
-	{ .type = FIFO,   .name = "text_in",  .flags = O_RDWR | O_NONBLOCK,           .mode = 0644 },
-	{ .type = FIFO,   .name = "file_in",  .flags = O_RDWR | O_NONBLOCK,           .mode = 0644 },
-	{ .type = STATIC, .name = "online",   .flags = O_WRONLY | O_TRUNC | O_CREAT,  .mode = 0644 },
-	{ .type = STATIC, .name = "name",     .flags = O_WRONLY | O_TRUNC | O_CREAT,  .mode = 0644 },
-	{ .type = STATIC, .name = "status",   .flags = O_WRONLY | O_TRUNC | O_CREAT,  .mode = 0644 },
-	{ .type = STATIC, .name = "text_out", .flags = O_WRONLY | O_APPEND | O_CREAT, .mode = 0644 },
+	{ .type = FIFO,   .name = "text_in",  .flags = O_RDWR   | O_NONBLOCK,         },
+	{ .type = FIFO,   .name = "file_in",  .flags = O_RDWR   | O_NONBLOCK,         },
+	{ .type = STATIC, .name = "online",   .flags = O_WRONLY | O_TRUNC  | O_CREAT  },
+	{ .type = STATIC, .name = "name",     .flags = O_WRONLY | O_TRUNC  | O_CREAT  },
+	{ .type = STATIC, .name = "status",   .flags = O_WRONLY | O_TRUNC  | O_CREAT  },
+	{ .type = STATIC, .name = "text_out", .flags = O_WRONLY | O_APPEND | O_CREAT  },
 };
 
 enum {
@@ -558,12 +556,12 @@ localinit(void)
 		}
 		for (m = 0; m < LEN(gfiles); m++) {
 			if (gfiles[m].type == FIFO) {
-				r = mkfifo(gfiles[m].name, gfiles[m].mode);
+				r = mkfifo(gfiles[m].name, 0644);
 				if (r < 0 && errno != EEXIST) {
 					perror("mkfifo");
 					exit(EXIT_FAILURE);
 				}
-				r = open(gfiles[m].name, gfiles[m].flags, 0);
+				r = open(gfiles[m].name, gfiles[m].flags);
 				if (r < 0) {
 					perror("open");
 					exit(EXIT_FAILURE);
@@ -571,14 +569,14 @@ localinit(void)
 				gslots[i].fd[m] = r;
 			} else if (gfiles[m].type == OUT_F) {
 				if (gslots[i].outtype == STATIC) {
-					r = open(gfiles[m].name, gfiles[m].flags, gfiles[m].mode);
+					r = open(gfiles[m].name, gfiles[m].flags);
 					if (r < 0) {
 						perror("open");
 						exit(EXIT_FAILURE);
 					}
 					gslots[i].fd[m] = r;
 				} else if (gslots[i].outtype == FOLDER) {
-					r = mkdir(gfiles[m].name, gslots[i].outmode);
+					r = mkdir(gfiles[m].name, 0777);
 					if (r < 0 && errno != EEXIST) {
 						perror("mkdir");
 						exit(EXIT_FAILURE);
@@ -723,7 +721,7 @@ friendcreate(int32_t fid)
 	}
 	for (i = 0; i < LEN(ffiles); i++) {
 		if (ffiles[i].type == FIFO) {
-			r = mkfifo(ffiles[i].name, ffiles[i].mode);
+			r = mkfifo(ffiles[i].name, 0644);
 			if (r < 0 && errno != EEXIST) {
 				perror("mkfifo");
 				exit(EXIT_FAILURE);
@@ -734,7 +732,7 @@ friendcreate(int32_t fid)
 				exit(EXIT_FAILURE);
 			}
 		} else if (ffiles[i].type == STATIC) {
-			r = open(ffiles[i].name, ffiles[i].flags, ffiles[i].mode);
+			r = open(ffiles[i].name, ffiles[i].flags);
 			if (r < 0) {
 				perror("open");
 				exit(EXIT_FAILURE);
