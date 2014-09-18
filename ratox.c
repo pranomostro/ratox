@@ -1050,11 +1050,15 @@ loop(void)
 			rtmp = TAILQ_NEXT(r, entry);
 			if (FD_ISSET(r->fd, &rfds) == 0)
 				continue;
-			if (read(r->fd, &c, 1) != 1 || c != '1')
+			if (read(r->fd, &c, 1) != 1)
 				continue;
-			tox_add_friend_norequest(tox, r->id);
-			printout("Accepted friend request for %s\n", r->idstr);
-			datasave();
+			if (c != '0' && c != '1')
+				continue;
+			if (c == '1') {
+				tox_add_friend_norequest(tox, r->id);
+				printout("Accepted friend request for %s\n", r->idstr);
+				datasave();
+			}
 			unlinkat(gslots[REQUEST].fd[OUT], r->idstr, 0);
 			close(r->fd);
 			TAILQ_REMOVE(&reqhead, r, entry);
