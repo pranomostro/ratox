@@ -4,6 +4,7 @@
 #include <sys/types.h>
 
 #include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -129,6 +130,7 @@ struct request {
 	char idstr[2 * TOX_CLIENT_ID_SIZE + 1];
 	/* null terminated friend request message */
 	char *msgstr;
+	int fd;
 	TAILQ_ENTRY(request) entry;
 };
 
@@ -158,69 +160,8 @@ static void id2str(uint8_t *, char *);
 static void str2id(char *, uint8_t *);
 static struct friend *friendcreate(int32_t);
 static void friendload(void);
-static int cmdrun(void);
-static int cmdaccept(char *, size_t);
-static int cmdhelp(char *, size_t);
 static void writeline(const char *, const char *, const char *, ...);
 static void loop(void);
-
-static char qsep[] = " \t\r\n";
-
-/* tokenization routines taken from Plan9 */
-static char *
-qtoken(char *s, char *sep)
-{
-	int quoting;
-	char *t;
-
-	quoting = 0;
-	t = s;	/* s is output string, t is input string */
-	while(*t!='\0' && (quoting || strchr(sep, *t)==NULL)) {
-		if(*t != '\'') {
-			*s++ = *t++;
-			continue;
-		}
-		/* *t is a quote */
-		if(!quoting) {
-			quoting = 1;
-			t++;
-			continue;
-		}
-		/* quoting and we're on a quote */
-		if(t[1] != '\'') {
-			/* end of quoted section; absorb closing quote */
-			t++;
-			quoting = 0;
-			continue;
-		}
-		/* doubled quote; fold one quote into two */
-		t++;
-		*s++ = *t++;
-	}
-	if(*s != '\0') {
-		*s = '\0';
-		if(t == s)
-			t++;
-	}
-	return t;
-}
-
-static int
-tokenize(char *s, char **args, int maxargs)
-{
-	int nargs;
-
-	for(nargs=0; nargs<maxargs; nargs++) {
-		while(*s!='\0' && strchr(qsep, *s)!=NULL)
-			s++;
-		if(*s == '\0')
-			break;
-		args[nargs] = s;
-		s = qtoken(s, qsep);
-	}
-
-	return nargs;
-}
 
 static void
 printrat(void)
@@ -309,6 +250,7 @@ static void
 cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, void *udata)
 {
 	struct request *req;
+	int r;
 
 	req = calloc(1, sizeof(*req));
 	if (!req) {
@@ -327,6 +269,18 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, vo
 		memcpy(req->msgstr, data, len);
 		req->msgstr[len] = '\0';
 	}
+
+	r = mkfifoat(gslots[REQUEST].fd[OUT], req->idstr, 0644);
+	if (r < 0 && errno != EEXIST) {
+		perror("mkfifoat");
+		exit(EXIT_FAILURE);
+	}
+	r = openat(gslots[REQUEST].fd[OUT], req->idstr, O_RDWR | O_NONBLOCK);
+	if (r < 0) {
+		perror("open");
+		exit(EXIT_FAILURE);
+	}
+	req->fd = r;
 
 	TAILQ_INSERT_TAIL(&reqhead, req, entry);
 
@@ -586,6 +540,7 @@ localinit(void)
 	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
 	uint8_t statusmsg[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
 	FILE *fp;
+	DIR *d;
 	int r;
 	size_t i, m;
 
@@ -627,7 +582,17 @@ localinit(void)
 						perror("mkdir");
 						exit(EXIT_FAILURE);
 					}
-					gslots[i].fd[m] = 0;
+					d = opendir(gfiles[m].name);
+					if (!d) {
+						perror("opendir");
+						exit(EXIT_FAILURE);
+					}
+					r = dirfd(d);
+					if (r < 0) {
+						perror("dirfd");
+						exit(EXIT_FAILURE);
+					}
+					gslots[i].fd[m] = r;
 				}
 			}
 		}
@@ -807,94 +772,6 @@ friendload(void)
 	free(fids);
 }
 
-struct cmd {
-	const char *cmd;
-	int (*cb)(char *, size_t);
-	const char *usage;
-} cmds[] = {
-	{ .cmd = "a", .cb = cmdaccept, .usage = "usage: a [id]\tAccept or list pending requests\n" },
-	{ .cmd = "h", .cb = cmdhelp,   .usage = NULL },
-};
-
-static int
-cmdaccept(char *cmd, size_t sz)
-{
-	struct request *req, *tmp;
-	char *args[2];
-	int r;
-	int found = 0;
-
-	r = tokenize(cmd, args, 2);
-
-	if (r == 1) {
-		TAILQ_FOREACH(req, &reqhead, entry) {
-			printout("Pending request from %s with message: %s\n",
-				 req->idstr, req->msgstr);
-			found = 1;
-		}
-		if (found == 0)
-			printf("No pending requests\n");
-	} else {
-		for (req = TAILQ_FIRST(&reqhead); req; req = tmp) {
-			tmp = TAILQ_NEXT(req, entry);
-			if (strcmp(req->idstr, args[1]) == 0) {
-				tox_add_friend_norequest(tox, req->id);
-				printout("Accepted friend request for %s\n", req->idstr);
-				datasave();
-				TAILQ_REMOVE(&reqhead, req, entry);
-				free(req->msgstr);
-				free(req);
-				break;
-			}
-		}
-	}
-
-	return 0;
-}
-
-static int
-cmdhelp(char *cmd, size_t sz)
-{
-	size_t i;
-
-	for (i = 0; i < LEN(cmds); i++)
-		if (cmds[i].usage)
-			fprintf(stderr, "%s", cmds[i].usage);
-	return 0;
-}
-
-static int
-cmdrun(void)
-{
-	char cmd[BUFSIZ];
-	ssize_t n;
-	size_t i;
-
-again:
-	n = read(STDIN_FILENO, cmd, sizeof(cmd) - 1);
-	if (n < 0) {
-		if (errno == EINTR)
-			goto again;
-		perror("read");
-		exit(EXIT_FAILURE);
-	}
-	if (n == 0)
-		return 0;
-	cmd[n] = '\0';
-	if (cmd[strlen(cmd) - 1] == '\n')
-		cmd[strlen(cmd) - 1] = '\0';
-	if (cmd[0] == '\0')
-		return 0;
-
-	for (i = 0; i < LEN(cmds); i++)
-		if (cmd[0] == cmds[i].cmd[0])
-			if (cmd[1] == '\0' || isspace((int)cmd[1]))
-				return (*cmds[i].cb)(cmd, strlen(cmd));
-
-	fprintf(stderr, "Unknown command '%s', type h for help\n", cmd);
-	return -1;
-}
-
 static void
 writeline(const char *path, const char *mode,
 	  const char *fmt, ...)
@@ -1034,10 +911,12 @@ static void
 loop(void)
 {
 	struct friend *f;
+	struct request *r;
 	time_t t0, t1, now;
 	int connected = 0;
 	int i, n;
 	int fdmax;
+	char c;
 	fd_set rfds;
 	struct timeval tv;
 
@@ -1062,13 +941,17 @@ loop(void)
 		tox_do(tox);
 
 		FD_ZERO(&rfds);
-		FD_SET(STDIN_FILENO, &rfds);
-		fdmax = STDIN_FILENO;
 
 		for (i = 0; i < LEN(gslots); i++) {
 			FD_SET(gslots[i].fd[IN], &rfds);
 			if (gslots[i].fd[IN] > fdmax)
 				fdmax = gslots[i].fd[IN];
+		}
+
+		TAILQ_FOREACH(r, &reqhead, entry) {
+			FD_SET(r->fd, &rfds);
+			if(r->fd > fdmax)
+				fdmax = r->fd;
 		}
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
@@ -1164,13 +1047,26 @@ loop(void)
 		if (n == 0)
 			continue;
 
-		if (FD_ISSET(STDIN_FILENO, &rfds) != 0)
-			cmdrun();
-
 		for (i = 0; i < LEN(gslots); i++) {
 			if (FD_ISSET(gslots[i].fd[IN], &rfds) == 0)
 				continue;
 			(*gslots[i].cb)(NULL);
+		}
+
+		TAILQ_FOREACH(r, &reqhead, entry) {
+			if (FD_ISSET(r->fd, &rfds) == 0)
+				continue;
+			if (read(r->fd, &c, 1) != 1 || c != '1') {
+				continue;
+			}
+			tox_add_friend_norequest(tox, r->id);
+			printout("Accepted friend request for %s\n", r->idstr);
+			datasave();
+			close(r->fd);
+			unlinkat(gslots[REQUEST].fd[OUT], r->idstr, 0);
+			TAILQ_REMOVE(&reqhead, r, entry);
+			free(r->msgstr);
+			free(r);
 		}
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
