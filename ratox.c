@@ -911,7 +911,7 @@ static void
 loop(void)
 {
 	struct friend *f;
-	struct request *r;
+	struct request *r, *rtmp;
 	time_t t0, t1, now;
 	int connected = 0;
 	int i, n;
@@ -1053,17 +1053,17 @@ loop(void)
 			(*gslots[i].cb)(NULL);
 		}
 
-		TAILQ_FOREACH(r, &reqhead, entry) {
+		for (r = TAILQ_FIRST(&reqhead); r; r = rtmp) {
+			rtmp = TAILQ_NEXT(r, entry);
 			if (FD_ISSET(r->fd, &rfds) == 0)
 				continue;
-			if (read(r->fd, &c, 1) != 1 || c != '1') {
+			if (read(r->fd, &c, 1) != 1 || c != '1')
 				continue;
-			}
 			tox_add_friend_norequest(tox, r->id);
 			printout("Accepted friend request for %s\n", r->idstr);
 			datasave();
-			close(r->fd);
 			unlinkat(gslots[REQUEST].fd[OUT], r->idstr, 0);
+			close(r->fd);
 			TAILQ_REMOVE(&reqhead, r, entry);
 			free(r->msgstr);
 			free(r);
@@ -1104,7 +1104,6 @@ int
 main(int argc, char *argv[])
 {
 	printrat();
-	printf("Type h for help\n");
 	toxinit();
 	localinit();
 	friendload();
