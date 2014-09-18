@@ -217,6 +217,7 @@ cbconnstatus(Tox *m, int32_t fid, uint8_t status, void *udata)
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
+			ftruncate(f->fd[FONLINE], 0);
 			dprintf(f->fd[FONLINE], status == 0 ? "0\n" : "1\n");
 			return;
 		}
@@ -301,6 +302,7 @@ cbnamechange(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *user)
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
+			ftruncate(f->fd[FNAME], 0);
 			dprintf(f->fd[FNAME], "%s\n", name);
 			if (memcmp(f->namestr, name, len + 1) == 0)
 				break;
@@ -324,6 +326,7 @@ cbstatusmessage(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *ud
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->fid == fid) {
+			ftruncate(f->fd[FSTATUS], 0);
 			dprintf(f->fd[FSTATUS], "%s\n", status);
 			printout("%s changed status: %s\n",
 				 f->namestr[0] == '\0' ? "Anonymous" : f->namestr, status);
@@ -741,13 +744,16 @@ friendcreate(int32_t fid)
 	}
 	chdir("..");
 
+	ftruncate(f->fd[FNAME], 0);
 	dprintf(f->fd[FNAME], "%s\n", f->namestr);
+	ftruncate(f->fd[FONLINE], 0);
 	dprintf(f->fd[FONLINE], "%s\n",
 		tox_get_friend_connection_status(tox, fid) == 0 ? "0" : "1");
 	r = tox_get_status_message_size(tox, fid);
 	if (r > sizeof(status) - 1)
 		r = sizeof(status) - 1;
 	status[r] = '\0';
+	ftruncate(f->fd[FSTATUS], 0);
 	dprintf(f->fd[FSTATUS], "%s\n", status);
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
