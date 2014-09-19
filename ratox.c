@@ -60,8 +60,8 @@ enum {
 };
 
 enum {
+	NONE,
 	FIFO,
-	OUT_F,
 	STATIC,
 	FOLDER
 };
@@ -77,9 +77,9 @@ static struct slot gslots[] = {
 };
 
 static struct file gfiles[] = {
-	{ .type = FIFO,  .name = "in",  .flags = O_RDONLY | O_NONBLOCK,       },
-	{ .type = OUT_F, .name = "out", .flags = O_WRONLY | O_TRUNC | O_CREAT },
-	{ .type = OUT_F, .name = "err", .flags = O_WRONLY | O_TRUNC | O_CREAT },
+	{ .type = FIFO,   .name = "in",  .flags = O_RDONLY | O_NONBLOCK,       },
+	{ .type = NONE,   .name = "out", .flags = O_WRONLY | O_TRUNC | O_CREAT },
+	{ .type = STATIC, .name = "err", .flags = O_WRONLY | O_TRUNC | O_CREAT },
 };
 
 enum {
@@ -634,7 +634,14 @@ localinit(void)
 					exit(EXIT_FAILURE);
 				}
 				gslots[i].fd[m] = r;
-			} else if (gfiles[m].type == OUT_F) {
+			} else if (gfiles[m].type == STATIC) {
+				r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0644);
+				if (r < 0) {
+					perror("open");
+					exit(EXIT_FAILURE);
+				}
+				gslots[i].fd[m] = r;
+			} else if (gfiles[m].type == NONE) {
 				if (gslots[i].outtype == STATIC) {
 					r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0644);
 					if (r < 0) {
