@@ -371,21 +371,21 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 	switch (ctrltype) {
 	case TOX_FILECONTROL_ACCEPT:
 		if (rec_sen == 1) {
-			f->t.fnum = fnum;
-			f->t.chunksz = tox_file_data_size(tox, fnum);
-			f->t.buf = malloc(f->t.chunksz);
-			if (!f->t.buf) {
-				perror("malloc");
-				exit(EXIT_FAILURE);
-			}
-			f->t.n = 0;
-			f->t.pending = 0;
-			f->t.state = TRANSFER_INPROGRESS;
-			printout("Transfer is in progress\n");
-		} else {
 			if (f->t.state == TRANSFER_PAUSED) {
-				printf("Receiver resumed transfer\n");
+				printout("Receiver resumed transfer\n");
 				f->t.state = TRANSFER_INPROGRESS;
+			} else {
+				f->t.fnum = fnum;
+				f->t.chunksz = tox_file_data_size(tox, fnum);
+				f->t.buf = malloc(f->t.chunksz);
+				if (!f->t.buf) {
+					perror("malloc");
+					exit(EXIT_FAILURE);
+				}
+				f->t.n = 0;
+				f->t.pending = 0;
+				f->t.state = TRANSFER_INPROGRESS;
+				printout("Transfer is in progress\n");
 			}
 		}
 		break;
