@@ -105,6 +105,7 @@ enum {
 	TRANSFER_NONE,
 	TRANSFER_INITIATED,
 	TRANSFER_INPROGRESS,
+	TRANSFER_PAUSED,
 	TRANSFER_DONE
 };
 
@@ -361,35 +362,47 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 {
 	struct friend *f;
 
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->fid == fid)
+			break;
+	if (!f)
+		return;
+
 	switch (ctrltype) {
 	case TOX_FILECONTROL_ACCEPT:
 		if (rec_sen == 1) {
-			TAILQ_FOREACH(f, &friendhead, entry) {
-				if (f->fid != fid)
-					continue;
-				f->t.fnum = fnum;
-				f->t.chunksz = tox_file_data_size(tox, fnum);
-				f->t.buf = malloc(f->t.chunksz);
-				if (!f->t.buf) {
-					perror("malloc");
-					exit(EXIT_FAILURE);
-				}
-				f->t.n = 0;
-				f->t.pending = 0;
+			f->t.fnum = fnum;
+			f->t.chunksz = tox_file_data_size(tox, fnum);
+			f->t.buf = malloc(f->t.chunksz);
+			if (!f->t.buf) {
+				perror("malloc");
+				exit(EXIT_FAILURE);
+			}
+			f->t.n = 0;
+			f->t.pending = 0;
+			f->t.state = TRANSFER_INPROGRESS;
+			printout("Transfer is in progress\n");
+		} else {
+			if (f->t.state == TRANSFER_PAUSED) {
+				printf("Receiver resumed transfer\n");
 				f->t.state = TRANSFER_INPROGRESS;
-				printout("Transfer is in progress\n");
-				break;
+			}
+		}
+		break;
+	case TOX_FILECONTROL_PAUSE:
+		if (rec_sen == 1) {
+			if (f->t.state == TRANSFER_INPROGRESS) {
+				f->t.state = TRANSFER_PAUSED;
+				printout("Receiver paused transfer\n");
 			}
 		}
 		break;
 	case TOX_FILECONTROL_FINISHED:
 		if (rec_sen == 1) {
-			TAILQ_FOREACH(f, &friendhead, entry) {
-				if (f->fid != fid)
-					continue;
-				f->t.state = TRANSFER_DONE;
-				break;
-			}
+			printout("Transfer complete\n");
+			f->t.state = TRANSFER_NONE;
+			free(f->t.buf);
+			f->t.buf = NULL;
 		}
 		break;
 	default:
@@ -956,7 +969,7 @@ loop(void)
 {
 	struct friend *f;
 	struct request *r, *rtmp;
-	time_t t0, t1, now;
+	time_t t0, t1;
 	int connected = 0;
 	int i, n;
 	int fdmax;
@@ -1004,13 +1017,8 @@ loop(void)
 				FD_SET(f->fd[FTEXT_IN], &rfds);
 				if (f->fd[FTEXT_IN] > fdmax)
 					fdmax = f->fd[FTEXT_IN];
-				/* If the transfer has just been initiated
-				 * wait until we have a state change before we start
-				 * polling.  Avoids spinning endlessly while waiting
-				 * for the transfer to be accepted by the other
-				 * party.
-				 */
-				if (f->t.state == TRANSFER_INITIATED)
+				if (f->t.state == TRANSFER_INITIATED ||
+				    f->t.state == TRANSFER_PAUSED)
 					continue;
 				FD_SET(f->fd[FFILE_IN], &rfds);
 				if (f->fd[FFILE_IN] > fdmax)
@@ -1057,20 +1065,6 @@ loop(void)
 				continue;
 			if (f->t.pending == 1)
 				sendfriendfile(f);
-		}
-
-		/* Check for completed file transfers */
-		now = time(NULL);
-		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_get_friend_connection_status(tox, f->fid) == 0)
-				continue;
-			if (f->t.state == TRANSFER_DONE) {
-				printout("Transfer complete\n");
-				f->t.state = TRANSFER_NONE;
-				free(f->t.buf);
-				f->t.buf = NULL;
-				break;
-			}
 		}
 
 		if (n == 0)
