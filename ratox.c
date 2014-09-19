@@ -377,6 +377,7 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 				f->t.n = 0;
 				f->t.pending = 0;
 				f->t.state = TRANSFER_INPROGRESS;
+				printout("Transfer is in progress\n");
 				break;
 			}
 		}
