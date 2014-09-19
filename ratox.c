@@ -151,6 +151,7 @@ static Tox *tox;
 static void printrat(void);
 static void printout(const char *, ...);
 static void fifoflush(int);
+static ssize_t fiforead(int *, int, struct file, char *, size_t);
 static void cbconnstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfriendmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
@@ -197,6 +198,33 @@ printout(const char *fmt, ...)
 	printf("%s ", buft);
 	vfprintf(stdout, fmt, ap);
 	va_end(ap);
+}
+
+static ssize_t
+fiforead(int *fd, int dirfd, struct file f, char *buf, size_t buflen) {
+	ssize_t r;
+
+again:
+	r = read(*fd, buf, buflen);
+	if (r == 0) {
+		close(*fd);
+		r = openat(dirfd, f.name, f.flags, 0644);
+		if (r < 0) {
+			perror("openat");
+			exit(EXIT_FAILURE);
+		}
+		*fd = r;
+		return 0;
+	}
+	if (r < 0) {
+		if (errno == EINTR)
+			goto again;
+		if (errno == EWOULDBLOCK)
+			return -1;
+		perror("read");
+		return -1;
+	}
+	return r;
 }
 
 static void
@@ -454,7 +482,6 @@ static void
 sendfriendfile(struct friend *f)
 {
 	ssize_t n;
-	int r;
 
 	while (1) {
 		/* attempt to transmit the pending buffer */
@@ -465,29 +492,18 @@ sendfriendfile(struct friend *f)
 			}
 			f->t.pending = 0;
 		}
+
 		/* grab another buffer from the FIFO */
-		n = read(f->fd[FFILE_IN], f->t.buf, f->t.chunksz);
+		n = fiforead(&f->fd[FFILE_IN], f->dirfd, ffiles[FFILE_IN], (char *)f->t.buf, f->t.chunksz);
+
 		if (n == 0) {
-			close(f->fd[FFILE_IN]);
-			r = openat(f->dirfd, ffiles[FFILE_IN].name, ffiles[FFILE_IN].flags, 0644);
-			if (r < 0) {
-				perror("open");
-				exit(EXIT_FAILURE);
-			}
-			f->fd[FFILE_IN] = r;
 			/* signal transfer completion to other end */
 			tox_file_send_control(tox, f->fid, 0, f->t.fnum,
 					      TOX_FILECONTROL_FINISHED, NULL, 0);
 			break;
 		}
-		if (n < 0) {
-			if (errno == EINTR)
-				continue;
-			/* go back to select() until the fd is readable */
-			if (errno == EWOULDBLOCK)
-				break;
-			perror("read");
-			exit(EXIT_FAILURE);
+		if (n == -1) {
+			break;
 		}
 		/* store transfer size in case we can't send it right now */
 		f->t.n = n;
@@ -502,34 +518,16 @@ sendfriendfile(struct friend *f)
 static void
 sendfriendtext(struct friend *f)
 {
-	uint8_t buf[TOX_MAX_MESSAGE_LENGTH];
+	char buf[TOX_MAX_MESSAGE_LENGTH];
 	ssize_t n;
-	int r;
 
-again:
-	n = read(f->fd[FTEXT_IN], buf, sizeof(buf));
-	if (n == 0) {
-		close(f->fd[FTEXT_IN]);
-		r = openat(f->dirfd, ffiles[FTEXT_IN].name, ffiles[FTEXT_IN].flags, 0644);
-		if (r < 0) {
-			perror("open");
-			exit(EXIT_FAILURE);
-		}
-		f->fd[FTEXT_IN] = r;
-		return ;
-	}
-	if (n < 0) {
-		if (errno == EINTR)
-			goto again;
-		/* go back to select() until the fd is readable */
-		if (errno == EWOULDBLOCK)
-			return;
-		perror("read");
-		exit(EXIT_FAILURE);
-	}
+	n = fiforead(&f->fd[FTEXT_IN], f->dirfd, ffiles[FTEXT_IN], buf, sizeof(buf));
+
+	if (n <= 0)
+		return;
 	if (buf[n - 1] == '\n')
 		n--;
-	tox_send_message(tox, f->fid, buf, n);
+	tox_send_message(tox, f->fid, (uint8_t *)buf, n);
 }
 
 static void
@@ -866,33 +864,17 @@ friendload(void)
 static void
 setname(void *data)
 {
-	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
-	int r;
+	char name[TOX_MAX_NAME_LENGTH + 1];
+	ssize_t n;
 
-again:
-	r = read(gslots[NAME].fd[IN], name, sizeof(name) - 1);
-	if (r == 0) {
-		close(gslots[NAME].fd[IN]);
-		r = openat(gslots[NAME].dirfd, gfiles[IN].name, gfiles[IN].flags, 0644);
-		if (r < 0) {
-			perror("openat");
-			exit(EXIT_FAILURE);
-		}
-		gslots[NAME].fd[IN] = r;
+	n = fiforead(&gslots[NAME].fd[IN], gslots[NAME].dirfd, gfiles[IN], name, sizeof(name));
+
+	if (n <= 0)
 		return;
-	}
-	if (r < 0) {
-		if (errno == EINTR)
-			goto again;
-		if (errno == EWOULDBLOCK)
-			return;
-		perror("read");
-		return;
-	}
-	if (name[r - 1] == '\n')
-		r--;
-	name[r] = '\0';
-	tox_set_name(tox, name, r);
+	if (name[n - 1] == '\n')
+		n--;
+	name[n] = '\0';
+	tox_set_name(tox, (uint8_t *)name, n);
 	datasave();
 	printout("Changed name to %s\n", name);
 	ftruncate(gslots[NAME].fd[OUT], 0);
@@ -902,33 +884,17 @@ again:
 static void
 setstatus(void *data)
 {
-	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
-	int r;
+	char status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
+	ssize_t n;
 
-again:
-	r = read(gslots[STATUS].fd[IN], status, sizeof(status) - 1);
-	if (r == 0) {
-		close(gslots[STATUS].fd[IN]);
-		r = openat(gslots[STATUS].dirfd, gfiles[IN].name, gfiles[IN].flags, 0644);
-		if (r < 0) {
-			perror("openat");
-			exit(EXIT_FAILURE);
-		}
-		gslots[STATUS].fd[IN] = r;
+	n = fiforead(&gslots[STATUS].fd[IN], gslots[STATUS].dirfd, gfiles[IN], status, sizeof(status));
+
+	if (n <= 0)
 		return;
-	}
-	if (r < 0) {
-		if (errno == EINTR)
-			goto again;
-		if (errno == EWOULDBLOCK)
-			return;
-		perror("read");
-		return;
-	}
-	if (status[r - 1] == '\n')
-		r--;
-	status[r] = '\0';
-	tox_set_status_message(tox, status, r);
+	if (status[n - 1] == '\n')
+		n--;
+	status[n] = '\0';
+	tox_set_status_message(tox, (uint8_t *)status, n);
 	datasave();
 	printout("Changed status message to %s\n", status);
 	ftruncate(gslots[STATUS].fd[OUT], 0);
@@ -938,32 +904,15 @@ again:
 static void
 sendfriendreq(void *data)
 {
-	char *p;
-	uint8_t id[TOX_FRIEND_ADDRESS_SIZE];
-	char buf[BUFSIZ], *msg = "ratox is awesome!";
+	char buf[BUFSIZ], *p, id[TOX_FRIEND_ADDRESS_SIZE], *msg = "ratox is awesome!";
+	ssize_t n;
 	int r;
 
-again:
-	r = read(gslots[REQUEST].fd[IN], buf, sizeof(buf) - 1);
-	if (r == 0) {
-		close(gslots[REQUEST].fd[IN]);
-		r = openat(gslots[REQUEST].dirfd, gfiles[IN].name, gfiles[IN].flags, 0644);
-		if (r < 0) {
-			perror("openat");
-			exit(EXIT_FAILURE);
-		}
-		gslots[REQUEST].fd[IN] = r;
+	n = fiforead(&gslots[REQUEST].fd[IN], gslots[REQUEST].dirfd, gfiles[IN], buf, sizeof(buf));
+
+	if (n <= 0)
 		return;
-	}
-	if (r < 0) {
-		if (errno == EINTR)
-			goto again;
-		if (errno == EWOULDBLOCK)
-			return;
-		perror("read");
-		return;
-	}
-	buf[r] = '\0';
+	buf[n] = '\0';
 
 	for (p = buf; *p && isspace(*p) == 0; p++)
 		;
@@ -976,9 +925,9 @@ again:
 		if (msg[strlen(msg) - 1] == '\n')
 			msg[strlen(msg) - 1] = '\0';
 	}
-	str2id(buf, id);
+	str2id(buf, (uint8_t *)id);
 
-	r = tox_add_friend(tox, id, (uint8_t *)buf, strlen(buf));
+	r = tox_add_friend(tox, (uint8_t *)id, (uint8_t *)buf, strlen(buf));
 	if (r < 0)
 		ftruncate(gslots[REQUEST].fd[ERR], 0);
 	switch (r) {
