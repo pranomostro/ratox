@@ -93,8 +93,8 @@ enum {
 };
 
 static struct file ffiles[] = {
-	{ .type = FIFO,   .name = "text_in",  .flags = O_RDWR   | O_NONBLOCK,         },
-	{ .type = FIFO,   .name = "file_in",  .flags = O_RDWR   | O_NONBLOCK,         },
+	{ .type = FIFO,   .name = "text_in",  .flags = O_RDONLY | O_NONBLOCK,         },
+	{ .type = FIFO,   .name = "file_in",  .flags = O_RDONLY | O_NONBLOCK,         },
 	{ .type = STATIC, .name = "online",   .flags = O_WRONLY | O_TRUNC  | O_CREAT  },
 	{ .type = STATIC, .name = "name",     .flags = O_WRONLY | O_TRUNC  | O_CREAT  },
 	{ .type = STATIC, .name = "status",   .flags = O_WRONLY | O_TRUNC  | O_CREAT  },
@@ -115,7 +115,6 @@ struct transfer {
 	ssize_t n;
 	int pending;
 	int state;
-	time_t lastsent;
 };
 
 struct friend {
@@ -125,6 +124,7 @@ struct friend {
 	uint8_t id[TOX_CLIENT_ID_SIZE];
 	/* null terminated id */
 	char idstr[2 * TOX_CLIENT_ID_SIZE + 1];
+	int dirfd;
 	int fd[NR_FFILES];
 	struct transfer t;
 	TAILQ_ENTRY(friend) entry;
@@ -155,7 +155,6 @@ static void cbnamechange(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbstatusmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbuserstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
-static void completefile(struct friend *);
 static void sendfriendfile(struct friend *);
 static void dataload(void);
 static void datasave(void);
@@ -378,7 +377,6 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 				f->t.n = 0;
 				f->t.pending = 0;
 				f->t.state = TRANSFER_INPROGRESS;
-				f->t.lastsent = time(NULL);
 				break;
 			}
 		}
@@ -400,16 +398,10 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 }
 
 static void
-completefile(struct friend *f)
-{
-	tox_file_send_control(tox, f->fid, 0, f->t.fnum,
-			      TOX_FILECONTROL_FINISHED, NULL, 0);
-}
-
-static void
 sendfriendfile(struct friend *f)
 {
 	ssize_t n;
+	int r;
 
 	while (1) {
 		/* attempt to transmit the pending buffer */
@@ -418,11 +410,23 @@ sendfriendfile(struct friend *f)
 				/* bad luck - we will try again later */
 				break;
 			}
-			f->t.lastsent = time(NULL);
 			f->t.pending = 0;
 		}
 		/* grab another buffer from the FIFO */
 		n = read(f->fd[FFILE_IN], f->t.buf, f->t.chunksz);
+		if (n == 0) {
+			close(f->fd[FFILE_IN]);
+			r = openat(f->dirfd, ffiles[FFILE_IN].name, ffiles[FFILE_IN].flags, 0644);
+			if (r < 0) {
+				perror("open");
+				exit(EXIT_FAILURE);
+			}
+			f->fd[FFILE_IN] = r;
+			/* signal transfer completion to other end */
+			tox_file_send_control(tox, f->fid, 0, f->t.fnum,
+					      TOX_FILECONTROL_FINISHED, NULL, 0);
+			break;
+		}
 		if (n < 0) {
 			if (errno == EINTR)
 				continue;
@@ -439,7 +443,6 @@ sendfriendfile(struct friend *f)
 			f->t.pending = 1;
 			return;
 		}
-		f->t.lastsent = time(NULL);
 	}
 }
 
@@ -448,9 +451,20 @@ sendfriendtext(struct friend *f)
 {
 	uint8_t buf[TOX_MAX_MESSAGE_LENGTH];
 	ssize_t n;
+	int r;
 
 again:
 	n = read(f->fd[FTEXT_IN], buf, sizeof(buf));
+	if (n == 0) {
+		close(f->fd[FTEXT_IN]);
+		r = openat(f->dirfd, ffiles[FTEXT_IN].name, ffiles[FTEXT_IN].flags, 0644);
+		if (r < 0) {
+			perror("open");
+			exit(EXIT_FAILURE);
+		}
+		f->fd[FTEXT_IN] = r;
+		return ;
+	}
 	if (n < 0) {
 		if (errno == EINTR)
 			goto again;
@@ -690,6 +704,7 @@ friendcreate(int32_t fid)
 	struct friend *f;
 	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
 	size_t i;
+	DIR *d;
 	int r;
 
 	f = calloc(1, sizeof(*f));
@@ -715,25 +730,32 @@ friendcreate(int32_t fid)
 		exit(EXIT_FAILURE);
 	}
 
-	r = chdir(f->idstr);
-	if (r < 0) {
-		perror("chdir");
+	d = opendir(f->idstr);
+	if (!d) {
+		perror("opendir");
 		exit(EXIT_FAILURE);
 	}
+	r = dirfd(d);
+	if (r < 0) {
+		perror("dirfd");
+		exit(EXIT_FAILURE);
+	}
+	f->dirfd = r;
+
 	for (i = 0; i < LEN(ffiles); i++) {
 		if (ffiles[i].type == FIFO) {
-			r = mkfifo(ffiles[i].name, 0644);
+			r = mkfifoat(f->dirfd, ffiles[i].name, 0644);
 			if (r < 0 && errno != EEXIST) {
 				perror("mkfifo");
 				exit(EXIT_FAILURE);
 			}
-			r = open(ffiles[i].name, ffiles[i].flags, 0644);
+			r = openat(f->dirfd, ffiles[i].name, ffiles[i].flags, 0644);
 			if (r < 0) {
 				perror("open");
 				exit(EXIT_FAILURE);
 			}
 		} else if (ffiles[i].type == STATIC) {
-			r = open(ffiles[i].name, ffiles[i].flags, 0644);
+			r = openat(f->dirfd, ffiles[i].name, ffiles[i].flags, 0644);
 			if (r < 0) {
 				perror("open");
 				exit(EXIT_FAILURE);
@@ -741,7 +763,6 @@ friendcreate(int32_t fid)
 		}
 		f->fd[i] = r;
 	}
-	chdir("..");
 
 	ftruncate(f->fd[FNAME], 0);
 	dprintf(f->fd[FNAME], "%s\n", f->namestr);
@@ -1042,22 +1063,7 @@ loop(void)
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			if (tox_get_friend_connection_status(tox, f->fid) == 0)
 				continue;
-			switch (f->t.state) {
-			case TRANSFER_NONE:
-			case TRANSFER_INITIATED:
-				break;
-			case TRANSFER_INPROGRESS:
-				/* We use a 1 second grace period, if no reads
-				 * happen during that period we consider the transfer
-				 * to have completed and signal the end of transmission
-				 * control packet.  If we knew the size of the file
-				 * it would have been easier to do this but since we are
-				 * reading from a FIFO this is not really a possibility.
-				 */
-				if (now > f->t.lastsent + 1)
-					completefile(f);
-				break;
-			case TRANSFER_DONE:
+			if (f->t.state == TRANSFER_DONE) {
 				printout("Transfer complete\n");
 				f->t.state = TRANSFER_NONE;
 				free(f->t.buf);
