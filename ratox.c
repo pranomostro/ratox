@@ -361,6 +361,9 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 	const uint8_t *data, uint16_t len, void *udata)
 {
 	struct friend *f;
+	char buf[BUFSIZ];
+	ssize_t n;
+	int r;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
 		if (f->fid == fid)
@@ -395,6 +398,35 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 				f->t.state = TRANSFER_PAUSED;
 				printout("Receiver paused transfer\n");
 			}
+		}
+		break;
+	case TOX_FILECONTROL_KILL:
+		if (rec_sen == 1) {
+			printout("Transfer rejected by receiver\n");
+			f->t.state = TRANSFER_NONE;
+			free(f->t.buf);
+			f->t.buf = NULL;
+
+			/* Flush the FIFO */
+			while (1) {
+				n = read(f->fd[FFILE_IN], buf, sizeof(buf));
+				if (n < 0) {
+					if (errno == EINTR || errno == EWOULDBLOCK)
+						continue;
+					perror("read");
+					exit(EXIT_FAILURE);
+				}
+				if (n == 0)
+					break;
+			}
+
+			close(f->fd[FFILE_IN]);
+			r = openat(f->dirfd, ffiles[FFILE_IN].name, ffiles[FFILE_IN].flags, 0644);
+			if (r < 0) {
+				perror("open");
+				exit(EXIT_FAILURE);
+			}
+			f->fd[FFILE_IN] = r;
 		}
 		break;
 	case TOX_FILECONTROL_FINISHED:
