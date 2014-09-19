@@ -1045,6 +1045,7 @@ loop(void)
 
 		FD_ZERO(&rfds);
 
+		fdmax = -1;
 		for (i = 0; i < LEN(gslots); i++) {
 			FD_SET(gslots[i].fd[IN], &rfds);
 			if (gslots[i].fd[IN] > fdmax)
