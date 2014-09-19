@@ -149,6 +149,8 @@ static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
 static Tox *tox;
 
 static void printrat(void);
+static void printout(const char *, ...);
+static void fifoflush(int);
 static void cbconnstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfriendmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
@@ -195,6 +197,26 @@ printout(const char *fmt, ...)
 	printf("%s ", buft);
 	vfprintf(stdout, fmt, ap);
 	va_end(ap);
+}
+
+static void
+fifoflush(int fd)
+{
+	char buf[BUFSIZ];
+	ssize_t n;
+
+	/* Flush the FIFO */
+	while (1) {
+		n = read(fd, buf, sizeof(buf));
+		if (n < 0) {
+			if (errno == EINTR || errno == EWOULDBLOCK)
+				continue;
+			perror("read");
+			exit(EXIT_FAILURE);
+		}
+		if (n == 0)
+			break;
+	}
 }
 
 static void
@@ -361,8 +383,6 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 	const uint8_t *data, uint16_t len, void *udata)
 {
 	struct friend *f;
-	char buf[BUFSIZ];
-	ssize_t n;
 	int r;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
@@ -406,20 +426,7 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 			f->t.state = TRANSFER_NONE;
 			free(f->t.buf);
 			f->t.buf = NULL;
-
-			/* Flush the FIFO */
-			while (1) {
-				n = read(f->fd[FFILE_IN], buf, sizeof(buf));
-				if (n < 0) {
-					if (errno == EINTR || errno == EWOULDBLOCK)
-						continue;
-					perror("read");
-					exit(EXIT_FAILURE);
-				}
-				if (n == 0)
-					break;
-			}
-
+			fifoflush(f->fd[FFILE_IN]);
 			close(f->fd[FFILE_IN]);
 			r = openat(f->dirfd, ffiles[FFILE_IN].name, ffiles[FFILE_IN].flags, 0644);
 			if (r < 0) {
@@ -1007,10 +1014,10 @@ static void
 loop(void)
 {
 	struct friend *f;
-	struct request *r, *rtmp;
+	struct request *req, *rtmp;
 	time_t t0, t1;
 	int connected = 0;
-	int i, n;
+	int i, n, r;
 	int fdmax;
 	char c;
 	fd_set rfds;
@@ -1044,10 +1051,10 @@ loop(void)
 				fdmax = gslots[i].fd[IN];
 		}
 
-		TAILQ_FOREACH(r, &reqhead, entry) {
-			FD_SET(r->fd, &rfds);
-			if(r->fd > fdmax)
-				fdmax = r->fd;
+		TAILQ_FOREACH(req, &reqhead, entry) {
+			FD_SET(req->fd, &rfds);
+			if(req->fd > fdmax)
+				fdmax = req->fd;
 		}
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
@@ -1085,6 +1092,14 @@ loop(void)
 					f->t.state = TRANSFER_NONE;
 					free(f->t.buf);
 					f->t.buf = NULL;
+					fifoflush(f->fd[FFILE_IN]);
+					close(f->fd[FFILE_IN]);
+					r = openat(f->dirfd, ffiles[FFILE_IN].name, ffiles[FFILE_IN].flags, 0644);
+					if (r < 0) {
+						perror("open");
+						exit(EXIT_FAILURE);
+					}
+					f->fd[FFILE_IN] = r;
 				}
 			}
 		}
@@ -1115,26 +1130,26 @@ loop(void)
 			(*gslots[i].cb)(NULL);
 		}
 
-		for (r = TAILQ_FIRST(&reqhead); r; r = rtmp) {
-			rtmp = TAILQ_NEXT(r, entry);
-			if (FD_ISSET(r->fd, &rfds) == 0)
+		for (req = TAILQ_FIRST(&reqhead); req; req = rtmp) {
+			rtmp = TAILQ_NEXT(req, entry);
+			if (FD_ISSET(req->fd, &rfds) == 0)
 				continue;
-			if (read(r->fd, &c, 1) != 1)
+			if (read(req->fd, &c, 1) != 1)
 				continue;
 			if (c != '0' && c != '1')
 				continue;
 			if (c == '1') {
-				tox_add_friend_norequest(tox, r->id);
-				printout("Accepted friend request for %s\n", r->idstr);
+				tox_add_friend_norequest(tox, req->id);
+				printout("Accepted friend request for %s\n", req->idstr);
 				datasave();
 			} else {
-				printout("Rejected friend request for %s\n", r->idstr);
+				printout("Rejected friend request for %s\n", req->idstr);
 			}
-			unlinkat(gslots[REQUEST].fd[OUT], r->idstr, 0);
-			close(r->fd);
-			TAILQ_REMOVE(&reqhead, r, entry);
-			free(r->msgstr);
-			free(r);
+			unlinkat(gslots[REQUEST].fd[OUT], req->idstr, 0);
+			close(req->fd);
+			TAILQ_REMOVE(&reqhead, req, entry);
+			free(req->msgstr);
+			free(req);
 		}
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
