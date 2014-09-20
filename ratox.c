@@ -162,7 +162,7 @@ static Tox *tox;
 static void printrat(void);
 static void printout(const char *, ...);
 static void fifoflush(int);
-static ssize_t fiforead(int, int *, struct file, char *, size_t);
+static ssize_t fiforead(int, int *, struct file, void *, size_t);
 static void cbconnstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfriendmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
@@ -212,7 +212,7 @@ printout(const char *fmt, ...)
 }
 
 static ssize_t
-fiforead(int dirfd, int *fd, struct file f, char *buf, size_t sz)
+fiforead(int dirfd, int *fd, struct file f, void *buf, size_t sz)
 {
 	ssize_t r;
 
@@ -505,7 +505,7 @@ sendfriendfile(struct friend *f)
 			f->t.pending = 0;
 		}
 		/* grab another buffer from the FIFO */
-		n = fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN], (char *)f->t.buf,
+		n = fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN], f->t.buf,
 			     f->t.chunksz);
 		if (n == 0) {
 			/* signal transfer completion to other end */
@@ -528,7 +528,7 @@ sendfriendfile(struct friend *f)
 static void
 sendfriendtext(struct friend *f)
 {
-	char buf[TOX_MAX_MESSAGE_LENGTH];
+	uint8_t buf[TOX_MAX_MESSAGE_LENGTH];
 	ssize_t n;
 
 	n = fiforead(f->dirfd, &f->fd[FTEXT_IN], ffiles[FTEXT_IN], buf, sizeof(buf));
@@ -536,7 +536,7 @@ sendfriendtext(struct friend *f)
 		return;
 	if (buf[n - 1] == '\n')
 		n--;
-	tox_send_message(tox, f->fid, (uint8_t *)buf, n);
+	tox_send_message(tox, f->fid, buf, n);
 }
 
 static void
@@ -893,7 +893,7 @@ setname(void *data)
 static void
 setstatus(void *data)
 {
-	char status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
+	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
 	ssize_t n;
 
 	n = fiforead(gslots[STATUS].dirfd, &gslots[STATUS].fd[IN], gfiles[IN],
@@ -903,7 +903,7 @@ setstatus(void *data)
 	if (status[n - 1] == '\n')
 		n--;
 	status[n] = '\0';
-	tox_set_status_message(tox, (uint8_t *)status, n);
+	tox_set_status_message(tox, status, n);
 	datasave();
 	printout("Changed status message to %s\n", status);
 	ftruncate(gslots[STATUS].fd[OUT], 0);
@@ -913,7 +913,9 @@ setstatus(void *data)
 static void
 sendfriendreq(void *data)
 {
-	char buf[BUFSIZ], *p, id[TOX_FRIEND_ADDRESS_SIZE], *msg = "ratox is awesome!";
+	char buf[BUFSIZ], *p;
+	char *msg = "ratox is awesome!";
+	uint8_t id[TOX_FRIEND_ADDRESS_SIZE];
 	ssize_t n;
 	int r;
 
@@ -934,9 +936,9 @@ sendfriendreq(void *data)
 		if (msg[strlen(msg) - 1] == '\n')
 			msg[strlen(msg) - 1] = '\0';
 	}
-	str2id(buf, (uint8_t *)id);
+	str2id(buf, id);
 
-	r = tox_add_friend(tox, (uint8_t *)id, (uint8_t *)buf, strlen(buf));
+	r = tox_add_friend(tox, id, (uint8_t *)buf, strlen(buf));
 	ftruncate(gslots[REQUEST].fd[ERR], 0);
 
 	if (r < 0) {
