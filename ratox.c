@@ -162,7 +162,7 @@ static Tox *tox;
 static void printrat(void);
 static void printout(const char *, ...);
 static void fifoflush(int);
-static ssize_t fiforead(int *, int, struct file, char *, size_t);
+static ssize_t fiforead(int, int *, struct file, char *, size_t);
 static void cbconnstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfriendmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
@@ -212,11 +212,12 @@ printout(const char *fmt, ...)
 }
 
 static ssize_t
-fiforead(int *fd, int dirfd, struct file f, char *buf, size_t buflen) {
+fiforead(int dirfd, int *fd, struct file f, char *buf, size_t sz)
+{
 	ssize_t r;
 
 again:
-	r = read(*fd, buf, buflen);
+	r = read(*fd, buf, sz);
 	if (r == 0) {
 		close(*fd);
 		r = openat(dirfd, f.name, f.flags, 0644);
@@ -233,7 +234,7 @@ again:
 		if (errno == EWOULDBLOCK)
 			return -1;
 		perror("read");
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 	return r;
 }
@@ -503,19 +504,17 @@ sendfriendfile(struct friend *f)
 			}
 			f->t.pending = 0;
 		}
-
 		/* grab another buffer from the FIFO */
-		n = fiforead(&f->fd[FFILE_IN], f->dirfd, ffiles[FFILE_IN], (char *)f->t.buf, f->t.chunksz);
-
+		n = fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN], (char *)f->t.buf,
+			     f->t.chunksz);
 		if (n == 0) {
 			/* signal transfer completion to other end */
 			tox_file_send_control(tox, f->fid, 0, f->t.fnum,
 					      TOX_FILECONTROL_FINISHED, NULL, 0);
 			break;
 		}
-		if (n == -1) {
+		if (n == -1)
 			break;
-		}
 		/* store transfer size in case we can't send it right now */
 		f->t.n = n;
 		if (tox_file_send_data(tox, f->fid, f->t.fnum, f->t.buf, f->t.n) == -1) {
@@ -532,8 +531,7 @@ sendfriendtext(struct friend *f)
 	char buf[TOX_MAX_MESSAGE_LENGTH];
 	ssize_t n;
 
-	n = fiforead(&f->fd[FTEXT_IN], f->dirfd, ffiles[FTEXT_IN], buf, sizeof(buf));
-
+	n = fiforead(f->dirfd, &f->fd[FTEXT_IN], ffiles[FTEXT_IN], buf, sizeof(buf));
 	if (n <= 0)
 		return;
 	if (buf[n - 1] == '\n')
@@ -878,8 +876,8 @@ setname(void *data)
 	char name[TOX_MAX_NAME_LENGTH + 1];
 	ssize_t n;
 
-	n = fiforead(&gslots[NAME].fd[IN], gslots[NAME].dirfd, gfiles[IN], name, sizeof(name));
-
+	n = fiforead(gslots[NAME].dirfd, &gslots[NAME].fd[IN],
+		     gfiles[IN], name, sizeof(name) - 1);
 	if (n <= 0)
 		return;
 	if (name[n - 1] == '\n')
@@ -898,8 +896,8 @@ setstatus(void *data)
 	char status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
 	ssize_t n;
 
-	n = fiforead(&gslots[STATUS].fd[IN], gslots[STATUS].dirfd, gfiles[IN], status, sizeof(status));
-
+	n = fiforead(gslots[STATUS].dirfd, &gslots[STATUS].fd[IN], gfiles[IN],
+		     status, sizeof(status) - 1);
 	if (n <= 0)
 		return;
 	if (status[n - 1] == '\n')
@@ -919,8 +917,8 @@ sendfriendreq(void *data)
 	ssize_t n;
 	int r;
 
-	n = fiforead(&gslots[REQUEST].fd[IN], gslots[REQUEST].dirfd, gfiles[IN], buf, sizeof(buf));
-
+	n = fiforead(gslots[REQUEST].dirfd, &gslots[REQUEST].fd[IN], gfiles[IN],
+		     buf, sizeof(buf) - 1);
 	if (n <= 0)
 		return;
 	buf[n] = '\0';
