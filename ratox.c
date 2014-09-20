@@ -24,6 +24,17 @@
 #define LEN(x) (sizeof (x) / sizeof *(x))
 #define DATAFILE ".ratox.data"
 
+const char *reqerr[] = {
+	[-TOX_FAERR_TOOLONG]      = "Message is too long",
+	[-TOX_FAERR_NOMESSAGE]    = "Please add a message to your request",
+	[-TOX_FAERR_OWNKEY]       = "That appears to be your own ID",
+	[-TOX_FAERR_ALREADYSENT]  = "Friend request already sent",
+	[-TOX_FAERR_UNKNOWN]      = "Unknown error while sending your request",
+	[-TOX_FAERR_BADCHECKSUM]  = "Bad checksum while verifying address",
+	[-TOX_FAERR_SETNEWNOSPAM] = "Friend already added but nospam doesn't match",
+	[-TOX_FAERR_NOMEM]        = "Error increasing the friend list size"
+};
+
 struct node {
 	const char *addr;
 	uint16_t port;
@@ -928,34 +939,13 @@ sendfriendreq(void *data)
 	str2id(buf, (uint8_t *)id);
 
 	r = tox_add_friend(tox, (uint8_t *)id, (uint8_t *)buf, strlen(buf));
-	if (r < 0)
-		ftruncate(gslots[REQUEST].fd[ERR], 0);
-	switch (r) {
-	case TOX_FAERR_TOOLONG:
-		dprintf(gslots[REQUEST].fd[ERR], "Message is too long\n");
-		break;
-	case TOX_FAERR_NOMESSAGE:
-		dprintf(gslots[REQUEST].fd[ERR], "Please add a message to your request\n");
-		break;
-	case TOX_FAERR_OWNKEY:
-		dprintf(gslots[REQUEST].fd[ERR], "That appears to be your own ID\n");
-		break;
-	case TOX_FAERR_ALREADYSENT:
-		dprintf(gslots[REQUEST].fd[ERR], "Friend request already sent\n");
-		break;
-	case TOX_FAERR_UNKNOWN:
-		dprintf(gslots[REQUEST].fd[ERR], "Unknown error while sending your request\n");
-		break;
-	case TOX_FAERR_BADCHECKSUM:
-		dprintf(gslots[REQUEST].fd[ERR], "Bad checksum while verifying address\n");
-		break;
-	case TOX_FAERR_SETNEWNOSPAM:
-		dprintf(gslots[REQUEST].fd[ERR], "Friend already added but nospam doesn't match\n");
-		break;
-	default:
-		printout("Friend request sent\n");
-		break;
+	ftruncate(gslots[REQUEST].fd[ERR], 0);
+
+	if (r < 0) {
+		dprintf(gslots[REQUEST].fd[ERR], "%s\n", reqerr[-r]);
+		return;
 	}
+	printout("Friend request sent\n");
 	datasave();
 }
 
