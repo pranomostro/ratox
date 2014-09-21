@@ -160,7 +160,9 @@ static TAILQ_HEAD(friendhead, friend) friendhead = TAILQ_HEAD_INITIALIZER(friend
 static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
 
 static Tox *tox;
+static Tox_Options toxopt;
 static int running = 1;
+static int ipv6;
 
 static void printrat(void);
 static void printout(const char *, ...);
@@ -186,6 +188,7 @@ static void friendload(void);
 static void loop(void);
 static void initshutdown(int);
 static void shutdown(void);
+static void usage(void);
 
 static void
 printrat(void)
@@ -720,8 +723,8 @@ localinit(void)
 static int
 toxinit(void)
 {
-	/* IPv4 only */
-	tox = tox_new(0);
+	toxopt.ipv6enabled = ipv6;
+	tox = tox_new(&toxopt);
 	dataload();
 	datasave();
 	tox_callback_connection_status(tox, cbconnstatus, NULL);
@@ -743,8 +746,10 @@ toxconnect(void)
 
 	for (i = 0; i < LEN(nodes); i++) {
 		n = &nodes[i];
+		if (ipv6 == 1 && !n->addr6)
+			continue;
 		str2id(n->idstr, id);
-		tox_bootstrap_from_address(tox, n->addr4, n->port, id);
+		tox_bootstrap_from_address(tox, ipv6 == 1 ? n->addr6 : n->addr4, n->port, id);
 	}
 	return 0;
 }
@@ -1192,9 +1197,26 @@ shutdown(void)
 	unlink("id");
 }
 
+static void
+usage(void)
+{
+	fprintf(stderr, "usage: %s [-4|-6]\n", argv0);
+	exit(EXIT_FAILURE);
+}
+
 int
 main(int argc, char *argv[])
 {
+	ARGBEGIN {
+	case '4':
+		break;
+	case '6':
+		ipv6 = 1;
+		break;
+	default:
+		usage();
+	} ARGEND;
+
 	signal(SIGHUP, initshutdown);
 	signal(SIGINT, initshutdown);
 	signal(SIGQUIT, initshutdown);
