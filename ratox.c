@@ -37,9 +37,9 @@ const char *reqerr[] = {
 };
 
 struct node {
-	const char *addr;
+	char *addr;
 	uint16_t port;
-	uint8_t key[TOX_CLIENT_ID_SIZE];
+	char *idstr;
 };
 
 #include "config.h"
@@ -736,12 +736,14 @@ toxinit(void)
 static int
 toxconnect(void)
 {
-	struct node *bn;
+	struct node *n;
+	uint8_t id[TOX_CLIENT_ID_SIZE];
 	size_t i;
 
 	for (i = 0; i < LEN(nodes); i++) {
-		bn = &nodes[i];
-		tox_bootstrap_from_address(tox, bn->addr, bn->port, bn->key);
+		n = &nodes[i];
+		str2id(n->idstr, id);
+		tox_bootstrap_from_address(tox, n->addr, n->port, id);
 	}
 	return 0;
 }
