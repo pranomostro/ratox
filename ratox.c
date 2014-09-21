@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -158,6 +159,7 @@ static TAILQ_HEAD(friendhead, friend) friendhead = TAILQ_HEAD_INITIALIZER(friend
 static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
 
 static Tox *tox;
+static int running = 1;
 
 static void printrat(void);
 static void printout(const char *, ...);
@@ -181,6 +183,8 @@ static void str2id(char *, uint8_t *);
 static struct friend *friendcreate(int32_t);
 static void friendload(void);
 static void loop(void);
+static void initshutdown(int);
+static void shutdown(void);
 
 static void
 printrat(void)
@@ -965,7 +969,7 @@ loop(void)
 	t0 = time(NULL);
 	printout("Connecting to DHT...\n");
 	toxconnect();
-	while (1) {
+	while (running) {
 		if (tox_isconnected(tox) == 1) {
 			if (connected == 0) {
 				printout("Connected to DHT\n");
@@ -1123,13 +1127,73 @@ loop(void)
 	}
 }
 
+static void
+initshutdown(int sig)
+{
+	printout("Shutting down...\n");
+	running = 0;
+}
+
+static void
+shutdown(void)
+{
+	int i, m;
+	struct friend *f, *ftmp;
+	struct request *r, *rtmp;
+
+	tox_kill(tox);
+
+	/* friends */
+	for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
+		ftmp = TAILQ_NEXT(f, entry);
+
+		for (i = 0; i < LEN(ffiles); i++) {
+			unlinkat(f->dirfd, ffiles[i].name, 0);
+			close(f->fd[i]);
+		}
+		rmdir(f->idstr);
+		/* T0D0: cancel transmissions */
+		TAILQ_REMOVE(&friendhead, f, entry);
+	}
+
+	/* requests */
+	for (r = TAILQ_FIRST(&reqhead); r; r = rtmp) {
+		rtmp = TAILQ_NEXT(r, entry);
+
+		unlinkat(gslots[REQUEST].fd[OUT], r->idstr, 0);
+		close(r->fd);
+		TAILQ_REMOVE(&reqhead, r, entry);
+		free(r->msgstr);
+		free(r);
+	}
+
+	/* global files and slots */
+	for (i = 0; i < LEN(gslots); i++) {
+		for (m = 0; m < LEN(gfiles); m++) {
+			unlinkat(gslots[i].dirfd, gfiles[m].name,
+				 (gslots[i].outtype == FOLDER && m == OUT)
+				 ? AT_REMOVEDIR : 0);
+			close(gslots[i].fd[m]);
+		}
+		rmdir(gslots[i].name);
+	}
+	unlink("id");
+}
+
 int
 main(int argc, char *argv[])
 {
+	signal(SIGHUP, initshutdown);
+	signal(SIGINT, initshutdown);
+	signal(SIGQUIT, initshutdown);
+	signal(SIGABRT, initshutdown);
+	signal(SIGTERM, initshutdown);
+
 	printrat();
 	toxinit();
 	localinit();
 	friendload();
 	loop();
+	shutdown();
 	return EXIT_SUCCESS;
 }
