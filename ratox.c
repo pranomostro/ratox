@@ -83,9 +83,9 @@ static void setstatus(void *);
 static void sendfriendreq(void *);
 
 static struct slot gslots[] = {
-	[NAME]    = { .name = "name",	 .cb = setname,	      .outtype = STATIC },
-	[STATUS]  = { .name = "status",	 .cb = setstatus,     .outtype = STATIC },
-	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outtype = FOLDER },
+	[NAME]    = { .name = "name",	 .cb = setname,	      .outtype = STATIC, .dirfd = -1 },
+	[STATUS]  = { .name = "status",	 .cb = setstatus,     .outtype = STATIC, .dirfd = -1 },
+	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outtype = FOLDER, .dirfd = -1 },
 };
 
 static struct file gfiles[] = {
@@ -1148,8 +1148,11 @@ shutdown(void)
 		ftmp = TAILQ_NEXT(f, entry);
 
 		for (i = 0; i < LEN(ffiles); i++) {
-			unlinkat(f->dirfd, ffiles[i].name, 0);
-			close(f->fd[i]);
+			if (f->dirfd != -1) {
+				unlinkat(f->dirfd, ffiles[i].name, 0);
+				if (f->fd[i] != -1)
+					close(f->fd[i]);
+			}
 		}
 		rmdir(f->idstr);
 		/* T0D0: cancel transmissions */
@@ -1160,8 +1163,11 @@ shutdown(void)
 	for (r = TAILQ_FIRST(&reqhead); r; r = rtmp) {
 		rtmp = TAILQ_NEXT(r, entry);
 
-		unlinkat(gslots[REQUEST].fd[OUT], r->idstr, 0);
-		close(r->fd);
+		if (gslots[REQUEST].fd[OUT] != -1) {
+			unlinkat(gslots[REQUEST].fd[OUT], r->idstr, 0);
+			if (r->fd != -1)
+				close(r->fd);
+		}
 		TAILQ_REMOVE(&reqhead, r, entry);
 		free(r->msgstr);
 		free(r);
@@ -1170,10 +1176,13 @@ shutdown(void)
 	/* global files and slots */
 	for (i = 0; i < LEN(gslots); i++) {
 		for (m = 0; m < LEN(gfiles); m++) {
-			unlinkat(gslots[i].dirfd, gfiles[m].name,
-				 (gslots[i].outtype == FOLDER && m == OUT)
-				 ? AT_REMOVEDIR : 0);
-			close(gslots[i].fd[m]);
+			if (gslots[i].dirfd != -1) {
+				unlinkat(gslots[i].dirfd, gfiles[m].name,
+					 (gslots[i].outtype == FOLDER && m == OUT)
+					 ? AT_REMOVEDIR : 0);
+				if (gslots[i].fd[m] != -1)
+					close(gslots[i].fd[m]);
+			}
 		}
 		rmdir(gslots[i].name);
 	}
