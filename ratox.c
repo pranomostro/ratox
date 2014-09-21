@@ -37,7 +37,8 @@ const char *reqerr[] = {
 };
 
 struct node {
-	char *addr;
+	char *addr4;
+	char *addr6;
 	uint16_t port;
 	char *idstr;
 };
@@ -743,7 +744,7 @@ toxconnect(void)
 	for (i = 0; i < LEN(nodes); i++) {
 		n = &nodes[i];
 		str2id(n->idstr, id);
-		tox_bootstrap_from_address(tox, n->addr, n->port, id);
+		tox_bootstrap_from_address(tox, n->addr4, n->port, id);
 	}
 	return 0;
 }
