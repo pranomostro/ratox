@@ -579,11 +579,10 @@ dataload(void)
 	}
 
 	if (tox_is_data_encrypted(data) == 1) {
+		if (encryptdatafile == 0)
+			printout("%s is encrypted, but saving in plain format\n", DATAFILE);
 		while (readpass("Passphrase: ") < 0 ||
 		       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0);
-		if (encryptdatafile == 0) {
-			printout("%s is encrypted, but saving in plain format\n", DATAFILE);
-		}
 	} else {
 		if (tox_load(tox, data, sz) < 0) {
 			fprintf(stderr, "tox_load() failed\n");
@@ -593,7 +592,6 @@ dataload(void)
 			printout("%s is not encrypted, but saving in encrypted format\n", DATAFILE);
 			while (readpass("New passphrase: ") < 0);
 		}
-
 	}
 
 	free(data);
