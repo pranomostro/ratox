@@ -1,5 +1,7 @@
 /* See LICENSE file for copyright and license details. */
 
+static int encryptsave = 0;
+
 static struct node nodes[] = {
 	{
 		.addr4 = "192.254.75.98",

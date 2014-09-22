@@ -18,9 +18,11 @@
 #include <unistd.h>
 
 #include <tox/tox.h>
+#include <tox/toxencryptsave.h>
 
 #include "arg.h"
 #include "queue.h"
+#include "readpassphrase.h"
 
 #define LEN(x) (sizeof (x) / sizeof *(x))
 #define DATAFILE ".ratox.data"
@@ -161,6 +163,8 @@ static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
 
 static Tox *tox;
 static Tox_Options toxopt;
+static uint8_t *passphrase;
+static uint32_t pplen;
 static int running = 1;
 static int ipv6;
 
@@ -176,6 +180,7 @@ static void cbstatusmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbuserstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
 static void sendfriendfile(struct friend *);
+static void readpass(void);
 static void dataload(void);
 static void datasave(void);
 static int localinit(void);
@@ -548,12 +553,34 @@ sendfriendtext(struct friend *f)
 }
 
 static void
+readpass(void)
+{
+	char pass[BUFSIZ], *p;
+
+	p = readpassphrase("Password: ", pass, sizeof(pass), RPP_ECHO_OFF);
+	if (!p) {
+		perror("readpassphrase");
+		exit(EXIT_FAILURE);
+	}
+	passphrase = malloc(strlen(p)); /* not null-terminated */
+	if (!passphrase) {
+		perror("malloc");
+		exit(EXIT_FAILURE);
+	}
+	memcpy(passphrase, p, strlen(p));
+	pplen = strlen(p);
+}
+
+static void
 dataload(void)
 {
 	FILE *fp;
 	size_t sz;
 	uint8_t *data;
 	int r;
+
+	if (encryptsave == 1)
+		readpass();
 
 	fp = fopen(DATAFILE, "r");
 	if (!fp)
@@ -573,13 +600,20 @@ dataload(void)
 		fprintf(stderr, "failed to read %s\n", DATAFILE);
 		exit(EXIT_FAILURE);
 	}
-	r = tox_load(tox, data, sz);
+
+	if (encryptsave == 1)
+		r = tox_encrypted_load(tox, data, sz, passphrase, pplen);
+	else
+		r = tox_load(tox, data, sz);
 	if (r < 0) {
-		fprintf(stderr, "tox_load() failed\n");
+		fprintf(stderr, "%s failed\n",
+			encryptsave == 1 ? "tox_encrypted_load" : "tox_load");
+		exit(EXIT_FAILURE);
+	} else if (r == 1) {
+		fprintf(stderr, "Found encrypted %s but encryption is disabled\n",
+			DATAFILE);
 		exit(EXIT_FAILURE);
 	}
-	if (r == 1)
-		printf("Found encrypted data in %s\n", DATAFILE);
 
 	free(data);
 	fclose(fp);
@@ -598,14 +632,17 @@ datasave(void)
 		exit(EXIT_FAILURE);
 	}
 
-	sz = tox_size(tox);
+	sz = encryptsave == 1 ? tox_encrypted_size(tox) : tox_size(tox);
 	data = malloc(sz);
 	if (!data) {
 		perror("malloc");
 		exit(EXIT_FAILURE);
 	}
 
-	tox_save(tox, data);
+	if (encryptsave == 1)
+		tox_encrypted_save(tox, data, passphrase, pplen);
+	else
+		tox_save(tox, data);
 	if (fwrite(data, 1, sz, fp) != sz || ferror(fp)) {
 		fprintf(stderr, "failed to write %s\n", DATAFILE);
 		exit(EXIT_FAILURE);

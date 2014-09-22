@@ -3,40 +3,43 @@ include config.mk
 .POSIX:
 .SUFFIXES: .c .o
 
-SRC = ratox.c
+HDR = arg.h readpassphrase.h
+LIB = \
+	readpassphrase.o
+SRC = \
+	ratox.c
 
-OBJ = $(SRC:.c=.o)
+OBJ = $(SRC:.c=.o) $(LIB)
 BIN = $(SRC:.c=)
+MAN = $(SRC:.c=.1)
 
-all: options bin
+all: binlib
 
-options:
-	@echo ratox build options:
-	@echo "CFLAGS   = $(CFLAGS)"
-	@echo "LDFLAGS  = $(LDFLAGS)"
-	@echo "CC       = $(CC)"
+binlib: util.a
+	$(MAKE) bin
 
 bin: $(BIN)
 
-$(OBJ): config.h config.mk
-
-config.h:
-	@echo creating $@ from config.def.h
-	@cp config.def.h $@
+$(OBJ): readpassphrase.h config.mk
 
 .o:
 	@echo LD $@
-	@$(LD) -o $@ $< $(LDFLAGS)
+	@$(LD) -o $@ $< util.a $(LDFLAGS)
 
 .c.o:
 	@echo CC $<
 	@$(CC) -c -o $@ $< $(CFLAGS)
 
+util.a: $(LIB)
+	@echo AR $@
+	@$(AR) -r -c $@ $(LIB)
+	@ranlib $@
+
 install: all
 	@echo installing executable to $(DESTDIR)$(PREFIX)/bin
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin
 	@cp -f $(BIN) $(DESTDIR)$(PREFIX)/bin
-	@chmod 755 $(DESTDIR)$(PREFIX)/bin/$(BIN)
+	@cd $(DESTDIR)$(PREFIX)/bin && chmod 755 $(BIN)
 
 uninstall:
 	@echo removing executable from $(DESTDIR)$(PREFIX)/bin
@@ -44,4 +47,4 @@ uninstall:
 
 clean:
 	@echo cleaning
-	@rm -f $(BIN) $(OBJ)
+	@rm -f $(BIN) $(OBJ) $(LIB) util.a

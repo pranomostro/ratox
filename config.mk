@@ -9,4 +9,4 @@ CC = cc
 LD = $(CC)
 CPPFLAGS = -DVERSION=\"${VERSION}\"
 CFLAGS   = -I/usr/local/include -Wall -Wunused $(CPPFLAGS)
-LDFLAGS  = -L/usr/local/lib -ltoxcore
+LDFLAGS  = -L/usr/local/lib -ltoxcore -ltoxencryptsave
