@@ -564,7 +564,7 @@ readpass(void)
 	}
 	if (p[0] == '\0')
 		return -1;
-	passphrase = malloc(strlen(p)); /* not null-terminated */
+	passphrase = realloc(passphrase, strlen(p)); /* not null-terminated */
 	if (!passphrase) {
 		perror("malloc");
 		exit(EXIT_FAILURE);
