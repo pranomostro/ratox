@@ -100,6 +100,7 @@ static struct file gfiles[] = {
 enum {
 	FTEXT_IN,
 	FFILE_IN,
+	FREMOVE,
 	FONLINE,
 	FNAME,
 	FSTATUS,
@@ -110,6 +111,7 @@ enum {
 static struct file ffiles[] = {
 	{ .type = FIFO,   .name = "text_in",  .flags = O_RDONLY | O_NONBLOCK,         },
 	{ .type = FIFO,   .name = "file_in",  .flags = O_RDONLY | O_NONBLOCK,         },
+	{ .type = FIFO,   .name = "remove",   .flags = O_RDONLY | O_NONBLOCK,         },
 	{ .type = STATIC, .name = "online",   .flags = O_WRONLY | O_TRUNC  | O_CREAT  },
 	{ .type = STATIC, .name = "name",     .flags = O_WRONLY | O_TRUNC  | O_CREAT  },
 	{ .type = STATIC, .name = "status",   .flags = O_WRONLY | O_TRUNC  | O_CREAT  },
@@ -180,6 +182,8 @@ static void cbstatusmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbuserstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
 static void sendfriendfile(struct friend *);
+static void sendfriendtext(struct friend *);
+static void removefriend(struct friend *);
 static int readpass(const char *);
 static void dataload(void);
 static void datasave(void);
@@ -526,6 +530,34 @@ sendfriendtext(struct friend *f)
 	if (buf[n - 1] == '\n')
 		n--;
 	tox_send_message(tox, f->fid, buf, n);
+}
+
+static void
+removefriend(struct friend *f)
+{
+	char c;
+	ssize_t n;
+	int i;
+
+	n = fiforead(f->dirfd, &f->fd[FREMOVE], ffiles[FREMOVE], &c, 1);
+	if (n <= 0)
+		return;
+	if (c != '1')
+		return;
+	tox_del_friend(tox, f->fid);
+	datasave();
+	printout("Removed friend %s\n",
+		 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
+	for (i = 0; i < LEN(ffiles); i++) {
+		if (f->dirfd != -1) {
+			unlinkat(f->dirfd, ffiles[i].name, 0);
+			if (f->fd[i] != -1)
+				close(f->fd[i]);
+		}
+	}
+	rmdir(f->idstr);
+	/* T0D0: cancel transmissions */
+	TAILQ_REMOVE(&friendhead, f, entry);
 }
 
 static int
@@ -980,7 +1012,7 @@ static void
 loop(void)
 {
 	char tstamp[64];
-	struct friend *f;
+	struct friend *f, *ftmp;
 	struct request *req, *rtmp;
 	time_t t0, t1, now;
 	int connected = 0;
@@ -1038,6 +1070,9 @@ loop(void)
 				if (f->fd[FFILE_IN] > fdmax)
 					fdmax = f->fd[FFILE_IN];
 			}
+			FD_SET(f->fd[FREMOVE], &rfds);
+			if (f->fd[FREMOVE] > fdmax)
+				fdmax = f->fd[FREMOVE];
 		}
 
 		tv.tv_sec = 0;
@@ -1116,7 +1151,8 @@ loop(void)
 			free(req);
 		}
 
-		TAILQ_FOREACH(f, &friendhead, entry) {
+		for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
+			ftmp = TAILQ_NEXT(f, entry);
 			for (i = 0; i < NR_FFILES; i++) {
 				if (FD_ISSET(f->fd[i], &rfds) == 0)
 					continue;
@@ -1140,6 +1176,9 @@ loop(void)
 						sendfriendfile(f);
 						break;
 					}
+					break;
+				case FREMOVE:
+					removefriend(f);
 					break;
 				default:
 					fprintf(stderr, "Unhandled FIFO read\n");
