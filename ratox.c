@@ -207,6 +207,7 @@ printrat(void)
 	printf("                            //  \\   |_./\n");
 	printf("                          '~' '~----'\tratox v"VERSION"\n");
 	printf("\033[0m");
+	putchar('\n');
 }
 
 static void
