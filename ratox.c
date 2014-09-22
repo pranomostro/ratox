@@ -579,12 +579,13 @@ dataload(void)
 	uint8_t *data;
 	int r;
 
-	if (encryptsave == 1)
-		readpass();
-
 	fp = fopen(DATAFILE, "r");
-	if (!fp)
+	if (!fp) {
+		/* First time round, just set our pass */
+		if (encryptsave == 1)
+			readpass();
 		return;
+	}
 
 	fseek(fp, 0, SEEK_END);
 	sz = ftell(fp);
@@ -601,6 +602,12 @@ dataload(void)
 		exit(EXIT_FAILURE);
 	}
 
+	if (tox_is_data_encrypted(data) ^ encryptsave) {
+		fprintf(stderr, "Ensure %s matches your encryption configuration\n",
+			DATAFILE);
+		exit(EXIT_FAILURE);
+	}
+
 	if (encryptsave == 1) {
 		while (1) {
 			r = tox_encrypted_load(tox, data, sz, passphrase, pplen);
@@ -611,12 +618,10 @@ dataload(void)
 		}
 	} else {
 		r = tox_load(tox, data, sz);
-		if (r < 0)
+		if (r < 0) {
 			fprintf(stderr, "tox_load() failed\n");
-		else if (r == 1)
-			fprintf(stderr, "Found encrypted %s but encryption is disabled\n",
-				DATAFILE);
-		exit(EXIT_FAILURE);
+			exit(EXIT_FAILURE);
+		}
 	}
 
 	free(data);
