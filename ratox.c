@@ -979,9 +979,10 @@ sendfriendreq(void *data)
 static void
 loop(void)
 {
+	char tstamp[64];
 	struct friend *f;
 	struct request *req, *rtmp;
-	time_t t0, t1;
+	time_t t0, t1, now;
 	int connected = 0;
 	int i, n;
 	int fdmax;
@@ -1128,8 +1129,10 @@ loop(void)
 					case TRANSFER_NONE:
 						/* prepare a new transfer */
 						f->t.state = TRANSFER_INITIATED;
+						now = time(NULL);
+						snprintf(tstamp, sizeof(tstamp), "%lu", (unsigned long)now);
 						tox_new_file_sender(tox, f->fid,
-							0, (uint8_t *)"file", strlen("file") + 1);
+							0, (uint8_t *)tstamp, strlen(tstamp));
 						printout("Initiated transfer to %s\n",
 							 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
 						break;
