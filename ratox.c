@@ -553,21 +553,19 @@ readpass(const char *prompt)
 static void
 dataload(void)
 {
-	FILE *fp;
-	size_t sz;
+	off_t sz;
 	uint8_t *data;
-	int r;
+	int fd;
 
-	fp = fopen(DATAFILE, "r");
-	if (!fp) {
+	fd = open(DATAFILE, 0444);
+	if (fd < 0) {
 		if (encryptdatafile == 1)
-			while (readpass("New password: ") == -1);
+			while (readpass("New passphrase: ") == -1);
 		return;
 	}
 
-	fseek(fp, 0, SEEK_END);
-	sz = ftell(fp);
-	rewind(fp);
+	sz = lseek(fd, 0, SEEK_END);
+	lseek(fd, 0, SEEK_SET);
 
 	data = malloc(sz);
 	if (!data) {
@@ -575,44 +573,31 @@ dataload(void)
 		exit(EXIT_FAILURE);
 	}
 
-	if (fread(data, 1, sz, fp) != sz || ferror(fp)) {
-		fprintf(stderr, "failed to read %s\n", DATAFILE);
+	if (read(fd, data, sz) != sz) {
+		perror("read");
 		exit(EXIT_FAILURE);
 	}
 
-	if (encryptdatafile == 1) {
-		if (tox_is_data_encrypted(data) == 1) {
-			while (readpass("Password: ") == -1 ||
-			       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0)
-				;
-		} else {
-			printout("%s is not encrypted, forcing encrypted format\n",
-				 DATAFILE);
-			while (readpass("New password: ") == -1)
-				;
-			r = tox_load(tox, data, sz);
-			if (r < 0) {
-				fprintf(stderr, "tox_load() failed\n");
-				exit(EXIT_FAILURE);
-			}
+	if (tox_is_data_encrypted(data) == 1) {
+		while (readpass("Passphrase: ") < 0 ||
+		       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0);
+		if (encryptdatafile == 0) {
+			printout("%s is encrypted, but saving in plain format\n", DATAFILE);
 		}
 	} else {
-		if (tox_is_data_encrypted(data) == 0) {
-			r = tox_load(tox, data, sz);
-			if (r < 0) {
-				fprintf(stderr, "tox_load() failed\n");
-				exit(EXIT_FAILURE);
-			}
-		} else {
-			printout("%s is encrypted, forcing plain format\n", DATAFILE);
-			while (readpass("Password: ") == -1 ||
-			       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0)
-				;
+		if (tox_load(tox, data, sz) < 0) {
+			fprintf(stderr, "tox_load() failed\n");
+			exit(EXIT_FAILURE);
 		}
+		if (encryptdatafile == 1) {
+			printout("%s is not encrypted, but saving in encrypted format\n", DATAFILE);
+			while (readpass("New passphrase: ") < 0);
+		}
+
 	}
 
 	free(data);
-	fclose(fp);
+	close(fd);
 }
 
 static void
