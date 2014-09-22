@@ -605,10 +605,15 @@ dataload(void)
 		exit(EXIT_FAILURE);
 	}
 
-	if (tox_is_data_encrypted(data) ^ encryptsave) {
-		fprintf(stderr, "Ensure %s matches your encryption configuration\n",
-			DATAFILE);
-		exit(EXIT_FAILURE);
+	if (encryptsave == 1) {
+		if (tox_is_data_encrypted(data) == 0)
+			encryptsave = 0;
+	} else {
+		if (tox_is_data_encrypted(data) == 1) {
+			fprintf(stderr, "Unable to load %s, it is encrypted\n",
+				DATAFILE);
+			exit(EXIT_FAILURE);
+		}
 	}
 
 	if (encryptsave == 1) {
