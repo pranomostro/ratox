@@ -585,7 +585,7 @@ dataload(void)
 
 	fp = fopen(DATAFILE, "r");
 	if (!fp) {
-		if (encryptsave == 1)
+		if (encryptdatafile == 1)
 			while (readpass("New password: ") == -1);
 		return;
 	}
@@ -605,7 +605,7 @@ dataload(void)
 		exit(EXIT_FAILURE);
 	}
 
-	if (encryptsave == 1) {
+	if (encryptdatafile == 1) {
 		if (tox_is_data_encrypted(data) == 1) {
 			while (readpass("Password: ") == -1 ||
 			       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0)
@@ -653,14 +653,14 @@ datasave(void)
 		exit(EXIT_FAILURE);
 	}
 
-	sz = encryptsave == 1 ? tox_encrypted_size(tox) : tox_size(tox);
+	sz = encryptdatafile == 1 ? tox_encrypted_size(tox) : tox_size(tox);
 	data = malloc(sz);
 	if (!data) {
 		perror("malloc");
 		exit(EXIT_FAILURE);
 	}
 
-	if (encryptsave == 1)
+	if (encryptdatafile == 1)
 		tox_encrypted_save(tox, data, passphrase, pplen);
 	else
 		tox_save(tox, data);
