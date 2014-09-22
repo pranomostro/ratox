@@ -557,7 +557,7 @@ dataload(void)
 	uint8_t *data;
 	int fd;
 
-	fd = open(DATAFILE, 0444);
+	fd = open(DATAFILE, O_RDONLY);
 	if (fd < 0) {
 		if (encryptdatafile == 1)
 			while (readpass("New passphrase: ") == -1);
