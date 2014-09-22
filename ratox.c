@@ -605,7 +605,7 @@ datasave(void)
 	uint8_t *data;
 	int fd;
 
-	fd = open(DATAFILE, O_WRONLY | O_CREAT , 0644);
+	fd = open(DATAFILE, O_WRONLY | O_TRUNC | O_CREAT , 0644);
 	if (fd < 0) {
 		perror("open");
 		exit(EXIT_FAILURE);
