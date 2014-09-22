@@ -653,6 +653,7 @@ datasave(void)
 		perror("write");
 		exit(EXIT_FAILURE);
 	}
+	fsync(fd);
 
 	free(data);
 	close(fd);
