@@ -562,7 +562,7 @@ readpass(void)
 		perror("readpassphrase");
 		exit(EXIT_FAILURE);
 	}
-	if (strlen(p) == 0)
+	if (p[0] == '\0')
 		return -1;
 	passphrase = malloc(strlen(p)); /* not null-terminated */
 	if (!passphrase) {
