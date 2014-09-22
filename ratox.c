@@ -601,17 +601,21 @@ dataload(void)
 		exit(EXIT_FAILURE);
 	}
 
-	if (encryptsave == 1)
-		r = tox_encrypted_load(tox, data, sz, passphrase, pplen);
-	else
+	if (encryptsave == 1) {
+		while (1) {
+			r = tox_encrypted_load(tox, data, sz, passphrase, pplen);
+			if (r < 0)
+				readpass();
+			else
+				break;
+		}
+	} else {
 		r = tox_load(tox, data, sz);
-	if (r < 0) {
-		fprintf(stderr, "%s failed\n",
-			encryptsave == 1 ? "tox_encrypted_load" : "tox_load");
-		exit(EXIT_FAILURE);
-	} else if (r == 1) {
-		fprintf(stderr, "Found encrypted %s but encryption is disabled\n",
-			DATAFILE);
+		if (r < 0)
+			fprintf(stderr, "tox_load() failed\n");
+		else if (r == 1)
+			fprintf(stderr, "Found encrypted %s but encryption is disabled\n",
+				DATAFILE);
 		exit(EXIT_FAILURE);
 	}
 
