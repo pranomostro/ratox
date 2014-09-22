@@ -3,7 +3,7 @@ include config.mk
 .POSIX:
 .SUFFIXES: .c .o
 
-HDR = arg.h readpassphrase.h
+HDR = arg.h config.h readpassphrase.h
 LIB = \
 	readpassphrase.o
 SRC = \
@@ -20,7 +20,11 @@ binlib: util.a
 
 bin: $(BIN)
 
-$(OBJ): readpassphrase.h config.mk
+$(OBJ): $(HDR) config.mk
+
+config.h:
+	@echo creating $@ from config.def.h
+	@cp config.def.h $@
 
 .o:
 	@echo LD $@
