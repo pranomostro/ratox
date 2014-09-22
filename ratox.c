@@ -469,8 +469,8 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 	case TOX_FILECONTROL_PAUSE:
 		if (rec_sen == 1) {
 			if (f->t.state == TRANSFER_INPROGRESS) {
-				f->t.state = TRANSFER_PAUSED;
 				printout("Receiver paused transfer\n");
+				f->t.state = TRANSFER_PAUSED;
 			}
 		}
 		break;
