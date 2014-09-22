@@ -180,7 +180,7 @@ static void cbstatusmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbuserstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
 static void sendfriendfile(struct friend *);
-static void readpass(void);
+static int readpass(void);
 static void dataload(void);
 static void datasave(void);
 static int localinit(void);
@@ -552,7 +552,7 @@ sendfriendtext(struct friend *f)
 	tox_send_message(tox, f->fid, buf, n);
 }
 
-static void
+static int
 readpass(void)
 {
 	char pass[BUFSIZ], *p;
@@ -562,6 +562,8 @@ readpass(void)
 		perror("readpassphrase");
 		exit(EXIT_FAILURE);
 	}
+	if (strlen(p) == 0)
+		return -1;
 	passphrase = malloc(strlen(p)); /* not null-terminated */
 	if (!passphrase) {
 		perror("malloc");
@@ -569,6 +571,7 @@ readpass(void)
 	}
 	memcpy(passphrase, p, strlen(p));
 	pplen = strlen(p);
+	return 0;
 }
 
 static void
@@ -583,7 +586,7 @@ dataload(void)
 	if (!fp) {
 		/* First time round, just set our pass */
 		if (encryptsave == 1)
-			readpass();
+			while (readpass() == -1);
 		return;
 	}
 
@@ -609,13 +612,9 @@ dataload(void)
 	}
 
 	if (encryptsave == 1) {
-		while (1) {
-			r = tox_encrypted_load(tox, data, sz, passphrase, pplen);
-			if (r < 0)
-				readpass();
-			else
-				break;
-		}
+		while (readpass() == -1 &&
+		       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0)
+			;
 	} else {
 		r = tox_load(tox, data, sz);
 		if (r < 0) {
