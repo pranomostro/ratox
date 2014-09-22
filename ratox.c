@@ -601,13 +601,13 @@ dataload(void)
 static void
 datasave(void)
 {
-	FILE *fp;
-	size_t sz;
+	off_t sz;
 	uint8_t *data;
+	int fd;
 
-	fp = fopen(DATAFILE, "w");
-	if (!fp) {
-		fprintf(stderr, "can't open %s for writing\n", DATAFILE);
+	fd = open(DATAFILE, O_WRONLY | O_CREAT , 0644);
+	if (fd < 0) {
+		perror("open");
 		exit(EXIT_FAILURE);
 	}
 
@@ -622,13 +622,13 @@ datasave(void)
 		tox_encrypted_save(tox, data, passphrase, pplen);
 	else
 		tox_save(tox, data);
-	if (fwrite(data, 1, sz, fp) != sz || ferror(fp)) {
-		fprintf(stderr, "failed to write %s\n", DATAFILE);
+	if (write(fd, data, sz) != sz) {
+		perror("write");
 		exit(EXIT_FAILURE);
 	}
 
 	free(data);
-	fclose(fp);
+	close(fd);
 }
 
 static int
@@ -637,9 +637,8 @@ localinit(void)
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
 	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
 	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
-	FILE *fp;
 	DIR *d;
-	int r;
+	int r, fd;
 	size_t i, m;
 
 	for (i = 0; i < LEN(gslots); i++) {
@@ -722,16 +721,16 @@ localinit(void)
 	dprintf(gslots[STATUS].fd[OUT], "%s\n", name);
 
 	/* Dump ID */
-	fp = fopen("id", "w");
-	if (!fp) {
-		perror("fopen");
+	fd = open("id", O_WRONLY | O_CREAT, 0644);
+	if (fd < 0) {
+		perror("open");
 		exit(EXIT_FAILURE);
 	}
 	tox_get_address(tox, address);
 	for (i = 0; i < TOX_FRIEND_ADDRESS_SIZE; i++)
-		fprintf(fp, "%02X", address[i]);
-	fputc('\n', fp);
-	fclose(fp);
+		dprintf(fd, "%02X", address[i]);
+	dprintf(fd, "\n");
+	close(fd);
 
 	return 0;
 }
