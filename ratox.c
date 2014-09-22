@@ -165,12 +165,12 @@ static Tox *tox;
 static Tox_Options toxopt;
 static uint8_t *passphrase;
 static uint32_t pplen;
+static uint8_t toilet[BUFSIZ];
 static int running = 1;
 static int ipv6;
 
 static void printrat(void);
 static void printout(const char *, ...);
-static void fifoflush(int);
 static ssize_t fiforead(int, int *, struct file, void *, size_t);
 static void cbconnstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfriendmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
@@ -251,26 +251,6 @@ again:
 		exit(EXIT_FAILURE);
 	}
 	return r;
-}
-
-static void
-fifoflush(int fd)
-{
-	char buf[BUFSIZ];
-	ssize_t n;
-
-	/* Flush the FIFO */
-	while (1) {
-		n = read(fd, buf, sizeof(buf));
-		if (n < 0) {
-			if (errno == EINTR || errno == EWOULDBLOCK)
-				continue;
-			perror("read");
-			exit(EXIT_FAILURE);
-		}
-		if (n == 0)
-			break;
-	}
 }
 
 static void
@@ -437,7 +417,6 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 	const uint8_t *data, uint16_t len, void *udata)
 {
 	struct friend *f;
-	int r;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
 		if (f->fid == fid)
@@ -480,14 +459,10 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 			f->t.state = TRANSFER_NONE;
 			free(f->t.buf);
 			f->t.buf = NULL;
-			fifoflush(f->fd[FFILE_IN]);
-			close(f->fd[FFILE_IN]);
-			r = openat(f->dirfd, ffiles[FFILE_IN].name, ffiles[FFILE_IN].flags, 0644);
-			if (r < 0) {
-				perror("open");
-				exit(EXIT_FAILURE);
-			}
-			f->fd[FFILE_IN] = r;
+
+			/* flush the FIFO */
+			while (fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
+			                toilet, sizeof(toilet)));
 		}
 		break;
 	case TOX_FILECONTROL_FINISHED:
@@ -1026,7 +1001,7 @@ loop(void)
 	struct request *req, *rtmp;
 	time_t t0, t1;
 	int connected = 0;
-	int i, n, r;
+	int i, n;
 	int fdmax;
 	char c;
 	fd_set rfds;
@@ -1102,14 +1077,10 @@ loop(void)
 					f->t.state = TRANSFER_NONE;
 					free(f->t.buf);
 					f->t.buf = NULL;
-					fifoflush(f->fd[FFILE_IN]);
-					close(f->fd[FFILE_IN]);
-					r = openat(f->dirfd, ffiles[FFILE_IN].name, ffiles[FFILE_IN].flags, 0644);
-					if (r < 0) {
-						perror("open");
-						exit(EXIT_FAILURE);
-					}
-					f->fd[FFILE_IN] = r;
+
+					/* flush the FIFO */
+					while (fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
+					                toilet, sizeof(toilet)));
 				}
 			}
 		}
