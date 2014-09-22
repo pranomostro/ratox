@@ -612,7 +612,7 @@ dataload(void)
 	}
 
 	if (encryptsave == 1) {
-		while (readpass() == -1 &&
+		while (readpass() == -1 ||
 		       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0)
 			;
 	} else {
