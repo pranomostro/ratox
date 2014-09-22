@@ -607,8 +607,11 @@ dataload(void)
 	}
 
 	if (encryptsave == 1) {
-		if (tox_is_data_encrypted(data) == 0)
+		if (tox_is_data_encrypted(data) == 0) {
+			printout("%s is not encrypted, disabling encryption\n",
+				 DATAFILE);
 			encryptsave = 0;
+		}
 	} else {
 		if (tox_is_data_encrypted(data) == 1) {
 			fprintf(stderr, "Unable to load %s, it is encrypted\n",
