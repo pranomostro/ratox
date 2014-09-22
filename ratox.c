@@ -718,7 +718,7 @@ localinit(void)
 		r = sizeof(status) - 1;
 	status[r] = '\0';
 	ftruncate(gslots[STATUS].fd[OUT], 0);
-	dprintf(gslots[STATUS].fd[OUT], "%s\n", name);
+	dprintf(gslots[STATUS].fd[OUT], "%s\n", status);
 
 	/* Dump ID */
 	fd = open("id", O_WRONLY | O_CREAT, 0644);
