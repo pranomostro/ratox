@@ -180,7 +180,7 @@ static void cbstatusmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbuserstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
 static void sendfriendfile(struct friend *);
-static int readpass(void);
+static int readpass(const char *);
 static void dataload(void);
 static void datasave(void);
 static int localinit(void);
@@ -554,11 +554,11 @@ sendfriendtext(struct friend *f)
 }
 
 static int
-readpass(void)
+readpass(const char *prompt)
 {
 	char pass[BUFSIZ], *p;
 
-	p = readpassphrase("Password: ", pass, sizeof(pass), RPP_ECHO_OFF);
+	p = readpassphrase(prompt, pass, sizeof(pass), RPP_ECHO_OFF);
 	if (!p) {
 		perror("readpassphrase");
 		exit(EXIT_FAILURE);
@@ -585,9 +585,8 @@ dataload(void)
 
 	fp = fopen(DATAFILE, "r");
 	if (!fp) {
-		/* First time round, just set our pass */
 		if (encryptsave == 1)
-			while (readpass() == -1);
+			while (readpass("New password: ") == -1);
 		return;
 	}
 
@@ -607,28 +606,33 @@ dataload(void)
 	}
 
 	if (encryptsave == 1) {
-		if (tox_is_data_encrypted(data) == 0) {
-			printout("%s is not encrypted, disabling encryption\n",
-				 DATAFILE);
-			encryptsave = 0;
-		}
-	} else {
 		if (tox_is_data_encrypted(data) == 1) {
-			fprintf(stderr, "Unable to load %s, it is encrypted\n",
-				DATAFILE);
-			exit(EXIT_FAILURE);
+			while (readpass("Password: ") == -1 ||
+			       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0)
+				;
+		} else {
+			printout("%s is not encrypted, forcing encrypted format\n",
+				 DATAFILE);
+			while (readpass("New password: ") == -1)
+				;
+			r = tox_load(tox, data, sz);
+			if (r < 0) {
+				fprintf(stderr, "tox_load() failed\n");
+				exit(EXIT_FAILURE);
+			}
 		}
-	}
-
-	if (encryptsave == 1) {
-		while (readpass() == -1 ||
-		       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0)
-			;
 	} else {
-		r = tox_load(tox, data, sz);
-		if (r < 0) {
-			fprintf(stderr, "tox_load() failed\n");
-			exit(EXIT_FAILURE);
+		if (tox_is_data_encrypted(data) == 0) {
+			r = tox_load(tox, data, sz);
+			if (r < 0) {
+				fprintf(stderr, "tox_load() failed\n");
+				exit(EXIT_FAILURE);
+			}
+		} else {
+			printout("%s is encrypted, forcing plain format\n", DATAFILE);
+			while (readpass("Password: ") == -1 ||
+			       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0)
+				;
 		}
 	}
 
