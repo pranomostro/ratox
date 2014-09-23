@@ -757,6 +757,7 @@ static int
 toxinit(void)
 {
 	toxopt.ipv6enabled = ipv6;
+	toxopt.udp_disabled = tcpenabled;
 	tox = tox_new(&toxopt);
 	dataload();
 	datasave();
@@ -1246,7 +1247,10 @@ shutdown(void)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-4|-6]\n", argv0);
+	fprintf(stderr, "usage: %s [-4|-6] [-t]\n", argv0);
+	fprintf(stderr, " -4\tIPv4 only\n");
+	fprintf(stderr, " -6\tIPv6 only\n");
+	fprintf(stderr, " -t\tEnable TCP mode (UDP by default)\n");
 	exit(EXIT_FAILURE);
 }
 
@@ -1258,6 +1262,9 @@ main(int argc, char *argv[])
 		break;
 	case '6':
 		ipv6 = 1;
+		break;
+	case 't':
+		tcpenabled = 1;
 		break;
 	default:
 		usage();
