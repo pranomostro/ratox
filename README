@@ -1,0 +1,40 @@
+What is it?
+===========
+
+ratox is a client implementation of the rather popular tox protocol.
+Unlike other clients relying on GUIs as an interface to the user,
+ratox is developed with the UNIX-philosophy in mind and allows complete
+interaction through named pipes.
+
+Features
+========
+
+1 v 1 messaging: Yes
+File transfer: Sending only
+Group chat: No
+Audio: No
+Video: No
+DNS discovery: No
+Chat logs: Yes
+Proxy support: No
+Offline message: Yes
+Contact aliases: No
+Contact blocking: No
+Save file encryption: Yes
+Multilingual: No
+Multiprofile: Yes
+Typing notification: No
+Audio notifications: No
+Emoticons: No
+Spell check: No
+Desktop sharing: No
+Inline images: No
+File resuming: No
+Read receipts: No
+Message splitting: No
+Changing nospam: No
+toxi URI: No
+
+NOTE: Some of these features are not intended to be developed
+in ratox itself but rather in external scripts that are built upon
+ratox.
