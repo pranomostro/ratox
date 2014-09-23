@@ -182,6 +182,7 @@ static void cbnamechange(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbstatusmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbuserstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
+static void canceltransfer(struct friend *);
 static void sendfriendfile(struct friend *);
 static void sendfriendtext(struct friend *);
 static void removefriend(struct friend *);
@@ -483,6 +484,21 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 		fprintf(stderr, "Unhandled file control type: %d\n", ctrltype);
 		break;
 	};
+}
+
+static void
+canceltransfer(struct friend *f)
+{
+	if (f->t.state != TRANSFER_NONE) {
+		printout("Cancelling transfer to %s\n",
+			 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
+		f->t.state = TRANSFER_NONE;
+		free(f->t.buf);
+		f->t.buf = NULL;
+		/* flush the FIFO */
+		while (fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
+				toilet, sizeof(toilet)));
+	}
 }
 
 static void
@@ -919,7 +935,7 @@ frienddestroy(struct friend *f)
 		}
 	}
 	rmdir(f->idstr);
-	/* T0D0: cancel transmissions */
+	canceltransfer(f);
 	TAILQ_REMOVE(&friendhead, f, entry);
 }
 
@@ -1105,18 +1121,8 @@ loop(void)
 		 * in the middle of a transfer.
 		 */
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_get_friend_connection_status(tox, f->fid) == 0) {
-				if (f->t.state != TRANSFER_NONE) {
-					printout("Stale transfer detected, friend offline\n");
-					f->t.state = TRANSFER_NONE;
-					free(f->t.buf);
-					f->t.buf = NULL;
-
-					/* flush the FIFO */
-					while (fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
-					                toilet, sizeof(toilet)));
-				}
-			}
+			if (tox_get_friend_connection_status(tox, f->fid) == 0)
+				canceltransfer(f);
 		}
 
 		/* If we hit the receiver too hard, we will run out of
