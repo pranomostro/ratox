@@ -588,6 +588,12 @@ dataload(void)
 	sz = lseek(fd, 0, SEEK_END);
 	lseek(fd, 0, SEEK_SET);
 
+	if (sz == 0) {
+		fprintf(stderr, "%s seems to be corrupt\n",
+			DATAFILE);
+		exit(EXIT_FAILURE);
+	}
+
 	data = malloc(sz);
 	if (!data) {
 		perror("malloc");
