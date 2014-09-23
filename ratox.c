@@ -169,6 +169,8 @@ static uint32_t pplen;
 static uint8_t toilet[BUFSIZ];
 static int running = 1;
 static int ipv6;
+static int tcpflag;
+static int proxyflag;
 
 static void printrat(void);
 static void printout(const char *, ...);
@@ -757,7 +759,14 @@ static int
 toxinit(void)
 {
 	toxopt.ipv6enabled = ipv6;
-	toxopt.udp_disabled = tcpenabled;
+	toxopt.udp_disabled = tcpflag;
+	if (proxyflag == 1) {
+		snprintf(toxopt.proxy_address, sizeof(toxopt.proxy_address),
+			 "%s", proxyaddr);
+		toxopt.proxy_port = proxyport;
+		toxopt.proxy_enabled = 1;
+		printout("Using proxy %s:%hu\n", proxyaddr, proxyport);
+	}
 	tox = tox_new(&toxopt);
 	dataload();
 	datasave();
@@ -1247,10 +1256,11 @@ shutdown(void)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-4|-6] [-t]\n", argv0);
+	fprintf(stderr, "usage: %s [-4|-6] [-t] [-p]\n", argv0);
 	fprintf(stderr, " -4\tIPv4 only\n");
 	fprintf(stderr, " -6\tIPv6 only\n");
 	fprintf(stderr, " -t\tEnable TCP mode (UDP by default)\n");
+	fprintf(stderr, " -p\tEnable TCP socks5 proxy\n");
 	exit(EXIT_FAILURE);
 }
 
@@ -1264,7 +1274,10 @@ main(int argc, char *argv[])
 		ipv6 = 1;
 		break;
 	case 't':
-		tcpenabled = 1;
+		tcpflag = 1;
+		break;
+	case 'p':
+		proxyflag = 1;
 		break;
 	default:
 		usage();

@@ -1,7 +1,9 @@
 /* See LICENSE file for copyright and license details. */
 
 static int encryptdatafile = 0;
-static int tcpenabled = 0;
+
+static char proxyaddr[] = "localhost";
+static uint16_t proxyport = 8080;
 
 static struct node nodes[] = {
 	{
