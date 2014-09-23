@@ -1,5 +1,4 @@
 /* See LICENSE file for copyright and license details. */
-
 static int encryptdatafile = 0;
 
 static char proxyaddr[] = "localhost";
