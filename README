@@ -38,3 +38,11 @@ toxi URI: No
 NOTE: Some of these features are not intended to be developed
 in ratox itself but rather in external scripts that are built upon
 ratox.
+
+Portability
+===========
+
+Builds and works on *BSD and Linux.  It has been tested on
+SPARC systems with a slightly patched[0] toxcore.
+
+[0] http://users.2f30.org/sin/patches/0001-Fix-unaligned-memory-access-on-SPARC.patch
