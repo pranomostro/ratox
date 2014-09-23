@@ -183,7 +183,7 @@ static void cbuserstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
 static void sendfriendfile(struct friend *);
 static void sendfriendtext(struct friend *);
-static void removefriend(struct friend *, int);
+static void removefriend(struct friend *);
 static int readpass(const char *);
 static void dataload(void);
 static void datasave(void);
@@ -194,6 +194,7 @@ static void id2str(uint8_t *, char *);
 static void str2id(char *, uint8_t *);
 static struct friend *friendcreate(int32_t);
 static void friendload(void);
+static void frienddestroy(struct friend *);
 static void loop(void);
 static void initshutdown(int);
 static void shutdown(void);
@@ -533,26 +534,19 @@ sendfriendtext(struct friend *f)
 }
 
 static void
-removefriend(struct friend *f, int official)
+removefriend(struct friend *f)
 {
-	int i;
+	char c;
 
-	if (official) {
-		tox_del_friend(tox, f->fid);
-		datasave();
-		printout("Removed friend %s\n",
-		         f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
-	}
-	for (i = 0; i < LEN(ffiles); i++) {
-		if (f->dirfd != -1) {
-			unlinkat(f->dirfd, ffiles[i].name, 0);
-			if (f->fd[i] != -1)
-				close(f->fd[i]);
-		}
-	}
-	rmdir(f->idstr);
-	/* T0D0: cancel transmissions */
-	TAILQ_REMOVE(&friendhead, f, entry);
+	if (fiforead(f->dirfd, &f->fd[FREMOVE], ffiles[FREMOVE], &c, 1) != 1)
+		return;
+	if (c != '1')
+		return;
+	tox_del_friend(tox, f->fid);
+	datasave();
+	printout("Removed friend %s\n",
+	         f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
+	frienddestroy(f);
 }
 
 static int
@@ -904,6 +898,23 @@ friendcreate(int32_t fid)
 }
 
 static void
+frienddestroy(struct friend *f)
+{
+	int i;
+
+	for (i = 0; i < LEN(ffiles); i++) {
+		if (f->dirfd != -1) {
+			unlinkat(f->dirfd, ffiles[i].name, 0);
+			if (f->fd[i] != -1)
+				close(f->fd[i]);
+		}
+	}
+	rmdir(f->idstr);
+	/* T0D0: cancel transmissions */
+	TAILQ_REMOVE(&friendhead, f, entry);
+}
+
+static void
 friendload(void)
 {
 	int32_t *fids;
@@ -1174,11 +1185,7 @@ loop(void)
 					}
 					break;
 				case FREMOVE:
-					if (fiforead(f->dirfd, &f->fd[FREMOVE], ffiles[FREMOVE], &c, 1) != 1)
-						return;
-					if (c != '1')
-						return;
-					removefriend(f, 1);
+					removefriend(f);
 					break;
 				default:
 					fprintf(stderr, "Unhandled FIFO read\n");
@@ -1207,7 +1214,7 @@ shutdown(void)
 	/* friends */
 	for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
 		ftmp = TAILQ_NEXT(f, entry);
-		removefriend(f, 0);
+		frienddestroy(f);
 	}
 
 	/* requests */
