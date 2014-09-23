@@ -492,6 +492,7 @@ canceltransfer(struct friend *f)
 	if (f->t.state != TRANSFER_NONE) {
 		printout("Cancelling transfer to %s\n",
 			 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
+		tox_file_send_control(tox, f->fid, 0, 0, TOX_FILECONTROL_KILL, NULL, 0);
 		f->t.state = TRANSFER_NONE;
 		free(f->t.buf);
 		f->t.buf = NULL;
@@ -1223,8 +1224,6 @@ shutdown(void)
 	struct friend *f, *ftmp;
 	struct request *r, *rtmp;
 
-	tox_kill(tox);
-
 	/* friends */
 	for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
 		ftmp = TAILQ_NEXT(f, entry);
@@ -1259,6 +1258,8 @@ shutdown(void)
 		rmdir(gslots[i].name);
 	}
 	unlink("id");
+
+	tox_kill(tox);
 }
 
 static void
