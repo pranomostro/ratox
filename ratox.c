@@ -928,6 +928,7 @@ frienddestroy(struct friend *f)
 {
 	int i;
 
+	canceltransfer(f);
 	for (i = 0; i < LEN(ffiles); i++) {
 		if (f->dirfd != -1) {
 			unlinkat(f->dirfd, ffiles[i].name, 0);
@@ -936,7 +937,6 @@ frienddestroy(struct friend *f)
 		}
 	}
 	rmdir(f->idstr);
-	canceltransfer(f);
 	TAILQ_REMOVE(&friendhead, f, entry);
 }
 
