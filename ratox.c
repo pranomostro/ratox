@@ -761,6 +761,9 @@ toxinit(void)
 	toxopt.ipv6enabled = ipv6;
 	toxopt.udp_disabled = tcpflag;
 	if (proxyflag == 1) {
+		tcpflag = 1;
+		toxopt.udp_disabled = tcpflag;
+		printout("Forcing TCP mode\n");
 		snprintf(toxopt.proxy_address, sizeof(toxopt.proxy_address),
 			 "%s", proxyaddr);
 		toxopt.proxy_port = proxyport;
