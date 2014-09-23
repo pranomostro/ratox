@@ -18,6 +18,7 @@ DNS discovery: No
 Chat logs: Yes
 Proxy support: Yes
 Offline message: Yes
+Offline transfers: Yes
 Contact aliases: No
 Contact blocking: No
 Save file encryption: Yes
@@ -42,7 +43,7 @@ ratox.
 Portability
 ===========
 
-Builds and works on *BSD and Linux.  It has been tested on
+Builds and works on *BSD and Linux, probably others as well.  It has been tested on
 SPARC systems with a slightly patched[0] toxcore.
 
 [0] http://users.2f30.org/sin/patches/0001-Fix-unaligned-memory-access-on-SPARC.patch
