@@ -54,47 +54,47 @@ struct file {
 };
 
 enum {
-	IN,
-	OUT,
-	ERR,
-	NR_GFILES
-};
-
-struct slot {
-	const char *name;
-	void (*cb)(void *);
-	int outtype;
-	int dirfd;
-	int fd[NR_GFILES];
-};
-
-enum {
-	NAME,
-	STATUS,
-	REQUEST,
-};
-
-enum {
 	NONE,
 	FIFO,
 	STATIC,
 	FOLDER
 };
 
+enum {
+	IN,
+	OUT,
+	ERR,
+};
+
+static struct file gfiles[] = {
+	[IN]      = { .type = FIFO,   .name = "in",  .flags = O_RDONLY | O_NONBLOCK,       },
+	[OUT]     = { .type = NONE,   .name = "out", .flags = O_WRONLY | O_TRUNC | O_CREAT },
+	[ERR]     = { .type = STATIC, .name = "err", .flags = O_WRONLY | O_TRUNC | O_CREAT },
+};
+
+
+struct slot {
+	const char *name;
+	void (*cb)(void *);
+	int outisfolder;
+	int dirfd;
+	int fd[LEN(gfiles)];
+};
+
 static void setname(void *);
 static void setstatus(void *);
 static void sendfriendreq(void *);
 
-static struct slot gslots[] = {
-	[NAME]    = { .name = "name",	 .cb = setname,	      .outtype = STATIC, .dirfd = -1 },
-	[STATUS]  = { .name = "status",	 .cb = setstatus,     .outtype = STATIC, .dirfd = -1 },
-	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outtype = FOLDER, .dirfd = -1 },
+enum {
+	NAME,
+	STATUS,
+	REQUEST
 };
 
-static struct file gfiles[] = {
-	{ .type = FIFO,   .name = "in",  .flags = O_RDONLY | O_NONBLOCK,       },
-	{ .type = NONE,   .name = "out", .flags = O_WRONLY | O_TRUNC | O_CREAT },
-	{ .type = STATIC, .name = "err", .flags = O_WRONLY | O_TRUNC | O_CREAT },
+static struct slot gslots[] = {
+	[NAME]    = { .name = "name",	 .cb = setname,	      .outisfolder = 0, .dirfd = -1 },
+	[STATUS]  = { .name = "status",	 .cb = setstatus,     .outisfolder = 0, .dirfd = -1 },
+	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outisfolder = 1, .dirfd = -1 },
 };
 
 enum {
@@ -104,18 +104,17 @@ enum {
 	FONLINE,
 	FNAME,
 	FSTATUS,
-	FTEXT_OUT,
-	NR_FFILES
+	FTEXT_OUT
 };
 
 static struct file ffiles[] = {
-	{ .type = FIFO,   .name = "text_in",  .flags = O_RDONLY | O_NONBLOCK,         },
-	{ .type = FIFO,   .name = "file_in",  .flags = O_RDONLY | O_NONBLOCK,         },
-	{ .type = FIFO,   .name = "remove",   .flags = O_RDONLY | O_NONBLOCK,         },
-	{ .type = STATIC, .name = "online",   .flags = O_WRONLY | O_TRUNC  | O_CREAT  },
-	{ .type = STATIC, .name = "name",     .flags = O_WRONLY | O_TRUNC  | O_CREAT  },
-	{ .type = STATIC, .name = "status",   .flags = O_WRONLY | O_TRUNC  | O_CREAT  },
-	{ .type = STATIC, .name = "text_out", .flags = O_WRONLY | O_APPEND | O_CREAT  },
+	[FTEXT_IN]  = { .type = FIFO,   .name = "text_in",  .flags = O_RDONLY | O_NONBLOCK         },
+	[FFILE_IN]  = { .type = FIFO,   .name = "file_in",  .flags = O_RDONLY | O_NONBLOCK         },
+	[FREMOVE]   = { .type = FIFO,   .name = "remove",   .flags = O_RDONLY | O_NONBLOCK         },
+	[FONLINE]   = { .type = STATIC, .name = "online",   .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[FNAME]     = { .type = STATIC, .name = "name",     .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[FSTATUS]   = { .type = STATIC, .name = "status",   .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[FTEXT_OUT] = { .type = STATIC, .name = "text_out", .flags = O_WRONLY | O_APPEND | O_CREAT },
 };
 
 enum {
@@ -143,7 +142,7 @@ struct friend {
 	/* null terminated id */
 	char idstr[2 * TOX_CLIENT_ID_SIZE + 1];
 	int dirfd;
-	int fd[NR_FFILES];
+	int fd[LEN(ffiles)];
 	struct transfer t;
 	TAILQ_ENTRY(friend) entry;
 };
@@ -699,34 +698,25 @@ localinit(void)
 					exit(EXIT_FAILURE);
 				}
 				gslots[i].fd[m] = r;
-			} else if (gfiles[m].type == STATIC) {
+			} else if (gfiles[m].type == STATIC || (gfiles[m].type == NONE && !gslots[i].outisfolder)) {
 				r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0644);
 				if (r < 0) {
 					perror("open");
 					exit(EXIT_FAILURE);
 				}
 				gslots[i].fd[m] = r;
-			} else if (gfiles[m].type == NONE) {
-				if (gslots[i].outtype == STATIC) {
-					r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0644);
-					if (r < 0) {
-						perror("open");
-						exit(EXIT_FAILURE);
-					}
-					gslots[i].fd[m] = r;
-				} else if (gslots[i].outtype == FOLDER) {
-					r = mkdirat(gslots[i].dirfd, gfiles[m].name, 0777);
-					if (r < 0 && errno != EEXIST) {
-						perror("mkdir");
-						exit(EXIT_FAILURE);
-					}
-					r = openat(gslots[i].dirfd, gfiles[m].name, O_RDONLY | O_DIRECTORY);
-					if (r < 0) {
-						perror("openat");
-						exit(EXIT_FAILURE);
-					}
-					gslots[i].fd[m] = r;
+			} else if (gfiles[m].type == NONE && gslots[i].outisfolder) {
+				r = mkdirat(gslots[i].dirfd, gfiles[m].name, 0777);
+				if (r < 0 && errno != EEXIST) {
+					perror("mkdir");
+					exit(EXIT_FAILURE);
 				}
+				r = openat(gslots[i].dirfd, gfiles[m].name, O_RDONLY | O_DIRECTORY);
+				if (r < 0) {
+					perror("openat");
+					exit(EXIT_FAILURE);
+				}
+				gslots[i].fd[m] = r;
 			}
 		}
 	}
@@ -1166,7 +1156,7 @@ loop(void)
 
 		for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
 			ftmp = TAILQ_NEXT(f, entry);
-			for (i = 0; i < NR_FFILES; i++) {
+			for (i = 0; i < LEN(ffiles); i++) {
 				if (FD_ISSET(f->fd[i], &rfds) == 0)
 					continue;
 				switch (i) {
@@ -1242,7 +1232,7 @@ shutdown(void)
 		for (m = 0; m < LEN(gfiles); m++) {
 			if (gslots[i].dirfd != -1) {
 				unlinkat(gslots[i].dirfd, gfiles[m].name,
-					 (gslots[i].outtype == FOLDER && m == OUT)
+					 (gslots[i].outisfolder && m == OUT)
 					 ? AT_REMOVEDIR : 0);
 				if (gslots[i].fd[m] != -1)
 					close(gslots[i].fd[m]);
