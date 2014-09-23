@@ -1120,10 +1120,9 @@ loop(void)
 		/* Check for broken transfers, i.e. the friend went offline
 		 * in the middle of a transfer.
 		 */
-		TAILQ_FOREACH(f, &friendhead, entry) {
+		TAILQ_FOREACH(f, &friendhead, entry)
 			if (tox_get_friend_connection_status(tox, f->fid) == 0)
 				canceltransfer(f);
-		}
 
 		/* If we hit the receiver too hard, we will run out of
 		 * local buffer slots.  In that case tox_file_send_data()
