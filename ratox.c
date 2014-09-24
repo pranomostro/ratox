@@ -189,7 +189,8 @@ static void cbuserstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
 static void cbfilesendreq(Tox *, int32_t, uint8_t, uint64_t, const uint8_t *, uint16_t, void *);
 static void cbfiledata(Tox *, int32_t, uint8_t, const uint8_t *, uint16_t, void *);
-static void canceltransfer(struct friend *);
+static void canceltxtransfer(struct friend *);
+static void cancelrxtransfer(struct friend *);
 static void sendfriendfile(struct friend *);
 static void sendfriendtext(struct friend *);
 static void removefriend(struct friend *);
@@ -519,7 +520,7 @@ cbfilesendreq(Tox *m, int32_t fid, uint8_t fnum, uint64_t fsz,
 
 	/* We only support a single transfer at a time */
 	if (fnum != 0) {
-		tox_file_send_control(tox, f->fid, 1, 0, TOX_FILECONTROL_KILL, NULL, 0);
+		tox_file_send_control(tox, f->fid, 1, fnum, TOX_FILECONTROL_KILL, NULL, 0);
 		return;
 	}
 
@@ -543,21 +544,13 @@ cbfiledata(Tox *m, int32_t fid, uint8_t fnum, const uint8_t *data, uint16_t len,
 		return;
 
 	n = write(f->fd[FFILE_OUT], data, len);
-	if (n < 0) {
-		tox_file_send_control(tox, f->fid, 1, 0, TOX_FILECONTROL_KILL, NULL, 0);
-		if (f->fd[FFILE_OUT] != -1) {
-			close(f->fd[FFILE_OUT]);
-			f->fd[FFILE_OUT] = -1;
-		}
-	}
+	if (n < 0)
+		cancelrxtransfer(f);
 }
 
-/* T0D0: Might want to break this function into two separate ones for
- * TX and RX to minimize code duplication when cancelling transfers */
 static void
-canceltransfer(struct friend *f)
+canceltxtransfer(struct friend *f)
 {
-	/* Cancel TX transfers */
 	if (f->t.state != TRANSFER_NONE) {
 		printout("Cancelling transfer to %s\n",
 			 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
@@ -569,7 +562,10 @@ canceltransfer(struct friend *f)
 		while (fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
 				toilet, sizeof(toilet)));
 	}
-	/* Cancel RX transfers */
+}
+
+static void
+cancelrxtransfer(struct friend *f) {
 	if (f->recvfileactive == 1) {
 		printout("Cancelling transfer from %s\n",
 			 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
@@ -578,6 +574,9 @@ canceltransfer(struct friend *f)
 			close(f->fd[FFILE_OUT]);
 			f->fd[FFILE_OUT] = -1;
 		}
+		ftruncate(f->fd[FFILE_PENDING], 0);
+		dprintf(f->fd[FFILE_PENDING], "%d\n", 0);
+		f->recvfileactive = 0;
 	}
 }
 
@@ -1015,7 +1014,8 @@ frienddestroy(struct friend *f)
 {
 	int i;
 
-	canceltransfer(f);
+	canceltxtransfer(f);
+	cancelrxtransfer(f);
 	for (i = 0; i < LEN(ffiles); i++) {
 		if (f->dirfd != -1) {
 			unlinkat(f->dirfd, ffiles[i].name, 0);
@@ -1208,9 +1208,12 @@ loop(void)
 		/* Check for broken transfers, i.e. the friend went offline
 		 * in the middle of a transfer.
 		 */
-		TAILQ_FOREACH(f, &friendhead, entry)
-			if (tox_get_friend_connection_status(tox, f->fid) == 0)
-				canceltransfer(f);
+		TAILQ_FOREACH(f, &friendhead, entry) {
+			if (tox_get_friend_connection_status(tox, f->fid) == 0) {
+				canceltxtransfer(f);
+				cancelrxtransfer(f);
+			}
+		}
 
 		/* If we hit the receiver too hard, we will run out of
 		 * local buffer slots.  In that case tox_file_send_data()
