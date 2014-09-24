@@ -147,7 +147,7 @@ struct friend {
 	char idstr[2 * TOX_CLIENT_ID_SIZE + 1];
 	int dirfd;
 	int fd[LEN(ffiles)];
-	int recvfilepending;
+	int recvfileactive;
 	struct transfer t;
 	TAILQ_ENTRY(friend) entry;
 };
@@ -492,7 +492,7 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 			tox_file_send_control(tox, f->fid, 1, 0, TOX_FILECONTROL_FINISHED, NULL, 0);
 			ftruncate(f->fd[FFILE_PENDING], 0);
 			dprintf(f->fd[FFILE_PENDING], "%d\n", 0);
-			f->recvfilepending = 0;
+			f->recvfileactive = 0;
 			if (f->fd[FFILE_OUT] != -1) {
 				close(f->fd[FFILE_OUT]);
 				f->fd[FFILE_OUT] = -1;
@@ -525,7 +525,7 @@ cbfilesendreq(Tox *m, int32_t fid, uint8_t fnum, uint64_t fsz,
 
 	ftruncate(f->fd[FFILE_PENDING], 0);
 	dprintf(f->fd[FFILE_PENDING], "%d\n", 1);
-	f->recvfilepending = 1;
+	f->recvfileactive = 1;
 	printout("Pending file transfer request from %s\n",
 		 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
 }
@@ -570,7 +570,7 @@ canceltransfer(struct friend *f)
 				toilet, sizeof(toilet)));
 	}
 	/* Cancel RX transfers */
-	if (f->recvfilepending == 1) {
+	if (f->recvfileactive == 1) {
 		tox_file_send_control(tox, f->fid, 1, 0, TOX_FILECONTROL_KILL, NULL, 0);
 		if (f->fd[FFILE_OUT] != -1) {
 			close(f->fd[FFILE_OUT]);
@@ -1231,7 +1231,7 @@ loop(void)
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			if (tox_get_friend_connection_status(tox, f->fid) == 0)
 				continue;
-			if (f->recvfilepending == 0)
+			if (f->recvfileactive == 0)
 				continue;
 			if (f->fd[FFILE_OUT] == -1) {
 				r = openat(f->dirfd, ffiles[FFILE_OUT].name,
