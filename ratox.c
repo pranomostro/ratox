@@ -543,10 +543,14 @@ cbfiledata(Tox *m, int32_t fid, uint8_t fnum, const uint8_t *data, uint16_t len,
 	if (!f)
 		return;
 
+again:
 	n = write(f->fd[FFILE_OUT], data, len);
-	if (n < 0)
+	if (n < 0) {
 		if (errno == EPIPE)
 			cancelrxtransfer(f);
+		if (errno == EWOULDBLOCK)
+			goto again;
+	}
 }
 
 static void
