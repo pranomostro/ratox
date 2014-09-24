@@ -571,6 +571,8 @@ canceltransfer(struct friend *f)
 	}
 	/* Cancel RX transfers */
 	if (f->recvfileactive == 1) {
+		printout("Cancelling transfer from %s\n",
+			 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
 		tox_file_send_control(tox, f->fid, 1, 0, TOX_FILECONTROL_KILL, NULL, 0);
 		if (f->fd[FFILE_OUT] != -1) {
 			close(f->fd[FFILE_OUT]);
