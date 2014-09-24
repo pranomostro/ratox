@@ -491,13 +491,13 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 			/* Receiving completed */
 			printout("Transfer complete\n");
 			tox_file_send_control(tox, f->fid, 1, 0, TOX_FILECONTROL_FINISHED, NULL, 0);
-			ftruncate(f->fd[FFILE_PENDING], 0);
-			dprintf(f->fd[FFILE_PENDING], "%d\n", 0);
-			f->recvfileactive = 0;
 			if (f->fd[FFILE_OUT] != -1) {
 				close(f->fd[FFILE_OUT]);
 				f->fd[FFILE_OUT] = -1;
 			}
+			ftruncate(f->fd[FFILE_PENDING], 0);
+			dprintf(f->fd[FFILE_PENDING], "%d\n", 0);
+			f->recvfileactive = 0;
 		}
 		break;
 	default:
