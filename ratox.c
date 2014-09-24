@@ -474,20 +474,20 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 			free(f->t.buf);
 			f->t.buf = NULL;
 
-			/* flush the FIFO */
+			/* Flush the FIFO */
 			while (fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
 			                toilet, sizeof(toilet)));
 		}
 		break;
 	case TOX_FILECONTROL_FINISHED:
 		if (rec_sen == 1) {
-			/* sending completed */
+			/* Sending completed */
 			printout("Transfer complete\n");
 			f->t.state = TRANSFER_NONE;
 			free(f->t.buf);
 			f->t.buf = NULL;
 		} else {
-			/* receiving completed */
+			/* Receiving completed */
 			printout("Transfer complete\n");
 			tox_file_send_control(tox, f->fid, 1, 0, TOX_FILECONTROL_FINISHED, NULL, 0);
 			ftruncate(f->fd[FFILE_PENDING], 0);
@@ -517,7 +517,7 @@ cbfilesendreq(Tox *m, int32_t fid, uint8_t fnum, uint64_t fsz,
 	if (!f)
 		return;
 
-	/* we only support a single transfer at a time */
+	/* We only support a single transfer at a time */
 	if (fnum != 0) {
 		tox_file_send_control(tox, f->fid, 1, 0, TOX_FILECONTROL_KILL, NULL, 0);
 		return;
@@ -562,7 +562,7 @@ canceltransfer(struct friend *f)
 		f->t.state = TRANSFER_NONE;
 		free(f->t.buf);
 		f->t.buf = NULL;
-		/* flush the FIFO */
+		/* Flush the FIFO */
 		while (fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
 				toilet, sizeof(toilet)));
 	}
@@ -574,7 +574,7 @@ sendfriendfile(struct friend *f)
 	ssize_t n;
 
 	while (1) {
-		/* attempt to transmit the pending buffer */
+		/* Attempt to transmit the pending buffer */
 		if (f->t.pending == 1) {
 			if (tox_file_send_data(tox, f->fid, f->t.fnum, f->t.buf, f->t.n) == -1) {
 				/* bad luck - we will try again later */
@@ -582,21 +582,20 @@ sendfriendfile(struct friend *f)
 			}
 			f->t.pending = 0;
 		}
-		/* grab another buffer from the FIFO */
+		/* Grab another buffer from the FIFO */
 		n = fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN], f->t.buf,
 			     f->t.chunksz);
 		if (n == 0) {
-			/* signal transfer completion to other end */
+			/* Signal transfer completion to other end */
 			tox_file_send_control(tox, f->fid, 0, f->t.fnum,
 					      TOX_FILECONTROL_FINISHED, NULL, 0);
 			break;
 		}
 		if (n == -1)
 			break;
-		/* store transfer size in case we can't send it right now */
+		/* Store transfer size in case we can't send it right now */
 		f->t.n = n;
 		if (tox_file_send_data(tox, f->fid, f->t.fnum, f->t.buf, f->t.n) == -1) {
-			/* ok we will have to send it later, flip state */
 			f->t.pending = 1;
 			return;
 		}
@@ -1284,7 +1283,7 @@ loop(void)
 				case FFILE_IN:
 					switch (f->t.state) {
 					case TRANSFER_NONE:
-						/* prepare a new transfer */
+						/* Prepare a new transfer */
 						f->t.state = TRANSFER_INITIATED;
 						now = time(NULL);
 						snprintf(tstamp, sizeof(tstamp), "%lu", (unsigned long)now);
@@ -1323,13 +1322,13 @@ shutdown(void)
 	struct friend *f, *ftmp;
 	struct request *r, *rtmp;
 
-	/* friends */
+	/* Friends */
 	for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
 		ftmp = TAILQ_NEXT(f, entry);
 		frienddestroy(f);
 	}
 
-	/* requests */
+	/* Requests */
 	for (r = TAILQ_FIRST(&reqhead); r; r = rtmp) {
 		rtmp = TAILQ_NEXT(r, entry);
 
@@ -1343,7 +1342,7 @@ shutdown(void)
 		free(r);
 	}
 
-	/* global files and slots */
+	/* Global files and slots */
 	for (i = 0; i < LEN(gslots); i++) {
 		for (m = 0; m < LEN(gfiles); m++) {
 			if (gslots[i].dirfd != -1) {
