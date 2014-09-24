@@ -485,14 +485,12 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 		break;
 	case TOX_FILECONTROL_FINISHED:
 		if (rec_sen == 1) {
-			/* Sending completed */
-			printout("Transfer complete\n");
+			printout("TX transfer complete\n");
 			f->t.state = TRANSFER_NONE;
 			free(f->t.buf);
 			f->t.buf = NULL;
 		} else {
-			/* Receiving completed */
-			printout("Transfer complete\n");
+			printout("RX transfer complete\n");
 			tox_file_send_control(tox, f->fid, 1, 0, TOX_FILECONTROL_FINISHED, NULL, 0);
 			if (f->fd[FFILE_OUT] != -1) {
 				close(f->fd[FFILE_OUT]);
@@ -1422,6 +1420,8 @@ main(int argc, char *argv[])
 	signal(SIGABRT, initshutdown);
 	signal(SIGTERM, initshutdown);
 	signal(SIGPIPE, SIG_IGN);
+
+	setbuf(stdout, NULL);
 
 	printrat();
 	toxinit();
