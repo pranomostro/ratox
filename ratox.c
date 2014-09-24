@@ -535,6 +535,7 @@ static void
 cbfiledata(Tox *m, int32_t fid, uint8_t fnum, const uint8_t *data, uint16_t len, void *udata)
 {
 	struct friend *f;
+	uint16_t wrote = 0;
 	ssize_t n;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
@@ -543,13 +544,17 @@ cbfiledata(Tox *m, int32_t fid, uint8_t fnum, const uint8_t *data, uint16_t len,
 	if (!f)
 		return;
 
-again:
-	n = write(f->fd[FFILE_OUT], data, len);
-	if (n < 0) {
-		if (errno == EPIPE)
-			cancelrxtransfer(f);
-		if (errno == EWOULDBLOCK)
-			goto again;
+	while (len > 0) {
+		n = write(f->fd[FFILE_OUT], &data[wrote], len);
+		if (n < 0) {
+			if (errno == EPIPE)
+				cancelrxtransfer(f);
+			if (errno == EWOULDBLOCK)
+				continue;
+		} else if (n == 0)
+			break;
+		wrote += n;
+		len -= n;
 	}
 }
 
