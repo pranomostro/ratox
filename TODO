@@ -1,3 +1,4 @@
 * Add support for receiving files.
 * Expose the ID + nospam + checksum for friends
   in the directory name.
+* Cancel transfers etc. if we lose connectivity.
