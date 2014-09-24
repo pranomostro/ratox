@@ -478,6 +478,9 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 			/* Flush the FIFO */
 			while (fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
 			                toilet, sizeof(toilet)));
+		} else {
+			printout("Sender cancelled transfer\n");
+			cancelrxtransfer(f);
 		}
 		break;
 	case TOX_FILECONTROL_FINISHED:
@@ -520,6 +523,8 @@ cbfilesendreq(Tox *m, int32_t fid, uint8_t fnum, uint64_t fsz,
 
 	/* We only support a single transfer at a time */
 	if (fnum != 0) {
+		printout("Rejecting new transfer from %s; one already in progress\n",
+			 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
 		tox_file_send_control(tox, f->fid, 1, fnum, TOX_FILECONTROL_KILL, NULL, 0);
 		return;
 	}
