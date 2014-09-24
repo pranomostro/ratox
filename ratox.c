@@ -545,7 +545,8 @@ cbfiledata(Tox *m, int32_t fid, uint8_t fnum, const uint8_t *data, uint16_t len,
 
 	n = write(f->fd[FFILE_OUT], data, len);
 	if (n < 0)
-		cancelrxtransfer(f);
+		if (errno == EPIPE)
+			cancelrxtransfer(f);
 }
 
 static void
@@ -1401,6 +1402,7 @@ main(int argc, char *argv[])
 	signal(SIGQUIT, initshutdown);
 	signal(SIGABRT, initshutdown);
 	signal(SIGTERM, initshutdown);
+	signal(SIGPIPE, SIG_IGN);
 
 	printrat();
 	toxinit();
