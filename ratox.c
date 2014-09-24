@@ -1289,37 +1289,27 @@ loop(void)
 
 		for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
 			ftmp = TAILQ_NEXT(f, entry);
-			for (i = 0; i < LEN(ffiles); i++) {
-				if (FD_ISSET(f->fd[i], &rfds) == 0)
-					continue;
-				switch (i) {
-				case FTEXT_IN:
-					sendfriendtext(f);
+			if (FD_ISSET(f->fd[FTEXT_IN], &rfds))
+				sendfriendtext(f);
+			if (FD_ISSET(f->fd[FFILE_IN], &rfds)) {
+				switch (f->t.state) {
+				case TRANSFER_NONE:
+					/* Prepare a new transfer */
+					f->t.state = TRANSFER_INITIATED;
+					now = time(NULL);
+					snprintf(tstamp, sizeof(tstamp), "%lu", (unsigned long)now);
+					tox_new_file_sender(tox, f->fid,
+						0, (uint8_t *)tstamp, strlen(tstamp));
+					printout("Initiated transfer to %s\n",
+						 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
 					break;
-				case FFILE_IN:
-					switch (f->t.state) {
-					case TRANSFER_NONE:
-						/* Prepare a new transfer */
-						f->t.state = TRANSFER_INITIATED;
-						now = time(NULL);
-						snprintf(tstamp, sizeof(tstamp), "%lu", (unsigned long)now);
-						tox_new_file_sender(tox, f->fid,
-							0, (uint8_t *)tstamp, strlen(tstamp));
-						printout("Initiated transfer to %s\n",
-							 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
-						break;
-					case TRANSFER_INPROGRESS:
-						sendfriendfile(f);
-						break;
-					}
+				case TRANSFER_INPROGRESS:
+					sendfriendfile(f);
 					break;
-				case FREMOVE:
-					removefriend(f);
-					break;
-				default:
-					fprintf(stderr, "Unhandled FIFO read\n");
 				}
 			}
+			if (FD_ISSET(f->fd[FREMOVE], &rfds))
+				removefriend(f);
 		}
 	}
 }
