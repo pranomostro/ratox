@@ -552,9 +552,12 @@ cbfiledata(Tox *m, int32_t fid, uint8_t fnum, const uint8_t *data, uint16_t len,
 	}
 }
 
+/* T0D0: Might want to break this function into two separate ones for
+ * TX and RX to minimize code duplication when cancelling transfers */
 static void
 canceltransfer(struct friend *f)
 {
+	/* Cancel TX transfers */
 	if (f->t.state != TRANSFER_NONE) {
 		printout("Cancelling transfer to %s\n",
 			 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
@@ -565,6 +568,14 @@ canceltransfer(struct friend *f)
 		/* Flush the FIFO */
 		while (fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
 				toilet, sizeof(toilet)));
+	}
+	/* Cancel RX transfers */
+	if (f->recvfilepending == 1) {
+		tox_file_send_control(tox, f->fid, 1, 0, TOX_FILECONTROL_KILL, NULL, 0);
+		if (f->fd[FFILE_OUT] != -1) {
+			close(f->fd[FFILE_OUT]);
+			f->fd[FFILE_OUT] = -1;
+		}
 	}
 }
 
