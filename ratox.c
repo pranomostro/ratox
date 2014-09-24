@@ -100,21 +100,25 @@ static struct slot gslots[] = {
 enum {
 	FTEXT_IN,
 	FFILE_IN,
+	FFILE_OUT,
 	FREMOVE,
 	FONLINE,
 	FNAME,
 	FSTATUS,
-	FTEXT_OUT
+	FTEXT_OUT,
+	FFILE_PENDING,
 };
 
 static struct file ffiles[] = {
-	[FTEXT_IN]  = { .type = FIFO,   .name = "text_in",  .flags = O_RDONLY | O_NONBLOCK         },
-	[FFILE_IN]  = { .type = FIFO,   .name = "file_in",  .flags = O_RDONLY | O_NONBLOCK         },
-	[FREMOVE]   = { .type = FIFO,   .name = "remove",   .flags = O_RDONLY | O_NONBLOCK         },
-	[FONLINE]   = { .type = STATIC, .name = "online",   .flags = O_WRONLY | O_TRUNC  | O_CREAT },
-	[FNAME]     = { .type = STATIC, .name = "name",     .flags = O_WRONLY | O_TRUNC  | O_CREAT },
-	[FSTATUS]   = { .type = STATIC, .name = "status",   .flags = O_WRONLY | O_TRUNC  | O_CREAT },
-	[FTEXT_OUT] = { .type = STATIC, .name = "text_out", .flags = O_WRONLY | O_APPEND | O_CREAT },
+	[FTEXT_IN]      = { .type = FIFO,   .name = "text_in",      .flags = O_RDONLY | O_NONBLOCK         },
+	[FFILE_IN]      = { .type = FIFO,   .name = "file_in",      .flags = O_RDONLY | O_NONBLOCK         },
+	[FFILE_OUT]     = { .type = FIFO,   .name = "file_out",     .flags = O_WRONLY | O_NONBLOCK         },
+	[FREMOVE]       = { .type = FIFO,   .name = "remove",       .flags = O_RDONLY | O_NONBLOCK         },
+	[FONLINE]       = { .type = STATIC, .name = "online",       .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[FNAME]         = { .type = STATIC, .name = "name",         .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[FSTATUS]       = { .type = STATIC, .name = "status",       .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[FTEXT_OUT]     = { .type = STATIC, .name = "text_out",     .flags = O_WRONLY | O_APPEND | O_CREAT },
+	[FFILE_PENDING] = { .type = STATIC, .name = "file_pending", .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 };
 
 enum {
@@ -143,6 +147,7 @@ struct friend {
 	char idstr[2 * TOX_CLIENT_ID_SIZE + 1];
 	int dirfd;
 	int fd[LEN(ffiles)];
+	int recvfilepending;
 	struct transfer t;
 	TAILQ_ENTRY(friend) entry;
 };
@@ -182,6 +187,8 @@ static void cbnamechange(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbstatusmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbuserstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
+static void cbfilesendreq(Tox *, int32_t, uint8_t, uint64_t, const uint8_t *, uint16_t, void *);
+static void cbfiledata(Tox *, int32_t, uint8_t, const uint8_t *, uint16_t, void *);
 static void canceltransfer(struct friend *);
 static void sendfriendfile(struct friend *);
 static void sendfriendtext(struct friend *);
@@ -342,7 +349,7 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, vo
 	}
 	r = openat(gslots[REQUEST].fd[OUT], req->idstr, O_RDWR | O_NONBLOCK);
 	if (r < 0) {
-		perror("open");
+		perror("openat");
 		exit(EXIT_FAILURE);
 	}
 	req->fd = r;
@@ -474,16 +481,75 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 		break;
 	case TOX_FILECONTROL_FINISHED:
 		if (rec_sen == 1) {
+			/* sending completed */
 			printout("Transfer complete\n");
 			f->t.state = TRANSFER_NONE;
 			free(f->t.buf);
 			f->t.buf = NULL;
+		} else {
+			/* receiving completed */
+			printout("Transfer complete\n");
+			tox_file_send_control(tox, f->fid, 1, 0, TOX_FILECONTROL_FINISHED, NULL, 0);
+			ftruncate(f->fd[FFILE_PENDING], 0);
+			dprintf(f->fd[FFILE_PENDING], "%d\n", 0);
+			f->recvfilepending = 0;
+			if (f->fd[FFILE_OUT] != -1) {
+				close(f->fd[FFILE_OUT]);
+				f->fd[FFILE_OUT] = -1;
+			}
 		}
 		break;
 	default:
 		fprintf(stderr, "Unhandled file control type: %d\n", ctrltype);
 		break;
 	};
+}
+
+static void
+cbfilesendreq(Tox *m, int32_t fid, uint8_t fnum, uint64_t fsz,
+	      const uint8_t *fname, uint16_t flen, void *udata)
+{
+	struct friend *f;
+
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->fid == fid)
+			break;
+	if (!f)
+		return;
+
+	/* we only support a single transfer at a time */
+	if (fnum != 0) {
+		tox_file_send_control(tox, f->fid, 1, 0, TOX_FILECONTROL_KILL, NULL, 0);
+		return;
+	}
+
+	ftruncate(f->fd[FFILE_PENDING], 0);
+	dprintf(f->fd[FFILE_PENDING], "%d\n", 1);
+	f->recvfilepending = 1;
+	printout("Pending file transfer request from %s\n",
+		 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
+}
+
+static void
+cbfiledata(Tox *m, int32_t fid, uint8_t fnum, const uint8_t *data, uint16_t len, void *udata)
+{
+	struct friend *f;
+	ssize_t n;
+
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->fid == fid)
+			break;
+	if (!f)
+		return;
+
+	n = write(f->fd[FFILE_OUT], data, len);
+	if (n < 0) {
+		tox_file_send_control(tox, f->fid, 1, 0, TOX_FILECONTROL_KILL, NULL, 0);
+		if (f->fd[FFILE_OUT] != -1) {
+			close(f->fd[FFILE_OUT]);
+			f->fd[FFILE_OUT] = -1;
+		}
+	}
 }
 
 static void
@@ -713,14 +779,14 @@ localinit(void)
 				}
 				r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0644);
 				if (r < 0) {
-					perror("open");
+					perror("openat");
 					exit(EXIT_FAILURE);
 				}
 				gslots[i].fd[m] = r;
 			} else if (gfiles[m].type == STATIC || (gfiles[m].type == NONE && !gslots[i].outisfolder)) {
 				r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0644);
 				if (r < 0) {
-					perror("open");
+					perror("openat");
 					exit(EXIT_FAILURE);
 				}
 				gslots[i].fd[m] = r;
@@ -797,6 +863,8 @@ toxinit(void)
 	tox_callback_status_message(tox, cbstatusmessage, NULL);
 	tox_callback_user_status(tox, cbuserstatus, NULL);
 	tox_callback_file_control(tox, cbfilecontrol, NULL);
+	tox_callback_file_send_request(tox, cbfilesendreq, NULL);
+	tox_callback_file_data(tox, cbfiledata, NULL);
 	return 0;
 }
 
@@ -893,13 +961,15 @@ friendcreate(int32_t fid)
 			}
 			r = openat(f->dirfd, ffiles[i].name, ffiles[i].flags, 0644);
 			if (r < 0) {
-				perror("open");
-				exit(EXIT_FAILURE);
+				if (errno != ENXIO) {
+					perror("openat");
+					exit(EXIT_FAILURE);
+				}
 			}
 		} else if (ffiles[i].type == STATIC) {
 			r = openat(f->dirfd, ffiles[i].name, ffiles[i].flags, 0644);
 			if (r < 0) {
-				perror("open");
+				perror("openat");
 				exit(EXIT_FAILURE);
 			}
 		}
@@ -908,15 +978,20 @@ friendcreate(int32_t fid)
 
 	ftruncate(f->fd[FNAME], 0);
 	dprintf(f->fd[FNAME], "%s\n", f->namestr);
+
 	ftruncate(f->fd[FONLINE], 0);
 	dprintf(f->fd[FONLINE], "%s\n",
 		tox_get_friend_connection_status(tox, fid) == 0 ? "0" : "1");
+
 	r = tox_get_status_message_size(tox, fid);
 	if (r > sizeof(status) - 1)
 		r = sizeof(status) - 1;
 	status[r] = '\0';
 	ftruncate(f->fd[FSTATUS], 0);
 	dprintf(f->fd[FSTATUS], "%s\n", status);
+
+	ftruncate(f->fd[FFILE_PENDING], 0);
+	dprintf(f->fd[FFILE_PENDING], "%d\n", 0);
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
 
@@ -1049,7 +1124,7 @@ loop(void)
 	struct request *req, *rtmp;
 	time_t t0, t1, now;
 	int connected = 0;
-	int i, n;
+	int i, n, r;
 	int fdmax;
 	char c;
 	fd_set rfds;
@@ -1140,6 +1215,30 @@ loop(void)
 				continue;
 			if (f->t.pending == 1)
 				sendfriendfile(f);
+		}
+
+		/* Accept pending transfers if any */
+		TAILQ_FOREACH(f, &friendhead, entry) {
+			if (tox_get_friend_connection_status(tox, f->fid) == 0)
+				continue;
+			if (f->recvfilepending == 0)
+				continue;
+			if (f->fd[FFILE_OUT] == -1) {
+				r = openat(f->dirfd, ffiles[FFILE_OUT].name,
+					   ffiles[FFILE_OUT].flags, 0644);
+				if (r < 0) {
+					if (errno != ENXIO) {
+						perror("openat");
+						exit(EXIT_FAILURE);
+					}
+				} else {
+					f->fd[FFILE_OUT] = r;
+					tox_file_send_control(tox, f->fid, 1, 0,
+							      TOX_FILECONTROL_ACCEPT, NULL, 0);
+					printout("Accepted transfer from %s\n",
+						 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
+				}
+			}
 		}
 
 		if (n == 0)
