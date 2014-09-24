@@ -1159,6 +1159,13 @@ loop(void)
 		if (tox_isconnected(tox) == 1) {
 			if (connected == 0) {
 				printout("Connected to DHT\n");
+				/* Cancel any pending transfers */
+				TAILQ_FOREACH(f, &friendhead, entry) {
+					if (tox_get_friend_connection_status(tox, f->fid) == 0) {
+						canceltxtransfer(f);
+						cancelrxtransfer(f);
+					}
+				}
 				connected = 1;
 			}
 		} else {
