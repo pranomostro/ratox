@@ -578,7 +578,8 @@ canceltxtransfer(struct friend *f)
 }
 
 static void
-cancelrxtransfer(struct friend *f) {
+cancelrxtransfer(struct friend *f)
+{
 	if (f->recvfileactive == 1) {
 		printout("Cancelling transfer from %s\n",
 			 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
