@@ -126,7 +126,6 @@ enum {
 	TRANSFER_INITIATED,
 	TRANSFER_INPROGRESS,
 	TRANSFER_PAUSED,
-	TRANSFER_DONE
 };
 
 struct transfer {
@@ -134,30 +133,26 @@ struct transfer {
 	uint8_t *buf;
 	int chunksz;
 	ssize_t n;
-	int pending;
+	int pendingbuf;
 	int state;
 };
 
 struct friend {
-	/* null terminated name */
-	char namestr[TOX_MAX_NAME_LENGTH + 1];
-	int fid;
+	char name[TOX_MAX_NAME_LENGTH + 1];
+	int32_t num;
 	uint8_t id[TOX_CLIENT_ID_SIZE];
-	/* null terminated id */
 	char idstr[2 * TOX_CLIENT_ID_SIZE + 1];
 	int dirfd;
 	int fd[LEN(ffiles)];
-	int recvfileactive;
-	struct transfer t;
+	struct transfer tx;
+	int rxstate;
 	TAILQ_ENTRY(friend) entry;
 };
 
 struct request {
 	uint8_t id[TOX_CLIENT_ID_SIZE];
-	/* null terminated id */
 	char idstr[2 * TOX_CLIENT_ID_SIZE + 1];
-	/* null terminated friend request message */
-	char *msgstr;
+	char *msg;
 	int fd;
 	TAILQ_ENTRY(request) entry;
 };
@@ -275,15 +270,15 @@ again:
 }
 
 static void
-cbconnstatus(Tox *m, int32_t fid, uint8_t status, void *udata)
+cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 {
 	struct friend *f;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
 	int r;
 
-	r = tox_get_name(tox, fid, name);
+	r = tox_get_name(tox, frnum, name);
 	if (r < 0) {
-		fprintf(stderr, "tox_get_name() on fid %d failed\n", fid);
+		fprintf(stderr, "tox_get_name() on friend number %d failed\n", frnum);
 		exit(EXIT_FAILURE);
 	}
 	name[r] = '\0';
@@ -292,18 +287,18 @@ cbconnstatus(Tox *m, int32_t fid, uint8_t status, void *udata)
 		 status == 0 ? "went offline" : "came online");
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
-		if (f->fid == fid) {
+		if (f->num == frnum) {
 			ftruncate(f->fd[FONLINE], 0);
 			dprintf(f->fd[FONLINE], status == 0 ? "0\n" : "1\n");
 			return;
 		}
 	}
 
-	friendcreate(fid);
+	friendcreate(frnum);
 }
 
 static void
-cbfriendmessage(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *udata)
+cbfriendmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *udata)
 {
 	struct friend *f;
 	uint8_t msg[len + 1];
@@ -314,12 +309,12 @@ cbfriendmessage(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *ud
 	msg[len] = '\0';
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
-		if (f->fid == fid) {
+		if (f->num == frnum) {
 			t = time(NULL);
 			strftime(buft, sizeof(buft), "%F %R", localtime(&t));
 			dprintf(f->fd[FTEXT_OUT], "%s %s\n", buft, msg);
 			printout("%s %s\n",
-				 f->namestr[0] == '\0' ? "Anonymous" : f->namestr, msg);
+				 f->name[0] == '\0' ? "Anonymous" : f->name, msg);
 			break;
 		}
 	}
@@ -340,13 +335,13 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, vo
 	id2str(req->id, req->idstr);
 
 	if (len > 0) {
-		req->msgstr = malloc(len + 1);
-		if (!req->msgstr) {
+		req->msg = malloc(len + 1);
+		if (!req->msg) {
 			perror("malloc");
 			exit(EXIT_FAILURE);
 		}
-		memcpy(req->msgstr, data, len);
-		req->msgstr[len] = '\0';
+		memcpy(req->msg, data, len);
+		req->msg[len] = '\0';
 	}
 
 	r = mkfifoat(gslots[REQUEST].fd[OUT], req->idstr, 0644);
@@ -364,11 +359,11 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, vo
 	TAILQ_INSERT_TAIL(&reqhead, req, entry);
 
 	printout("Pending request from %s with message: %s\n",
-		 req->idstr, req->msgstr);
+		 req->idstr, req->msg);
 }
 
 static void
-cbnamechange(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *user)
+cbnamechange(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *user)
 {
 	struct friend *f;
 	uint8_t name[len + 1];
@@ -377,14 +372,14 @@ cbnamechange(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *user)
 	name[len] = '\0';
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
-		if (f->fid == fid) {
+		if (f->num == frnum) {
 			ftruncate(f->fd[FNAME], 0);
 			dprintf(f->fd[FNAME], "%s\n", name);
-			if (memcmp(f->namestr, name, len + 1) == 0)
+			if (memcmp(f->name, name, len + 1) == 0)
 				break;
-			printout("%s -> %s\n", f->namestr[0] == '\0' ?
-				 "Anonymous" : f->namestr, name);
-			memcpy(f->namestr, name, len + 1);
+			printout("%s -> %s\n", f->name[0] == '\0' ?
+				 "Anonymous" : f->name, name);
+			memcpy(f->name, name, len + 1);
 			break;
 		}
 	}
@@ -392,7 +387,7 @@ cbnamechange(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *user)
 }
 
 static void
-cbstatusmessage(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *udata)
+cbstatusmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *udata)
 {
 	struct friend *f;
 	uint8_t status[len + 1];
@@ -401,11 +396,11 @@ cbstatusmessage(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *ud
 	status[len] = '\0';
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
-		if (f->fid == fid) {
+		if (f->num == frnum) {
 			ftruncate(f->fd[FSTATUS], 0);
 			dprintf(f->fd[FSTATUS], "%s\n", status);
 			printout("%s changed status: %s\n",
-				 f->namestr[0] == '\0' ? "Anonymous" : f->namestr, status);
+				 f->name[0] == '\0' ? "Anonymous" : f->name, status);
 			break;
 		}
 	}
@@ -413,7 +408,7 @@ cbstatusmessage(Tox *m, int32_t fid, const uint8_t *data, uint16_t len, void *ud
 }
 
 static void
-cbuserstatus(Tox *m, int32_t fid, uint8_t status, void *udata)
+cbuserstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 {
 	struct friend *f;
 	char *statusstr[] = { "none", "away", "busy" };
@@ -424,9 +419,9 @@ cbuserstatus(Tox *m, int32_t fid, uint8_t status, void *udata)
 	}
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
-		if (f->fid == fid) {
+		if (f->num == frnum) {
 			printout("%s changed user status: %s\n",
-				 f->namestr[0] == '\0' ? "Anonymous" : f->namestr,
+				 f->name[0] == '\0' ? "Anonymous" : f->name,
 			         statusstr[status]);
 			break;
 		}
@@ -434,13 +429,13 @@ cbuserstatus(Tox *m, int32_t fid, uint8_t status, void *udata)
 }
 
 static void
-cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrltype,
+cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrltype,
 	const uint8_t *data, uint16_t len, void *udata)
 {
 	struct friend *f;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->fid == fid)
+		if (f->num == frnum)
 			break;
 	if (!f)
 		return;
@@ -448,38 +443,38 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 	switch (ctrltype) {
 	case TOX_FILECONTROL_ACCEPT:
 		if (rec_sen == 1) {
-			if (f->t.state == TRANSFER_PAUSED) {
+			if (f->tx.state == TRANSFER_PAUSED) {
 				printout("Receiver resumed transfer\n");
-				f->t.state = TRANSFER_INPROGRESS;
+				f->tx.state = TRANSFER_INPROGRESS;
 			} else {
-				f->t.fnum = fnum;
-				f->t.chunksz = tox_file_data_size(tox, fnum);
-				f->t.buf = malloc(f->t.chunksz);
-				if (!f->t.buf) {
+				f->tx.fnum = fnum;
+				f->tx.chunksz = tox_file_data_size(tox, fnum);
+				f->tx.buf = malloc(f->tx.chunksz);
+				if (!f->tx.buf) {
 					perror("malloc");
 					exit(EXIT_FAILURE);
 				}
-				f->t.n = 0;
-				f->t.pending = 0;
-				f->t.state = TRANSFER_INPROGRESS;
+				f->tx.n = 0;
+				f->tx.pendingbuf = 0;
+				f->tx.state = TRANSFER_INPROGRESS;
 				printout("Transfer is in progress\n");
 			}
 		}
 		break;
 	case TOX_FILECONTROL_PAUSE:
 		if (rec_sen == 1) {
-			if (f->t.state == TRANSFER_INPROGRESS) {
+			if (f->tx.state == TRANSFER_INPROGRESS) {
 				printout("Receiver paused transfer\n");
-				f->t.state = TRANSFER_PAUSED;
+				f->tx.state = TRANSFER_PAUSED;
 			}
 		}
 		break;
 	case TOX_FILECONTROL_KILL:
 		if (rec_sen == 1) {
 			printout("Transfer rejected by receiver\n");
-			f->t.state = TRANSFER_NONE;
-			free(f->t.buf);
-			f->t.buf = NULL;
+			f->tx.state = TRANSFER_NONE;
+			free(f->tx.buf);
+			f->tx.buf = NULL;
 
 			/* Flush the FIFO */
 			while (fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
@@ -492,19 +487,19 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 	case TOX_FILECONTROL_FINISHED:
 		if (rec_sen == 1) {
 			printout("TX transfer complete\n");
-			f->t.state = TRANSFER_NONE;
-			free(f->t.buf);
-			f->t.buf = NULL;
+			f->tx.state = TRANSFER_NONE;
+			free(f->tx.buf);
+			f->tx.buf = NULL;
 		} else {
 			printout("RX transfer complete\n");
-			tox_file_send_control(tox, f->fid, 1, 0, TOX_FILECONTROL_FINISHED, NULL, 0);
+			tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_FINISHED, NULL, 0);
 			if (f->fd[FFILE_OUT] != -1) {
 				close(f->fd[FFILE_OUT]);
 				f->fd[FFILE_OUT] = -1;
 			}
 			ftruncate(f->fd[FFILE_PENDING], 0);
 			dprintf(f->fd[FFILE_PENDING], "%d\n", 0);
-			f->recvfileactive = 0;
+			f->rxstate = TRANSFER_NONE;
 		}
 		break;
 	default:
@@ -514,41 +509,41 @@ cbfilecontrol(Tox *m, int32_t fid, uint8_t rec_sen, uint8_t fnum, uint8_t ctrlty
 }
 
 static void
-cbfilesendreq(Tox *m, int32_t fid, uint8_t fnum, uint64_t fsz,
+cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 	      const uint8_t *fname, uint16_t flen, void *udata)
 {
 	struct friend *f;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->fid == fid)
+		if (f->num == frnum)
 			break;
 	if (!f)
 		return;
 
 	/* We only support a single transfer at a time */
-	if (fnum != 0) {
+	if (f->rxstate == TRANSFER_INPROGRESS) {
 		printout("Rejecting new transfer from %s; one already in progress\n",
-			 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
-		tox_file_send_control(tox, f->fid, 1, fnum, TOX_FILECONTROL_KILL, NULL, 0);
+			 f->name[0] == '\0' ? "Anonymous" : f->name);
+		tox_file_send_control(tox, f->num, 1, fnum, TOX_FILECONTROL_KILL, NULL, 0);
 		return;
 	}
 
 	ftruncate(f->fd[FFILE_PENDING], 0);
 	dprintf(f->fd[FFILE_PENDING], "%d\n", 1);
-	f->recvfileactive = 1;
+	f->rxstate = TRANSFER_INPROGRESS;
 	printout("Pending file transfer request from %s\n",
-		 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
+		 f->name[0] == '\0' ? "Anonymous" : f->name);
 }
 
 static void
-cbfiledata(Tox *m, int32_t fid, uint8_t fnum, const uint8_t *data, uint16_t len, void *udata)
+cbfiledata(Tox *m, int32_t frnum, uint8_t fnum, const uint8_t *data, uint16_t len, void *udata)
 {
 	struct friend *f;
 	uint16_t wrote = 0;
 	ssize_t n;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->fid == fid)
+		if (f->num == frnum)
 			break;
 	if (!f)
 		return;
@@ -570,13 +565,13 @@ cbfiledata(Tox *m, int32_t fid, uint8_t fnum, const uint8_t *data, uint16_t len,
 static void
 canceltxtransfer(struct friend *f)
 {
-	if (f->t.state != TRANSFER_NONE) {
+	if (f->tx.state != TRANSFER_NONE) {
 		printout("Cancelling transfer to %s\n",
-			 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
-		tox_file_send_control(tox, f->fid, 0, 0, TOX_FILECONTROL_KILL, NULL, 0);
-		f->t.state = TRANSFER_NONE;
-		free(f->t.buf);
-		f->t.buf = NULL;
+			 f->name[0] == '\0' ? "Anonymous" : f->name);
+		tox_file_send_control(tox, f->num, 0, 0, TOX_FILECONTROL_KILL, NULL, 0);
+		f->tx.state = TRANSFER_NONE;
+		free(f->tx.buf);
+		f->tx.buf = NULL;
 		/* Flush the FIFO */
 		while (fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
 				toilet, sizeof(toilet)));
@@ -586,17 +581,17 @@ canceltxtransfer(struct friend *f)
 static void
 cancelrxtransfer(struct friend *f)
 {
-	if (f->recvfileactive == 1) {
+	if (f->rxstate == TRANSFER_INPROGRESS) {
 		printout("Cancelling transfer from %s\n",
-			 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
-		tox_file_send_control(tox, f->fid, 1, 0, TOX_FILECONTROL_KILL, NULL, 0);
+			 f->name[0] == '\0' ? "Anonymous" : f->name);
+		tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_KILL, NULL, 0);
 		if (f->fd[FFILE_OUT] != -1) {
 			close(f->fd[FFILE_OUT]);
 			f->fd[FFILE_OUT] = -1;
 		}
 		ftruncate(f->fd[FFILE_PENDING], 0);
 		dprintf(f->fd[FFILE_PENDING], "%d\n", 0);
-		f->recvfileactive = 0;
+		f->rxstate = TRANSFER_NONE;
 	}
 }
 
@@ -607,29 +602,29 @@ sendfriendfile(struct friend *f)
 
 	while (1) {
 		/* Attempt to transmit the pending buffer */
-		if (f->t.pending == 1) {
-			if (tox_file_send_data(tox, f->fid, f->t.fnum, f->t.buf, f->t.n) == -1) {
+		if (f->tx.pendingbuf == 1) {
+			if (tox_file_send_data(tox, f->num, f->tx.fnum, f->tx.buf, f->tx.n) == -1) {
 				/* bad luck - we will try again later */
 				break;
 			}
-			f->t.pending = 0;
+			f->tx.pendingbuf = 0;
 		}
 		/* Grab another buffer from the FIFO */
-		n = fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN], f->t.buf,
-			     f->t.chunksz);
+		n = fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN], f->tx.buf,
+			     f->tx.chunksz);
 		if (n == 0) {
 			/* Signal transfer completion to other end */
-			tox_file_send_control(tox, f->fid, 0, f->t.fnum,
+			tox_file_send_control(tox, f->num, 0, f->tx.fnum,
 					      TOX_FILECONTROL_FINISHED, NULL, 0);
-			f->t.state = TRANSFER_DONE;
+			f->tx.state = TRANSFER_NONE;
 			break;
 		}
 		if (n == -1)
 			break;
 		/* Store transfer size in case we can't send it right now */
-		f->t.n = n;
-		if (tox_file_send_data(tox, f->fid, f->t.fnum, f->t.buf, f->t.n) == -1) {
-			f->t.pending = 1;
+		f->tx.n = n;
+		if (tox_file_send_data(tox, f->num, f->tx.fnum, f->tx.buf, f->tx.n) == -1) {
+			f->tx.pendingbuf = 1;
 			return;
 		}
 	}
@@ -646,7 +641,7 @@ sendfriendtext(struct friend *f)
 		return;
 	if (buf[n - 1] == '\n')
 		n--;
-	tox_send_message(tox, f->fid, buf, n);
+	tox_send_message(tox, f->num, buf, n);
 }
 
 static void
@@ -658,10 +653,10 @@ removefriend(struct friend *f)
 		return;
 	if (c != '1')
 		return;
-	tox_del_friend(tox, f->fid);
+	tox_del_friend(tox, f->num);
 	datasave();
 	printout("Removed friend %s\n",
-	         f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
+	         f->name[0] == '\0' ? "Anonymous" : f->name);
 	frienddestroy(f);
 }
 
@@ -941,7 +936,7 @@ str2id(char *idstr, uint8_t *id)
 }
 
 static struct friend *
-friendcreate(int32_t fid)
+friendcreate(int32_t frnum)
 {
 	struct friend *f;
 	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
@@ -955,15 +950,15 @@ friendcreate(int32_t fid)
 		exit(EXIT_FAILURE);
 	}
 
-	r = tox_get_name(tox, fid, (uint8_t *)f->namestr);
+	r = tox_get_name(tox, frnum, (uint8_t *)f->name);
 	if (r < 0) {
-		fprintf(stderr, "tox_get_name() on fid %d failed\n", fid);
+		fprintf(stderr, "tox_get_name() on friend number %d failed\n", frnum);
 		exit(EXIT_FAILURE);
 	}
-	f->namestr[r] = '\0';
+	f->name[r] = '\0';
 
-	f->fid = fid;
-	tox_get_client_id(tox, f->fid, f->id);
+	f->num = frnum;
+	tox_get_client_id(tox, f->num, f->id);
 	id2str(f->id, f->idstr);
 
 	r = mkdir(f->idstr, 0755);
@@ -1009,13 +1004,13 @@ friendcreate(int32_t fid)
 	}
 
 	ftruncate(f->fd[FNAME], 0);
-	dprintf(f->fd[FNAME], "%s\n", f->namestr);
+	dprintf(f->fd[FNAME], "%s\n", f->name);
 
 	ftruncate(f->fd[FONLINE], 0);
 	dprintf(f->fd[FONLINE], "%s\n",
-		tox_get_friend_connection_status(tox, fid) == 0 ? "0" : "1");
+		tox_get_friend_connection_status(tox, frnum) == 0 ? "0" : "1");
 
-	r = tox_get_status_message_size(tox, fid);
+	r = tox_get_status_message_size(tox, frnum);
 	if (r > sizeof(status) - 1)
 		r = sizeof(status) - 1;
 	status[r] = '\0';
@@ -1051,23 +1046,23 @@ frienddestroy(struct friend *f)
 static void
 friendload(void)
 {
-	int32_t *fids;
+	int32_t *frnums;
 	uint32_t sz;
 	uint32_t i;
 
 	sz = tox_count_friendlist(tox);
-	fids = malloc(sz);
-	if (!fids) {
+	frnums = malloc(sz);
+	if (!frnums) {
 		perror("malloc");
 		exit(EXIT_FAILURE);
 	}
 
-	tox_get_friendlist(tox, fids, sz);
+	tox_get_friendlist(tox, frnums, sz);
 
 	for (i = 0; i < sz; i++)
-		friendcreate(fids[i]);
+		friendcreate(frnums[i]);
 
-	free(fids);
+	free(frnums);
 }
 
 static void
@@ -1205,12 +1200,12 @@ loop(void)
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			/* Only monitor friends that are online */
-			if (tox_get_friend_connection_status(tox, f->fid) == 1) {
+			if (tox_get_friend_connection_status(tox, f->num) == 1) {
 				FD_SET(f->fd[FTEXT_IN], &rfds);
 				if (f->fd[FTEXT_IN] > fdmax)
 					fdmax = f->fd[FTEXT_IN];
-				if (f->t.state == TRANSFER_INITIATED ||
-				    f->t.state == TRANSFER_PAUSED)
+				if (f->tx.state == TRANSFER_INITIATED ||
+				    f->tx.state == TRANSFER_PAUSED)
 					continue;
 				FD_SET(f->fd[FFILE_IN], &rfds);
 				if (f->fd[FFILE_IN] > fdmax)
@@ -1235,7 +1230,7 @@ loop(void)
 		 * in the middle of a transfer.
 		 */
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_get_friend_connection_status(tox, f->fid) == 0) {
+			if (tox_get_friend_connection_status(tox, f->num) == 0) {
 				canceltxtransfer(f);
 				cancelrxtransfer(f);
 			}
@@ -1250,19 +1245,19 @@ loop(void)
 		 * sent.
 		 */
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_get_friend_connection_status(tox, f->fid) == 0)
+			if (tox_get_friend_connection_status(tox, f->num) == 0)
 				continue;
-			if (f->t.state != TRANSFER_INPROGRESS)
+			if (f->tx.state != TRANSFER_INPROGRESS)
 				continue;
-			if (f->t.pending == 1)
+			if (f->tx.pendingbuf == 1)
 				sendfriendfile(f);
 		}
 
 		/* Accept pending transfers if any */
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_get_friend_connection_status(tox, f->fid) == 0)
+			if (tox_get_friend_connection_status(tox, f->num) == 0)
 				continue;
-			if (f->recvfileactive == 0)
+			if (f->rxstate == TRANSFER_NONE)
 				continue;
 			if (f->fd[FFILE_OUT] == -1) {
 				r = openat(f->dirfd, ffiles[FFILE_OUT].name,
@@ -1274,10 +1269,10 @@ loop(void)
 					}
 				} else {
 					f->fd[FFILE_OUT] = r;
-					tox_file_send_control(tox, f->fid, 1, 0,
+					tox_file_send_control(tox, f->num, 1, 0,
 							      TOX_FILECONTROL_ACCEPT, NULL, 0);
 					printout("Accepted transfer from %s\n",
-						 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
+						 f->name[0] == '\0' ? "Anonymous" : f->name);
 				}
 			}
 		}
@@ -1309,7 +1304,7 @@ loop(void)
 			unlinkat(gslots[REQUEST].fd[OUT], req->idstr, 0);
 			close(req->fd);
 			TAILQ_REMOVE(&reqhead, req, entry);
-			free(req->msgstr);
+			free(req->msg);
 			free(req);
 		}
 
@@ -1318,16 +1313,16 @@ loop(void)
 			if (FD_ISSET(f->fd[FTEXT_IN], &rfds))
 				sendfriendtext(f);
 			if (FD_ISSET(f->fd[FFILE_IN], &rfds)) {
-				switch (f->t.state) {
+				switch (f->tx.state) {
 				case TRANSFER_NONE:
 					/* Prepare a new transfer */
-					f->t.state = TRANSFER_INITIATED;
+					f->tx.state = TRANSFER_INITIATED;
 					now = time(NULL);
 					snprintf(tstamp, sizeof(tstamp), "%lu", (unsigned long)now);
-					tox_new_file_sender(tox, f->fid,
+					tox_new_file_sender(tox, f->num,
 						0, (uint8_t *)tstamp, strlen(tstamp));
 					printout("Initiated transfer to %s\n",
-						 f->namestr[0] == '\0' ? "Anonymous" : f->namestr);
+						 f->name[0] == '\0' ? "Anonymous" : f->name);
 					break;
 				case TRANSFER_INPROGRESS:
 					sendfriendfile(f);
@@ -1370,7 +1365,7 @@ shutdown(void)
 				close(r->fd);
 		}
 		TAILQ_REMOVE(&reqhead, r, entry);
-		free(r->msgstr);
+		free(r->msg);
 		free(r);
 	}
 
