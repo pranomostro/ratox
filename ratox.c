@@ -615,6 +615,7 @@ sendfriendfile(struct friend *f)
 			/* Signal transfer completion to other end */
 			tox_file_send_control(tox, f->fid, 0, f->t.fnum,
 					      TOX_FILECONTROL_FINISHED, NULL, 0);
+			f->t.state = TRANSFER_DONE;
 			break;
 		}
 		if (n == -1)
