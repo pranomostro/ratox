@@ -214,15 +214,21 @@ static void
 printrat(void)
 {
 	printf("\033[31m");
-	printf("                       ,     .\n");
-	printf("                       (\\,;,/)\n");
-	printf("                        (o o)\\//,\n");
-	printf("                         \\ /     \\,\n");
-	printf("                         `+'(  (   \\    )\n");
-	printf("                            //  \\   |_./\n");
-	printf("                          '~' '~----'\tratox v"VERSION"\n");
-	printf("\033[0m");
-	putchar('\n');
+	printf(	"                /y\\            /y\\\n"
+		"               /ver\\          /"VERSION"\\\n"
+		"               yyyyyy\\      /yyyyyy\n"
+		"               \\yyyyyyyyyyyyyyyyyy/\n"
+		"                yyyyyyyyyyyyyyyyyy\n"
+		"                yyyyyyyyyyyyyyyyyy\n"
+		"                yyy'yyyyyyyyyy'yyy\n"
+		"                \\yy  yyyyyyyy  yy/\n"
+		"                 \\yy.yyyyyyyy.yy/\n"
+		"                  \\yyyyyyyyyyyy/\n"
+		"                    \\yyyyyyyy/\n"
+		"              -------yyyyyyyy-------\n"
+		"                 ..---yyyyyy---..\n"
+		"                   ..--yyyy--..\n" );
+	printf("\033[0m\n");
 }
 
 static void
