@@ -756,18 +756,22 @@ localinit(void)
 		r = mkdir(gslots[i].name, 0755);
 		if (r < 0 && errno != EEXIST)
 			eprintf("mkdir %s:", gslots[i].name);
+
 		d = opendir(gslots[i].name);
 		if (!d)
 			eprintf("opendir %s:", gslots[i].name);
+
 		r = dirfd(d);
 		if (r < 0)
 			eprintf("dirfd %s:", gslots[i].name);
 		gslots[i].dirfd = r;
+
 		for (m = 0; m < LEN(gfiles); m++) {
 			if (gfiles[m].type == FIFO) {
 				r = mkfifoat(gslots[i].dirfd, gfiles[m].name, 0644);
 				if (r < 0 && errno != EEXIST)
 					eprintf("mkfifoat %s:", gfiles[m].name);
+
 				r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0644);
 				if (r < 0)
 					eprintf("openat %s:", gfiles[m].name);
@@ -781,6 +785,7 @@ localinit(void)
 				r = mkdirat(gslots[i].dirfd, gfiles[m].name, 0777);
 				if (r < 0 && errno != EEXIST)
 					eprintf("mkdirat %s:", gfiles[m].name);
+
 				r = openat(gslots[i].dirfd, gfiles[m].name, O_RDONLY | O_DIRECTORY);
 				if (r < 0)
 					eprintf("openat %s:", gfiles[m].name);
