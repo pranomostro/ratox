@@ -3,8 +3,9 @@ include config.mk
 .POSIX:
 .SUFFIXES: .c .o
 
-HDR = arg.h config.h readpassphrase.h
+HDR = arg.h config.h readpassphrase.h util.h
 LIB = \
+	eprintf.o \
 	readpassphrase.o
 SRC = \
 	ratox.c

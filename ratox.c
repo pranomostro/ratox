@@ -23,8 +23,8 @@
 #include "arg.h"
 #include "queue.h"
 #include "readpassphrase.h"
+#include "util.h"
 
-#define LEN(x) (sizeof (x) / sizeof *(x))
 #define DATAFILE ".ratox.data"
 
 const char *reqerr[] = {
@@ -157,8 +157,6 @@ struct request {
 	TAILQ_ENTRY(request) entry;
 };
 
-char *argv0;
-
 static TAILQ_HEAD(friendhead, friend) friendhead = TAILQ_HEAD_INITIALIZER(friendhead);
 static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
 
@@ -277,10 +275,10 @@ cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 	int r;
 
 	r = tox_get_name(tox, frnum, name);
-	if (r < 0) {
-		fprintf(stderr, "tox_get_name() on friend number %d failed\n", frnum);
-		exit(EXIT_FAILURE);
-	}
+	if (r < 0)
+		eprintf("Failed to get name for friend number %ld\n",
+			(long)frnum);
+
 	name[r] = '\0';
 
 	printout("%s %s\n", r == 0 ? (uint8_t *)"Anonymous" : name,
@@ -414,7 +412,7 @@ cbuserstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 	char *statusstr[] = { "none", "away", "busy" };
 
 	if (status >= LEN(statusstr)) {
-		fprintf(stderr, "received invalid user status: %d\n", status);
+		weprintf("Received invalid user status: %d\n", status);
 		return;
 	}
 
@@ -503,7 +501,7 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 		}
 		break;
 	default:
-		fprintf(stderr, "Unhandled file control type: %d\n", ctrltype);
+		weprintf("Unhandled file control type: %d\n", ctrltype);
 		break;
 	};
 }
@@ -699,11 +697,8 @@ dataload(void)
 	sz = lseek(fd, 0, SEEK_END);
 	lseek(fd, 0, SEEK_SET);
 
-	if (sz == 0) {
-		fprintf(stderr, "%s seems to be corrupt\n",
-			DATAFILE);
-		exit(EXIT_FAILURE);
-	}
+	if (sz == 0)
+		eprintf("%s seems to be corrupt\n", DATAFILE);
 
 	data = malloc(sz);
 	if (!data) {
@@ -722,10 +717,8 @@ dataload(void)
 		while (readpass("Passphrase: ") < 0 ||
 		       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0);
 	} else {
-		if (tox_load(tox, data, sz) < 0) {
-			fprintf(stderr, "tox_load() failed\n");
-			exit(EXIT_FAILURE);
-		}
+		if (tox_load(tox, data, sz) < 0)
+			eprintf("Failed to load %s\n", DATAFILE);
 		if (encryptdatafile == 1) {
 			printout("%s is not encrypted, but saving in encrypted format\n", DATAFILE);
 			while (readpass("New passphrase: ") < 0);
@@ -882,10 +875,8 @@ toxinit(void)
 	}
 
 	tox = tox_new(&toxopt);
-	if (!tox) {
-		fprintf(stderr, "failed to initialize tox core\n");
-		exit(EXIT_FAILURE);
-	}
+	if (!tox)
+		eprintf("Failed to initialize tox core\n");
 
 	dataload();
 	datasave();
@@ -959,10 +950,10 @@ friendcreate(int32_t frnum)
 	}
 
 	r = tox_get_name(tox, frnum, (uint8_t *)f->name);
-	if (r < 0) {
-		fprintf(stderr, "tox_get_name() on friend number %d failed\n", frnum);
-		exit(EXIT_FAILURE);
-	}
+	if (r < 0)
+		eprintf("Failed to get name for friend number %ld\n",
+			(long)frnum);
+
 	f->name[r] = '\0';
 
 	f->num = frnum;
