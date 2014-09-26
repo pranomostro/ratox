@@ -43,7 +43,4 @@ ratox.
 Portability
 ===========
 
-Builds and works on *BSD and Linux, probably others as well.  It has been tested on
-SPARC systems with a slightly patched[0] toxcore.
-
-[0] http://users.2f30.org/sin/patches/0001-Fix-unaligned-memory-access-on-SPARC.patch
+Builds and works on *BSD and Linux, probably others as well.
