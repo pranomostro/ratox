@@ -1376,14 +1376,14 @@ main(int argc, char *argv[])
 		usage();
 	} ARGEND;
 
+	setbuf(stdout, NULL);
+
 	signal(SIGHUP, initshutdown);
 	signal(SIGINT, initshutdown);
 	signal(SIGQUIT, initshutdown);
 	signal(SIGABRT, initshutdown);
 	signal(SIGTERM, initshutdown);
 	signal(SIGPIPE, SIG_IGN);
-
-	setbuf(stdout, NULL);
 
 	printrat();
 	toxinit();
