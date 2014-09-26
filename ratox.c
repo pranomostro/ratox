@@ -880,9 +880,16 @@ toxinit(void)
 		toxopt.proxy_enabled = 1;
 		printout("Using proxy %s:%hu\n", proxyaddr, proxyport);
 	}
+
 	tox = tox_new(&toxopt);
+	if (!tox) {
+		fprintf(stderr, "failed to initialize tox core\n");
+		exit(EXIT_FAILURE);
+	}
+
 	dataload();
 	datasave();
+
 	tox_callback_connection_status(tox, cbconnstatus, NULL);
 	tox_callback_friend_message(tox, cbfriendmessage, NULL);
 	tox_callback_friend_request(tox, cbfriendrequest, NULL);
@@ -892,6 +899,7 @@ toxinit(void)
 	tox_callback_file_control(tox, cbfilecontrol, NULL);
 	tox_callback_file_send_request(tox, cbfilesendreq, NULL);
 	tox_callback_file_data(tox, cbfiledata, NULL);
+
 	return 0;
 }
 
