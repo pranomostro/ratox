@@ -753,7 +753,7 @@ localinit(void)
 	size_t i, m;
 
 	for (i = 0; i < LEN(gslots); i++) {
-		r = mkdir(gslots[i].name, 0755);
+		r = mkdir(gslots[i].name, 0777);
 		if (r < 0 && errno != EEXIST)
 			eprintf("mkdir %s:", gslots[i].name);
 
@@ -924,7 +924,7 @@ friendcreate(int32_t frnum)
 	tox_get_client_id(tox, f->num, f->id);
 	id2str(f->id, f->idstr);
 
-	r = mkdir(f->idstr, 0755);
+	r = mkdir(f->idstr, 0777);
 	if (r < 0 && errno != EEXIST)
 		eprintf("mkdir %s:", f->idstr);
 
