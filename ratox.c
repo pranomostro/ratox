@@ -1219,8 +1219,7 @@ loop(void)
 					if (tox_file_send_control(tox, f->num, 1, 0,
 							      TOX_FILECONTROL_ACCEPT, NULL, 0) < 0) {
 						weprintf("Failed to accept transfer from receiver\n");
-						close(f->fd[FFILE_OUT]);
-						f->fd[FFILE_OUT] = -1;
+						cancelrxtransfer(f);
 					} else {
 						printout("Accepted transfer from %s\n",
 							 f->name[0] == '\0' ? "Anonymous" : f->name);
