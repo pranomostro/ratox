@@ -472,12 +472,12 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 		break;
 	case TOX_FILECONTROL_FINISHED:
 		if (rec_sen == 1) {
-			printout("TX transfer complete\n");
+			printout("Tx transfer complete\n");
 			f->tx.state = TRANSFER_NONE;
 			free(f->tx.buf);
 			f->tx.buf = NULL;
 		} else {
-			printout("RX transfer complete\n");
+			printout("Rx transfer complete\n");
 			if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_FINISHED, NULL, 0) < 0)
 				weprintf("Failed to signal file completion to the sender\n");
 			if (f->fd[FFILE_OUT] != -1) {
@@ -512,7 +512,7 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 		printout("Rejecting new transfer from %s; one already in progress\n",
 			 f->name[0] == '\0' ? "Anonymous" : f->name);
 		if (tox_file_send_control(tox, f->num, 1, fnum, TOX_FILECONTROL_KILL, NULL, 0) < 0)
-			weprintf("Failed to kill new RX transfer\n");
+			weprintf("Failed to kill new Rx transfer\n");
 		return;
 	}
 
@@ -557,7 +557,7 @@ canceltxtransfer(struct friend *f)
 		printout("Cancelling transfer to %s\n",
 			 f->name[0] == '\0' ? "Anonymous" : f->name);
 		if (tox_file_send_control(tox, f->num, 0, 0, TOX_FILECONTROL_KILL, NULL, 0) < 0)
-			weprintf("Failed to kill TX transfer\n");
+			weprintf("Failed to kill Tx transfer\n");
 		f->tx.state = TRANSFER_NONE;
 		free(f->tx.buf);
 		f->tx.buf = NULL;
@@ -574,7 +574,7 @@ cancelrxtransfer(struct friend *f)
 		printout("Cancelling transfer from %s\n",
 			 f->name[0] == '\0' ? "Anonymous" : f->name);
 		if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_KILL, NULL, 0) < 0)
-			weprintf("Failed to kill RX transfer\n");
+			weprintf("Failed to kill Rx transfer\n");
 		if (f->fd[FFILE_OUT] != -1) {
 			close(f->fd[FFILE_OUT]);
 			f->fd[FFILE_OUT] = -1;
