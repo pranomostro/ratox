@@ -249,10 +249,8 @@ again:
 	if (r == 0) {
 		close(*fd);
 		r = openat(dirfd, f.name, f.flags, 0644);
-		if (r < 0) {
-			perror("openat");
-			exit(EXIT_FAILURE);
-		}
+		if (r < 0)
+			eprintf("openat %s:", f.name);
 		*fd = r;
 		return 0;
 	}
@@ -261,8 +259,7 @@ again:
 			goto again;
 		if (errno == EWOULDBLOCK)
 			return -1;
-		perror("read");
-		exit(EXIT_FAILURE);
+		eprintf("read %s:", f.name);
 	}
 	return r;
 }
@@ -325,33 +322,26 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, vo
 	int r;
 
 	req = calloc(1, sizeof(*req));
-	if (!req) {
-		perror("calloc");
-		exit(EXIT_FAILURE);
-	}
+	if (!req)
+		eprintf("calloc:");
+
 	memcpy(req->id, id, TOX_CLIENT_ID_SIZE);
 	id2str(req->id, req->idstr);
 
 	if (len > 0) {
 		req->msg = malloc(len + 1);
-		if (!req->msg) {
-			perror("malloc");
-			exit(EXIT_FAILURE);
-		}
+		if (!req->msg)
+			eprintf("malloc:");
 		memcpy(req->msg, data, len);
 		req->msg[len] = '\0';
 	}
 
 	r = mkfifoat(gslots[REQUEST].fd[OUT], req->idstr, 0644);
-	if (r < 0 && errno != EEXIST) {
-		perror("mkfifoat");
-		exit(EXIT_FAILURE);
-	}
+	if (r < 0 && errno != EEXIST)
+		eprintf("mkfifoat %s:", req->idstr);
 	r = openat(gslots[REQUEST].fd[OUT], req->idstr, O_RDWR | O_NONBLOCK);
-	if (r < 0) {
-		perror("openat");
-		exit(EXIT_FAILURE);
-	}
+	if (r < 0)
+		eprintf("openat %s:", req->idstr);
 	req->fd = r;
 
 	TAILQ_INSERT_TAIL(&reqhead, req, entry);
@@ -448,10 +438,8 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 				f->tx.fnum = fnum;
 				f->tx.chunksz = tox_file_data_size(tox, fnum);
 				f->tx.buf = malloc(f->tx.chunksz);
-				if (!f->tx.buf) {
-					perror("malloc");
-					exit(EXIT_FAILURE);
-				}
+				if (!f->tx.buf)
+					eprintf("malloc:");
 				f->tx.n = 0;
 				f->tx.pendingbuf = 0;
 				f->tx.state = TRANSFER_INPROGRESS;
@@ -664,17 +652,13 @@ readpass(const char *prompt)
 	char pass[BUFSIZ], *p;
 
 	p = readpassphrase(prompt, pass, sizeof(pass), RPP_ECHO_OFF);
-	if (!p) {
-		perror("readpassphrase");
-		exit(EXIT_FAILURE);
-	}
+	if (!p)
+		eprintf("readpassphrase:");
 	if (p[0] == '\0')
 		return -1;
 	passphrase = realloc(passphrase, strlen(p)); /* not null-terminated */
-	if (!passphrase) {
-		perror("malloc");
-		exit(EXIT_FAILURE);
-	}
+	if (!passphrase)
+		eprintf("malloc:");
 	memcpy(passphrase, p, strlen(p));
 	pplen = strlen(p);
 	return 0;
@@ -701,15 +685,11 @@ dataload(void)
 		eprintf("%s seems to be corrupt\n", DATAFILE);
 
 	data = malloc(sz);
-	if (!data) {
-		perror("malloc");
-		exit(EXIT_FAILURE);
-	}
+	if (!data)
+		eprintf("malloc:");
 
-	if (read(fd, data, sz) != sz) {
-		perror("read");
-		exit(EXIT_FAILURE);
-	}
+	if (read(fd, data, sz) != sz)
+		eprintf("read %s:", DATAFILE);
 
 	if (tox_is_data_encrypted(data) == 1) {
 		if (encryptdatafile == 0)
@@ -737,26 +717,20 @@ datasave(void)
 	int fd;
 
 	fd = open(DATAFILE, O_WRONLY | O_TRUNC | O_CREAT , 0644);
-	if (fd < 0) {
-		perror("open");
-		exit(EXIT_FAILURE);
-	}
+	if (fd < 0)
+		eprintf("open %s:", DATAFILE);
 
 	sz = encryptdatafile == 1 ? tox_encrypted_size(tox) : tox_size(tox);
 	data = malloc(sz);
-	if (!data) {
-		perror("malloc");
-		exit(EXIT_FAILURE);
-	}
+	if (!data)
+		eprintf("malloc:");
 
 	if (encryptdatafile == 1)
 		tox_encrypted_save(tox, data, passphrase, pplen);
 	else
 		tox_save(tox, data);
-	if (write(fd, data, sz) != sz) {
-		perror("write");
-		exit(EXIT_FAILURE);
-	}
+	if (write(fd, data, sz) != sz)
+		eprintf("write %s:", DATAFILE);
 	fsync(fd);
 
 	free(data);
@@ -775,52 +749,36 @@ localinit(void)
 
 	for (i = 0; i < LEN(gslots); i++) {
 		r = mkdir(gslots[i].name, 0755);
-		if (r < 0 && errno != EEXIST) {
-			perror("mkdir");
-			exit(EXIT_FAILURE);
-		}
+		if (r < 0 && errno != EEXIST)
+			eprintf("mkdir %s:", gslots[i].name);
 		d = opendir(gslots[i].name);
-		if (!d) {
-			perror("opendir");
-			exit(EXIT_FAILURE);
-		}
+		if (!d)
+			eprintf("opendir %s:", gslots[i].name);
 		r = dirfd(d);
-		if (r < 0) {
-			perror("dirfd");
-			exit(EXIT_FAILURE);
-		}
+		if (r < 0)
+			eprintf("dirfd %s:", gslots[i].name);
 		gslots[i].dirfd = r;
 		for (m = 0; m < LEN(gfiles); m++) {
 			if (gfiles[m].type == FIFO) {
 				r = mkfifoat(gslots[i].dirfd, gfiles[m].name, 0644);
-				if (r < 0 && errno != EEXIST) {
-					perror("mkfifo");
-					exit(EXIT_FAILURE);
-				}
+				if (r < 0 && errno != EEXIST)
+					eprintf("mkfifoat %s:", gfiles[m].name);
 				r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0644);
-				if (r < 0) {
-					perror("openat");
-					exit(EXIT_FAILURE);
-				}
+				if (r < 0)
+					eprintf("openat %s:", gfiles[m].name);
 				gslots[i].fd[m] = r;
 			} else if (gfiles[m].type == STATIC || (gfiles[m].type == NONE && !gslots[i].outisfolder)) {
 				r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0644);
-				if (r < 0) {
-					perror("openat");
-					exit(EXIT_FAILURE);
-				}
+				if (r < 0)
+					eprintf("openat %s:", gfiles[m].name);
 				gslots[i].fd[m] = r;
 			} else if (gfiles[m].type == NONE && gslots[i].outisfolder) {
 				r = mkdirat(gslots[i].dirfd, gfiles[m].name, 0777);
-				if (r < 0 && errno != EEXIST) {
-					perror("mkdir");
-					exit(EXIT_FAILURE);
-				}
+				if (r < 0 && errno != EEXIST)
+					eprintf("mkdirat %s:", gfiles[m].name);
 				r = openat(gslots[i].dirfd, gfiles[m].name, O_RDONLY | O_DIRECTORY);
-				if (r < 0) {
-					perror("openat");
-					exit(EXIT_FAILURE);
-				}
+				if (r < 0)
+					eprintf("openat %s:", gfiles[m].name);
 				gslots[i].fd[m] = r;
 			}
 		}
@@ -845,10 +803,8 @@ localinit(void)
 
 	/* Dump ID */
 	fd = open("id", O_WRONLY | O_CREAT, 0644);
-	if (fd < 0) {
-		perror("open");
-		exit(EXIT_FAILURE);
-	}
+	if (fd < 0)
+		eprintf("open %s:", "id");
 	tox_get_address(tox, address);
 	for (i = 0; i < TOX_FRIEND_ADDRESS_SIZE; i++)
 		dprintf(fd, "%02X", address[i]);
@@ -944,10 +900,8 @@ friendcreate(int32_t frnum)
 	int r;
 
 	f = calloc(1, sizeof(*f));
-	if (!f) {
-		perror("calloc");
-		exit(EXIT_FAILURE);
-	}
+	if (!f)
+		eprintf("calloc:");
 
 	r = tox_get_name(tox, frnum, (uint8_t *)f->name);
 	if (r < 0)
@@ -961,43 +915,32 @@ friendcreate(int32_t frnum)
 	id2str(f->id, f->idstr);
 
 	r = mkdir(f->idstr, 0755);
-	if (r < 0 && errno != EEXIST) {
-		perror("mkdir");
-		exit(EXIT_FAILURE);
-	}
+	if (r < 0 && errno != EEXIST)
+		eprintf("mkdir %s:", f->idstr);
 
 	d = opendir(f->idstr);
-	if (!d) {
-		perror("opendir");
-		exit(EXIT_FAILURE);
-	}
+	if (!d)
+		eprintf("opendir %s:", f->idstr);
+
 	r = dirfd(d);
-	if (r < 0) {
-		perror("dirfd");
-		exit(EXIT_FAILURE);
-	}
+	if (r < 0)
+		eprintf("dirfd %s:", f->idstr);
 	f->dirfd = r;
 
 	for (i = 0; i < LEN(ffiles); i++) {
 		if (ffiles[i].type == FIFO) {
 			r = mkfifoat(f->dirfd, ffiles[i].name, 0644);
-			if (r < 0 && errno != EEXIST) {
-				perror("mkfifo");
-				exit(EXIT_FAILURE);
-			}
+			if (r < 0 && errno != EEXIST)
+				eprintf("mkfifoat %s:", ffiles[i].name);
 			r = openat(f->dirfd, ffiles[i].name, ffiles[i].flags, 0644);
 			if (r < 0) {
-				if (errno != ENXIO) {
-					perror("openat");
-					exit(EXIT_FAILURE);
-				}
+				if (errno != ENXIO)
+					eprintf("openat %s:", ffiles[i].name);
 			}
 		} else if (ffiles[i].type == STATIC) {
 			r = openat(f->dirfd, ffiles[i].name, ffiles[i].flags, 0644);
-			if (r < 0) {
-				perror("openat");
-				exit(EXIT_FAILURE);
-			}
+			if (r < 0)
+				eprintf("openat %s:", ffiles[i].name);
 		}
 		f->fd[i] = r;
 	}
@@ -1051,10 +994,8 @@ friendload(void)
 
 	sz = tox_count_friendlist(tox);
 	frnums = malloc(sz);
-	if (!frnums) {
-		perror("malloc");
-		exit(EXIT_FAILURE);
-	}
+	if (!frnums)
+		eprintf("malloc:");
 
 	tox_get_friendlist(tox, frnums, sz);
 
@@ -1221,8 +1162,7 @@ loop(void)
 		if (n < 0) {
 			if (errno == EINTR)
 				continue;
-			perror("select");
-			exit(EXIT_FAILURE);
+			eprintf("select:");
 		}
 
 		/* Check for broken transfers, i.e. the friend went offline
@@ -1262,10 +1202,8 @@ loop(void)
 				r = openat(f->dirfd, ffiles[FFILE_OUT].name,
 					   ffiles[FFILE_OUT].flags, 0644);
 				if (r < 0) {
-					if (errno != ENXIO) {
-						perror("openat");
-						exit(EXIT_FAILURE);
-					}
+					if (errno != ENXIO)
+						eprintf("openat %s:", ffiles[FFILE_OUT].name);
 				} else {
 					f->fd[FFILE_OUT] = r;
 					tox_file_send_control(tox, f->num, 1, 0,
