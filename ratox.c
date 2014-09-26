@@ -687,7 +687,7 @@ dataload(void)
 	lseek(fd, 0, SEEK_SET);
 
 	if (sz == 0)
-		eprintf("%s seems to be corrupt\n", DATAFILE);
+		eprintf("%s seems to be empty\n", DATAFILE);
 
 	data = malloc(sz);
 	if (!data)
