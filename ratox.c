@@ -339,7 +339,7 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, vo
 	r = mkfifoat(gslots[REQUEST].fd[OUT], req->idstr, 0644);
 	if (r < 0 && errno != EEXIST)
 		eprintf("mkfifoat %s:", req->idstr);
-	r = openat(gslots[REQUEST].fd[OUT], req->idstr, O_RDWR | O_NONBLOCK);
+	r = openat(gslots[REQUEST].fd[OUT], req->idstr, O_RDONLY | O_NONBLOCK);
 	if (r < 0)
 		eprintf("openat %s:", req->idstr);
 	req->fd = r;
