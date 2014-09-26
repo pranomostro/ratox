@@ -478,7 +478,8 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 			f->tx.buf = NULL;
 		} else {
 			printout("RX transfer complete\n");
-			tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_FINISHED, NULL, 0);
+			if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_FINISHED, NULL, 0) < 0)
+				weprintf("Failed to signal file completion to the sender\n");
 			if (f->fd[FFILE_OUT] != -1) {
 				close(f->fd[FFILE_OUT]);
 				f->fd[FFILE_OUT] = -1;
@@ -510,7 +511,8 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 	if (f->rxstate == TRANSFER_INPROGRESS) {
 		printout("Rejecting new transfer from %s; one already in progress\n",
 			 f->name[0] == '\0' ? "Anonymous" : f->name);
-		tox_file_send_control(tox, f->num, 1, fnum, TOX_FILECONTROL_KILL, NULL, 0);
+		if (tox_file_send_control(tox, f->num, 1, fnum, TOX_FILECONTROL_KILL, NULL, 0) < 0)
+			weprintf("Failed to kill new RX transfer\n");
 		return;
 	}
 
@@ -554,7 +556,8 @@ canceltxtransfer(struct friend *f)
 	if (f->tx.state != TRANSFER_NONE) {
 		printout("Cancelling transfer to %s\n",
 			 f->name[0] == '\0' ? "Anonymous" : f->name);
-		tox_file_send_control(tox, f->num, 0, 0, TOX_FILECONTROL_KILL, NULL, 0);
+		if (tox_file_send_control(tox, f->num, 0, 0, TOX_FILECONTROL_KILL, NULL, 0) < 0)
+			weprintf("Failed to kill TX transfer\n");
 		f->tx.state = TRANSFER_NONE;
 		free(f->tx.buf);
 		f->tx.buf = NULL;
@@ -570,7 +573,8 @@ cancelrxtransfer(struct friend *f)
 	if (f->rxstate == TRANSFER_INPROGRESS) {
 		printout("Cancelling transfer from %s\n",
 			 f->name[0] == '\0' ? "Anonymous" : f->name);
-		tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_KILL, NULL, 0);
+		if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_KILL, NULL, 0) < 0)
+			weprintf("Failed to kill RX transfer\n");
 		if (f->fd[FFILE_OUT] != -1) {
 			close(f->fd[FFILE_OUT]);
 			f->fd[FFILE_OUT] = -1;
@@ -600,8 +604,9 @@ sendfriendfile(struct friend *f)
 			     f->tx.chunksz);
 		if (n == 0) {
 			/* Signal transfer completion to other end */
-			tox_file_send_control(tox, f->num, 0, f->tx.fnum,
-					      TOX_FILECONTROL_FINISHED, NULL, 0);
+			if (tox_file_send_control(tox, f->num, 0, f->tx.fnum,
+					      TOX_FILECONTROL_FINISHED, NULL, 0) < 0)
+				weprintf("Failed to signal transfer completion to the receiver\n");
 			f->tx.state = TRANSFER_NONE;
 			break;
 		}
@@ -1206,10 +1211,15 @@ loop(void)
 						eprintf("openat %s:", ffiles[FFILE_OUT].name);
 				} else {
 					f->fd[FFILE_OUT] = r;
-					tox_file_send_control(tox, f->num, 1, 0,
-							      TOX_FILECONTROL_ACCEPT, NULL, 0);
-					printout("Accepted transfer from %s\n",
-						 f->name[0] == '\0' ? "Anonymous" : f->name);
+					if (tox_file_send_control(tox, f->num, 1, 0,
+							      TOX_FILECONTROL_ACCEPT, NULL, 0) < 0) {
+						weprintf("Failed to accept transfer from receiver\n");
+						close(f->fd[FFILE_OUT]);
+						f->fd[FFILE_OUT] = -1;
+					} else {
+						printout("Accepted transfer from %s\n",
+							 f->name[0] == '\0' ? "Anonymous" : f->name);
+					}
 				}
 			}
 		}
@@ -1253,13 +1263,19 @@ loop(void)
 				switch (f->tx.state) {
 				case TRANSFER_NONE:
 					/* Prepare a new transfer */
-					f->tx.state = TRANSFER_INITIATED;
 					now = time(NULL);
 					snprintf(tstamp, sizeof(tstamp), "%lu", (unsigned long)now);
-					tox_new_file_sender(tox, f->num,
-						0, (uint8_t *)tstamp, strlen(tstamp));
-					printout("Initiated transfer to %s\n",
-						 f->name[0] == '\0' ? "Anonymous" : f->name);
+					if (tox_new_file_sender(tox, f->num,
+						0, (uint8_t *)tstamp, strlen(tstamp)) < 0) {
+						weprintf("Failed to initiate new transfer\n");
+						/* Flush the FIFO */
+						while (fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
+								toilet, sizeof(toilet)));
+					} else {
+						f->tx.state = TRANSFER_INITIATED;
+						printout("Initiated transfer to %s\n",
+							 f->name[0] == '\0' ? "Anonymous" : f->name);
+					}
 					break;
 				case TRANSFER_INPROGRESS:
 					sendfriendfile(f);
