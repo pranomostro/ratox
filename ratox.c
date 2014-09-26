@@ -165,7 +165,7 @@ static Tox_Options toxopt;
 static uint8_t *passphrase;
 static uint32_t pplen;
 static uint8_t toilet[BUFSIZ];
-static int running = 1;
+static sig_atomic_t running = 1;
 static int ipv6;
 static int tcpflag;
 static int proxyflag;
@@ -1296,7 +1296,6 @@ loop(void)
 static void
 initshutdown(int sig)
 {
-	printout("Shutting down...\n");
 	running = 0;
 }
 
@@ -1306,6 +1305,8 @@ shutdown(void)
 	int i, m;
 	struct friend *f, *ftmp;
 	struct request *r, *rtmp;
+
+	printout("Shutting down...\n");
 
 	/* Friends */
 	for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
