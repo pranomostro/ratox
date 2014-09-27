@@ -1,10 +1,65 @@
-What is it?
-===========
+What is ratox?
+==============
 
 ratox is a client implementation of the rather popular tox protocol.
-Unlike other clients relying on GUIs as an interface to the user,
-ratox is developed with the UNIX-philosophy in mind and allows complete
+Unlike other clients relying on GUIs as an interface to the user, ratox is
+developed with the UNIX-philosophy in mind and allows complete
 interaction through named pipes.
+
+Getting started
+===============
+
+Get the latest version from the git-repository; build and install it.
+Run ratox in an empty directory and it will create a set of files and
+folders allowing you to control the client.
+
+File structure
+==============
+
+In the following paragraph, / refers to the directory ratox has been started in.
+
+Global slots (name/, status/, request/)
+---------------------------------------
+
+Global slots allow you to change your name and status message and send and
+accept friend requests.  Each slot contains an in, out and err file or
+directory respectively.  The in-file is a pipe waiting for user-input.
+If you want to change your name or status, just pipe it to it. To send a
+friend request, pipe the Tox-ID to request/in.  The out-file contains the
+current state of a given parameter.   In request/, out is a directory
+containing named pipes for each pending request. To accept or reject a
+friend request, pipe a 1 or 0 to a FIFO respectively.
+
+Friend slots
+------------
+
+For each friend added, ratox will create a folder in / named after the friend's ID.
+It contains files and FIFOs to interact with your friends.  text_in and file_in allow
+you to send messages and files just by piping them to them.  text_out and file_out allow
+you to read your friend's messages and accept file-transmissions.  Accepting a file
+transmission is as easy as just piping the file_out to a file or other stream.
+online, name, status and file_pending are state-files giving you information on the
+friend's status.  If you pipe a 1 to remove, the friend will be removed.
+
+id file
+-------
+
+/id contains your own Tox-ID to pass on to your friends if you want them to add you.
+
+Command Line Options
+====================
+
+-4 and -6 allow you to switch between IPv4 and IPv6 mode respectively.
+-t enables TCP mode.  By default, Tox operates with UDP and is recommended, as
+TCP mode implies certain security considerations.
+-p enables the TCP SOCKS5-proxy as specified in the config.h.  Running ratox behind
+a ssh-proxy is as simple as setting
+
+static char proxyaddr[] = "localhost";
+static uint16_t proxyport = 8080;
+
+in config.h (already set by default) and running ssh -C2qTnN -D 8080 user@example.org
+in a separate terminal and launching ratox with ratox -p.
 
 Features
 ========
