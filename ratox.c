@@ -605,7 +605,7 @@ sendfriendfile(struct friend *f)
 		if (n == 0) {
 			/* Signal transfer completion to other end */
 			if (tox_file_send_control(tox, f->num, 0, f->tx.fnum,
-					      TOX_FILECONTROL_FINISHED, NULL, 0) < 0)
+						  TOX_FILECONTROL_FINISHED, NULL, 0) < 0)
 				weprintf("Failed to signal transfer completion to the receiver\n");
 			f->tx.state = TRANSFER_NONE;
 			break;
@@ -1203,6 +1203,8 @@ loop(void)
 				continue;
 			if (f->tx.pendingbuf == 1)
 				sendfriendfile(f);
+			if (f->tx.state == TRANSFER_NONE)
+				FD_CLR(f->fd[FFILE_IN], &rfds);
 		}
 
 		/* Accept pending transfers if any */
