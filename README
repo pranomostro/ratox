@@ -24,10 +24,10 @@ Global slots (name/, status/, request/)
 Global slots allow you to change your name and status message and send and
 accept friend requests.  Each slot contains an in, out and err file or
 directory respectively.  The in-file is a pipe waiting for user-input.
-If you want to change your name or status, just pipe it to it. To send a
+If you want to change your name or status, just pipe it to it.  To send a
 friend request, pipe the Tox-ID to request/in.  The out-file contains the
-current state of a given parameter.   In request/, out is a directory
-containing named pipes for each pending request. To accept or reject a
+current state of a given parameter.  In request/, out is a directory
+containing named pipes for each pending request.  To accept or reject a
 friend request, pipe a 1 or 0 to a FIFO respectively.
 
 Friend slots
