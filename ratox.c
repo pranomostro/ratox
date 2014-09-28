@@ -164,7 +164,7 @@ static Tox *tox;
 static Tox_Options toxopt;
 static uint8_t *passphrase;
 static uint32_t pplen;
-static uint8_t toilet[BUFSIZ];
+static uint8_t toilet[PIPE_BUF];
 static sig_atomic_t running = 1;
 static int ipv6;
 static int tcpflag;
@@ -1058,7 +1058,7 @@ setstatus(void *data)
 static void
 sendfriendreq(void *data)
 {
-	char buf[BUFSIZ], *p;
+	char buf[PIPE_BUF], *p;
 	char *msg = "ratox is awesome!";
 	uint8_t id[TOX_FRIEND_ADDRESS_SIZE];
 	ssize_t n;
