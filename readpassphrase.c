@@ -183,7 +183,8 @@ restart:
 	return(nr == -1 ? NULL : buf);
 }
 
-static void handler(int s)
+static void
+handler(int s)
 {
 
 	signo[s] = 1;
