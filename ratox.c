@@ -207,8 +207,8 @@ static void usage(void);
 static void
 printrat(void)
 {
-	printf("\033[31m");
-	printf(	"                /y\\            /y\\\n"
+	printf(	"\033[31m"
+		"                /y\\            /y\\\n"
 		"               /ver\\          /"VERSION"\\\n"
 		"               yyyyyy\\      /yyyyyy\n"
 		"               \\yyyyyyyyyyyyyyyyyy/\n"
@@ -221,8 +221,8 @@ printrat(void)
 		"                    \\yyyyyyyy/\n"
 		"              -------yyyyyyyy-------\n"
 		"                 ..---yyyyyy---..\n"
-		"                   ..--yyyy--..\n" );
-	printf("\033[0m\n");
+		"                   ..--yyyy--..\n"
+		"\033[0m\n");
 }
 
 static void
