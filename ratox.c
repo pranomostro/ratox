@@ -242,7 +242,7 @@ printout(const char *fmt, ...)
 	va_end(ap);
 }
 
-void
+static void
 fiforeset(int dirfd, int *fd, struct file f)
 {
 	ssize_t r;
