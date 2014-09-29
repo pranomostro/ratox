@@ -92,9 +92,9 @@ enum {
 };
 
 static struct slot gslots[] = {
-	[NAME]    = { .name = "name",	 .cb = setname,	      .outisfolder = 0, .dirfd = -1 },
-	[STATUS]  = { .name = "status",	 .cb = setstatus,     .outisfolder = 0, .dirfd = -1 },
-	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outisfolder = 1, .dirfd = -1 },
+	[NAME]    = { .name = "name",	 .cb = setname,	      .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
+	[STATUS]  = { .name = "status",	 .cb = setstatus,     .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
+	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outisfolder = 1, .dirfd = -1, .fd = {-1, -1, -1} },
 };
 
 enum {
@@ -172,6 +172,7 @@ static int proxyflag;
 
 static void printrat(void);
 static void printout(const char *, ...);
+static void fiforeset(int, int *, struct file);
 static ssize_t fiforead(int, int *, struct file, void *, size_t);
 static void cbconnstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfriendmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
@@ -239,6 +240,23 @@ printout(const char *fmt, ...)
 	va_end(ap);
 }
 
+void
+fiforeset(int dirfd, int *fd, struct file f)
+{
+	ssize_t r;
+
+	unlinkat(dirfd, f.name, 0);
+	if (*fd != -1)
+		close(*fd);
+	r = mkfifoat(dirfd, f.name, 0644);
+	if (r < 0 && errno != EEXIST)
+		eprintf("mkfifoat %s:", f.name);
+	r = openat(dirfd, f.name, f.flags);
+	if (r < 0 && errno != ENXIO)
+		eprintf("openat %s:", f.name);
+	*fd = r;
+}
+
 static ssize_t
 fiforead(int dirfd, int *fd, struct file f, void *buf, size_t sz)
 {
@@ -247,11 +265,7 @@ fiforead(int dirfd, int *fd, struct file f, void *buf, size_t sz)
 again:
 	r = read(*fd, buf, sz);
 	if (r == 0) {
-		close(*fd);
-		r = openat(dirfd, f.name, f.flags, 0644);
-		if (r < 0)
-			eprintf("openat %s:", f.name);
-		*fd = r;
+		fiforeset(dirfd, fd, f);
 		return 0;
 	}
 	if (r < 0) {
@@ -319,11 +333,12 @@ static void
 cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, void *udata)
 {
 	struct request *req;
-	int r;
+	struct file reqfifo;
 
 	req = calloc(1, sizeof(*req));
 	if (!req)
 		eprintf("calloc:");
+	req->fd = -1;
 
 	memcpy(req->id, id, TOX_CLIENT_ID_SIZE);
 	id2str(req->id, req->idstr);
@@ -336,13 +351,9 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, vo
 		req->msg[len] = '\0';
 	}
 
-	r = mkfifoat(gslots[REQUEST].fd[OUT], req->idstr, 0644);
-	if (r < 0 && errno != EEXIST)
-		eprintf("mkfifoat %s:", req->idstr);
-	r = openat(gslots[REQUEST].fd[OUT], req->idstr, O_RDONLY | O_NONBLOCK);
-	if (r < 0)
-		eprintf("openat %s:", req->idstr);
-	req->fd = r;
+	reqfifo.name = req->idstr;
+	reqfifo.flags = O_RDONLY | O_NONBLOCK;
+	fiforeset(gslots[REQUEST].fd[OUT], &req->fd, reqfifo);
 
 	TAILQ_INSERT_TAIL(&reqhead, req, entry);
 
@@ -461,10 +472,7 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 			f->tx.state = TRANSFER_NONE;
 			free(f->tx.buf);
 			f->tx.buf = NULL;
-
-			/* Flush the FIFO */
-			while (fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
-			                toilet, sizeof(toilet)));
+			fiforeset(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN]);
 		} else {
 			printout(": %s : Rx > Cancelled by Sender\n", f->name);
 			cancelrxtransfer(f);
@@ -561,9 +569,7 @@ canceltxtransfer(struct friend *f)
 		f->tx.state = TRANSFER_NONE;
 		free(f->tx.buf);
 		f->tx.buf = NULL;
-		/* Flush the FIFO */
-		while (fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
-				toilet, sizeof(toilet)));
+		fiforeset(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN]);
 	}
 }
 
@@ -756,11 +762,9 @@ localinit(void)
 		r = mkdir(gslots[i].name, 0777);
 		if (r < 0 && errno != EEXIST)
 			eprintf("mkdir %s:", gslots[i].name);
-
 		d = opendir(gslots[i].name);
 		if (!d)
 			eprintf("opendir %s:", gslots[i].name);
-
 		r = dirfd(d);
 		if (r < 0)
 			eprintf("dirfd %s:", gslots[i].name);
@@ -768,14 +772,7 @@ localinit(void)
 
 		for (m = 0; m < LEN(gfiles); m++) {
 			if (gfiles[m].type == FIFO) {
-				r = mkfifoat(gslots[i].dirfd, gfiles[m].name, 0644);
-				if (r < 0 && errno != EEXIST)
-					eprintf("mkfifoat %s:", gfiles[m].name);
-
-				r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0644);
-				if (r < 0)
-					eprintf("openat %s:", gfiles[m].name);
-				gslots[i].fd[m] = r;
+				fiforeset(gslots[i].dirfd, &gslots[i].fd[m], gfiles[m]);
 			} else if (gfiles[m].type == STATIC || (gfiles[m].type == NONE && !gslots[i].outisfolder)) {
 				r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0644);
 				if (r < 0)
@@ -938,21 +935,15 @@ friendcreate(int32_t frnum)
 	f->dirfd = r;
 
 	for (i = 0; i < LEN(ffiles); i++) {
+		f->fd[i] = -1;
 		if (ffiles[i].type == FIFO) {
-			r = mkfifoat(f->dirfd, ffiles[i].name, 0644);
-			if (r < 0 && errno != EEXIST)
-				eprintf("mkfifoat %s:", ffiles[i].name);
-			r = openat(f->dirfd, ffiles[i].name, ffiles[i].flags, 0644);
-			if (r < 0) {
-				if (errno != ENXIO)
-					eprintf("openat %s:", ffiles[i].name);
-			}
+			fiforeset(f->dirfd, &f->fd[i], ffiles[i]);
 		} else if (ffiles[i].type == STATIC) {
 			r = openat(f->dirfd, ffiles[i].name, ffiles[i].flags, 0644);
 			if (r < 0)
 				eprintf("openat %s:", ffiles[i].name);
+			f->fd[i] = r;
 		}
-		f->fd[i] = r;
 	}
 
 	ftruncate(f->fd[FNAME], 0);
