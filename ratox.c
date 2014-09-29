@@ -165,7 +165,7 @@ static Tox_Options toxopt;
 static uint8_t *passphrase;
 static uint32_t pplen;
 static uint8_t toilet[PIPE_BUF];
-static sig_atomic_t running = 1;
+static volatile sig_atomic_t running = 1;
 static int ipv6;
 static int tcpflag;
 static int proxyflag;
