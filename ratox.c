@@ -490,7 +490,6 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 				f->fd[FFILE_OUT] = -1;
 			}
 			ftruncate(f->fd[FFILE_PENDING], 0);
-			dprintf(f->fd[FFILE_PENDING], "%d\n", 0);
 			f->rxstate = TRANSFER_NONE;
 		}
 		break;
@@ -505,6 +504,7 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 	      const uint8_t *fname, uint16_t flen, void *udata)
 {
 	struct friend *f;
+	uint8_t filename[flen + 1];
 
 	TAILQ_FOREACH(f, &friendhead, entry)
 		if (f->num == frnum)
@@ -512,18 +512,22 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 	if (!f)
 		return;
 
+	memcpy(filename, fname, flen);
+	filename[flen] = '\0';
+
 	/* We only support a single transfer at a time */
 	if (f->rxstate == TRANSFER_INPROGRESS) {
-		printout(": %s : Rx > Rejected, already one in progress\n", FRIENDNAME);
+		printout(": %s : Rx > Rejected %s, already one in progress\n",
+			 FRIENDNAME, filename);
 		if (tox_file_send_control(tox, f->num, 1, fnum, TOX_FILECONTROL_KILL, NULL, 0) < 0)
 			weprintf("Failed to kill new Rx transfer\n");
 		return;
 	}
 
 	ftruncate(f->fd[FFILE_PENDING], 0);
-	dprintf(f->fd[FFILE_PENDING], "%d\n", 1);
+	dprintf(f->fd[FFILE_PENDING], "%s\n", filename);
 	f->rxstate = TRANSFER_INPROGRESS;
-	printout(": %s : Rx > Pending\n", FRIENDNAME);
+	printout(": %s : Rx > Pending %s\n", FRIENDNAME, filename);
 }
 
 static void
@@ -579,7 +583,6 @@ cancelrxtransfer(struct friend *f)
 			f->fd[FFILE_OUT] = -1;
 		}
 		ftruncate(f->fd[FFILE_PENDING], 0);
-		dprintf(f->fd[FFILE_PENDING], "%d\n", 0);
 		f->rxstate = TRANSFER_NONE;
 	}
 }
@@ -953,7 +956,6 @@ friendcreate(int32_t frnum)
 	dprintf(f->fd[FSTATUS], "%s\n", status);
 
 	ftruncate(f->fd[FFILE_PENDING], 0);
-	dprintf(f->fd[FFILE_PENDING], "%d\n", 0);
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
 
