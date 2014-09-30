@@ -282,10 +282,10 @@ static void
 cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 {
 	struct friend *f;
-	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
+	char name[TOX_MAX_NAME_LENGTH + 1];
 	int r;
 
-	r = tox_get_name(tox, frnum, name);
+	r = tox_get_name(tox, frnum, (uint8_t *)name);
 	if (r < 0)
 		eprintf("Failed to get name for friend number %ld\n",
 			(long)frnum);
