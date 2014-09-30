@@ -121,8 +121,6 @@ static struct file ffiles[] = {
 	[FFILE_PENDING] = { .type = STATIC, .name = "file_pending", .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 };
 
-#define FRIENDNAME (f->name[0] == '\0' ? "Anonymous" : f->name)
-
 enum {
 	TRANSFER_NONE,
 	TRANSFER_INITIATED,
@@ -324,7 +322,7 @@ cbfriendmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *
 			t = time(NULL);
 			strftime(buft, sizeof(buft), "%F %R", localtime(&t));
 			dprintf(f->fd[FTEXT_OUT], "%s %s\n", buft, msg);
-			printout(": %s > %s\n", FRIENDNAME, msg);
+			printout(": %s > %s\n", f->name, msg);
 			break;
 		}
 	}
@@ -373,11 +371,11 @@ cbnamechange(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *use
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->num == frnum) {
-			ftruncate(f->fd[FNAME], 0);
-			dprintf(f->fd[FNAME], "%s\n", name);
 			if (memcmp(f->name, name, len + 1) == 0)
 				break;
-			printout(": %s : Name > %s\n", FRIENDNAME, name);
+			ftruncate(f->fd[FNAME], 0);
+			dprintf(f->fd[FNAME], "%s\n", name);
+			printout(": %s : Name > %s\n", f->name, name);
 			memcpy(f->name, name, len + 1);
 			break;
 		}
@@ -398,7 +396,7 @@ cbstatusmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *
 		if (f->num == frnum) {
 			ftruncate(f->fd[FSTATUS], 0);
 			dprintf(f->fd[FSTATUS], "%s\n", status);
-			printout(": %s : Status > %s\n", FRIENDNAME, status);
+			printout(": %s : Status > %s\n", f->name, status);
 			break;
 		}
 	}
@@ -418,7 +416,7 @@ cbuserstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->num == frnum) {
-			printout(": %s : State > %s\n", FRIENDNAME, statusstr[status]);
+			printout(": %s : State > %s\n", f->name, statusstr[status]);
 			break;
 		}
 	}
@@ -440,7 +438,7 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 	case TOX_FILECONTROL_ACCEPT:
 		if (rec_sen == 1) {
 			if (f->tx.state == TRANSFER_PAUSED) {
-				printout(": %s : Tx > Resumed\n", FRIENDNAME);
+				printout(": %s : Tx > Resumed\n", f->name);
 				f->tx.state = TRANSFER_INPROGRESS;
 			} else {
 				f->tx.fnum = fnum;
@@ -451,38 +449,38 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 				f->tx.n = 0;
 				f->tx.pendingbuf = 0;
 				f->tx.state = TRANSFER_INPROGRESS;
-				printout(": %s : Tx > In Progress\n", FRIENDNAME);
+				printout(": %s : Tx > In Progress\n", f->name);
 			}
 		}
 		break;
 	case TOX_FILECONTROL_PAUSE:
 		if (rec_sen == 1) {
 			if (f->tx.state == TRANSFER_INPROGRESS) {
-				printout(": %s : Tx > Paused\n", FRIENDNAME);
+				printout(": %s : Tx > Paused\n", f->name);
 				f->tx.state = TRANSFER_PAUSED;
 			}
 		}
 		break;
 	case TOX_FILECONTROL_KILL:
 		if (rec_sen == 1) {
-			printout(": %s : Tx > Rejected\n", FRIENDNAME);
+			printout(": %s : Tx > Rejected\n", f->name);
 			f->tx.state = TRANSFER_NONE;
 			free(f->tx.buf);
 			f->tx.buf = NULL;
 			fiforeset(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN]);
 		} else {
-			printout(": %s : Rx > Cancelled by Sender\n", FRIENDNAME);
+			printout(": %s : Rx > Cancelled by Sender\n", f->name);
 			cancelrxtransfer(f);
 		}
 		break;
 	case TOX_FILECONTROL_FINISHED:
 		if (rec_sen == 1) {
-			printout(": %s : Tx > Complete\n", FRIENDNAME);
+			printout(": %s : Tx > Complete\n", f->name);
 			f->tx.state = TRANSFER_NONE;
 			free(f->tx.buf);
 			f->tx.buf = NULL;
 		} else {
-			printout(": %s : Rx > Complete\n", FRIENDNAME);
+			printout(": %s : Rx > Complete\n", f->name);
 			if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_FINISHED, NULL, 0) < 0)
 				weprintf("Failed to signal file completion to the sender\n");
 			if (f->fd[FFILE_OUT] != -1) {
@@ -518,7 +516,7 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 	/* We only support a single transfer at a time */
 	if (f->rxstate == TRANSFER_INPROGRESS) {
 		printout(": %s : Rx > Rejected %s, already one in progress\n",
-			 FRIENDNAME, filename);
+			 f->name, filename);
 		if (tox_file_send_control(tox, f->num, 1, fnum, TOX_FILECONTROL_KILL, NULL, 0) < 0)
 			weprintf("Failed to kill new Rx transfer\n");
 		return;
@@ -527,7 +525,7 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 	ftruncate(f->fd[FFILE_PENDING], 0);
 	dprintf(f->fd[FFILE_PENDING], "%s\n", filename);
 	f->rxstate = TRANSFER_INPROGRESS;
-	printout(": %s : Rx > Pending %s\n", FRIENDNAME, filename);
+	printout(": %s : Rx > Pending %s\n", f->name, filename);
 }
 
 static void
@@ -561,7 +559,7 @@ static void
 canceltxtransfer(struct friend *f)
 {
 	if (f->tx.state != TRANSFER_NONE) {
-		printout(": %s : Tx > Cancelling\n", FRIENDNAME);
+		printout(": %s : Tx > Cancelling\n", f->name);
 		if (tox_file_send_control(tox, f->num, 0, 0, TOX_FILECONTROL_KILL, NULL, 0) < 0)
 			weprintf("Failed to kill Tx transfer\n");
 		f->tx.state = TRANSFER_NONE;
@@ -575,7 +573,7 @@ static void
 cancelrxtransfer(struct friend *f)
 {
 	if (f->rxstate == TRANSFER_INPROGRESS) {
-		printout(": %s : Rx > Cancelling\n", FRIENDNAME);
+		printout(": %s : Rx > Cancelling\n", f->name);
 		if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_KILL, NULL, 0) < 0)
 			weprintf("Failed to kill Rx transfer\n");
 		if (f->fd[FFILE_OUT] != -1) {
@@ -648,7 +646,7 @@ removefriend(struct friend *f)
 		return;
 	tox_del_friend(tox, f->num);
 	datasave();
-	printout(": %s > Removed\n", FRIENDNAME);
+	printout(": %s > Removed\n", f->name);
 	frienddestroy(f);
 }
 
@@ -909,8 +907,10 @@ friendcreate(int32_t frnum)
 	if (r < 0)
 		eprintf("Failed to get name for friend number %ld\n",
 			(long)frnum);
-
-	f->name[r] = '\0';
+	if (r == 0)
+		snprintf(f->name, sizeof(f->name), "Anonymous");
+	else
+		f->name[r] = '\0';
 
 	f->num = frnum;
 	tox_get_client_id(tox, f->num, f->id);
@@ -1012,6 +1012,8 @@ setname(void *data)
 		return;
 	if (name[n - 1] == '\n')
 		n--;
+	if (n == 0)
+		return;
 	name[n] = '\0';
 	tox_set_name(tox, (uint8_t *)name, n);
 	datasave();
@@ -1211,7 +1213,7 @@ loop(void)
 						weprintf("Failed to accept transfer from receiver\n");
 						cancelrxtransfer(f);
 					} else {
-						printout(": %s : Rx > Accepted\n", FRIENDNAME);
+						printout(": %s : Rx > Accepted\n", f->name);
 					}
 				}
 			}
@@ -1266,7 +1268,7 @@ loop(void)
 								toilet, sizeof(toilet)));
 					} else {
 						f->tx.state = TRANSFER_INITIATED;
-						printout(": %s : Tx > Initiated\n", FRIENDNAME);
+						printout(": %s : Tx > Initiated\n", f->name);
 					}
 					break;
 				case TRANSFER_INPROGRESS:
