@@ -1012,8 +1012,6 @@ setname(void *data)
 		return;
 	if (name[n - 1] == '\n')
 		n--;
-	if (n == 0)
-		return;
 	name[n] = '\0';
 	tox_set_name(tox, (uint8_t *)name, n);
 	datasave();
