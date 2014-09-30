@@ -164,7 +164,6 @@ static Tox *tox;
 static Tox_Options toxopt;
 static uint8_t *passphrase;
 static uint32_t pplen;
-static uint8_t toilet[PIPE_BUF];
 static volatile sig_atomic_t running = 1;
 static int ipv6;
 static int tcpflag;
@@ -1263,9 +1262,7 @@ loop(void)
 					if (tox_new_file_sender(tox, f->num,
 						0, (uint8_t *)tstamp, strlen(tstamp)) < 0) {
 						weprintf("Failed to initiate new transfer\n");
-						/* Flush the FIFO */
-						while (fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
-								toilet, sizeof(toilet)));
+						fiforeset(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN]);
 					} else {
 						f->tx.state = TRANSFER_INITIATED;
 						printout(": %s : Tx > Initiated\n", f->name);
