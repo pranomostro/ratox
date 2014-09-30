@@ -290,10 +290,12 @@ cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 		eprintf("Failed to get name for friend number %ld\n",
 			(long)frnum);
 
-	name[r] = '\0';
+	if (r == 0)
+		snprintf(name, sizeof(name), "Anonymous");
+	else
+		name[r] = '\0';
 
-	printout(": %s > %s\n", r == 0 ? (uint8_t *)"Anonymous" : name,
-		 status == 0 ? "Offline" : "Online");
+	printout(": %s > %s\n", name, status == 0 ? "Offline" : "Online");
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->num == frnum) {
