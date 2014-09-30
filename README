@@ -18,7 +18,7 @@ File structure
 
 In the following paragraph, / refers to the directory ratox has been started in.
 
-Global slots (name/, status/, request/)
+Global slots (name/, status/, request/, nospam/)
 ---------------------------------------
 
 Global slots allow you to change your name and status message and send and
@@ -88,7 +88,7 @@ Inline images: No
 File resuming: No
 Read receipts: No
 Message splitting: Yes
-Changing nospam: No
+Changing nospam: Yes
 toxi URI: No
 
 NOTE: Some of these features are not intended to be developed

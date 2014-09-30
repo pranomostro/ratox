@@ -72,6 +72,7 @@ static struct file gfiles[] = {
 	[ERR]     = { .type = STATIC, .name = "err", .flags = O_WRONLY | O_TRUNC | O_CREAT },
 };
 
+static int idfd = -1;
 
 struct slot {
 	const char *name;
@@ -84,17 +85,20 @@ struct slot {
 static void setname(void *);
 static void setstatus(void *);
 static void sendfriendreq(void *);
+static void setnospam(void *);
 
 enum {
 	NAME,
 	STATUS,
-	REQUEST
+	REQUEST,
+	NOSPAM
 };
 
 static struct slot gslots[] = {
 	[NAME]    = { .name = "name",	 .cb = setname,	      .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
 	[STATUS]  = { .name = "status",	 .cb = setstatus,     .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
 	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outisfolder = 1, .dirfd = -1, .fd = {-1, -1, -1} },
+	[NOSPAM]  = { .name = "nospam",  .cb = setnospam,     .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} }
 };
 
 enum {
@@ -749,7 +753,7 @@ localinit(void)
 	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
 	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
 	DIR *d;
-	int r, fd;
+	int r;
 	size_t i, m;
 
 	for (i = 0; i < LEN(gslots); i++) {
@@ -803,14 +807,17 @@ localinit(void)
 	dprintf(gslots[STATUS].fd[OUT], "%s\n", status);
 
 	/* Dump ID */
-	fd = open("id", O_WRONLY | O_CREAT, 0644);
-	if (fd < 0)
+	idfd = open("id", O_WRONLY | O_CREAT, 0644);
+	if (idfd < 0)
 		eprintf("open %s:", "id");
 	tox_get_address(tox, address);
 	for (i = 0; i < TOX_FRIEND_ADDRESS_SIZE; i++)
-		dprintf(fd, "%02X", address[i]);
-	dprintf(fd, "\n");
-	close(fd);
+		dprintf(idfd, "%02X", address[i]);
+	dprintf(idfd, "\n");
+
+	/* Dump Nospam */
+	ftruncate(gslots[NOSPAM].fd[OUT], 0);
+	dprintf(gslots[NOSPAM].fd[OUT], "%X\n", tox_get_nospam(tox));
 
 	return 0;
 }
@@ -1076,8 +1083,45 @@ sendfriendreq(void *data)
 		dprintf(gslots[REQUEST].fd[ERR], "%s\n", reqerr[-r]);
 		return;
 	}
-	printout("Request > Sent\n");
 	datasave();
+	printout("Request > Sent\n");
+}
+
+static void
+setnospam(void *data)
+{
+	uint8_t nospam[2 * sizeof(uint32_t) + 1];
+	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
+	ssize_t n, i;
+
+	n = fiforead(gslots[NOSPAM].dirfd, &gslots[NOSPAM].fd[IN], gfiles[IN],
+	             nospam, sizeof(nospam) - 1);
+	if (n <= 0)
+		return;
+	if (nospam[n - 1] == '\n')
+		n--;
+	nospam[n] = '\0';
+
+	for (i = 0; i < n - 1; i++) {
+		if (nospam[i] < 48 || (nospam[i] > 57 && nospam[i] < 65) || nospam[i] > 70) {
+			dprintf(gslots[NOSPAM].fd[ERR], "Input contains invalid characters ![0-9, A-F]\n");
+			goto end;
+		}
+	}
+
+	tox_set_nospam(tox, strtol((char *)nospam, NULL, 16));
+	datasave();
+	printout("Nospam > %s\n", nospam);
+	ftruncate(gslots[NOSPAM].fd[OUT], 0);
+	dprintf(gslots[NOSPAM].fd[OUT], "%s\n", nospam);
+
+	tox_get_address(tox, address);
+	ftruncate(idfd, 0);
+	for (i = 0; i < TOX_FRIEND_ADDRESS_SIZE; i++)
+		dprintf(idfd, "%02X", address[i]);
+	dprintf(idfd, "\n");
+end:
+	fiforeset(gslots[NOSPAM].dirfd, &gslots[NOSPAM].fd[IN], gfiles[IN]);
 }
 
 static void
@@ -1328,6 +1372,8 @@ shutdown(void)
 		rmdir(gslots[i].name);
 	}
 	unlink("id");
+	if (idfd != -1)
+		close(idfd);
 
 	tox_kill(tox);
 }
