@@ -298,7 +298,7 @@ cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->num == frnum) {
 			ftruncate(f->fd[FONLINE], 0);
-			dprintf(f->fd[FONLINE], status == 0 ? "0\n" : "1\n");
+			dprintf(f->fd[FONLINE], "%d\n", status);
 			return;
 		}
 	}
@@ -945,8 +945,8 @@ friendcreate(int32_t frnum)
 	dprintf(f->fd[FNAME], "%s\n", f->name);
 
 	ftruncate(f->fd[FONLINE], 0);
-	dprintf(f->fd[FONLINE], "%s\n",
-		tox_get_friend_connection_status(tox, frnum) == 0 ? "0" : "1");
+	dprintf(f->fd[FONLINE], "%d\n",
+		tox_get_friend_connection_status(tox, frnum));
 
 	r = tox_get_status_message_size(tox, frnum);
 	if (r > sizeof(status) - 1)
