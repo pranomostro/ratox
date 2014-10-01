@@ -1354,7 +1354,7 @@ setnospam(void *data)
 	nospam[n] = '\0';
 
 	for (i = 0; i < n - 1; i++) {
-		if (nospam[i] < 48 || (nospam[i] > 57 && nospam[i] < 65) || nospam[i] > 70) {
+		if (nospam[i] < '0' || (nospam[i] > '9' && nospam[i] < 'A') || nospam[i] > 'F') {
 			dprintf(gslots[NOSPAM].fd[ERR], "Input contains invalid characters ![0-9, A-F]\n");
 			goto end;
 		}
