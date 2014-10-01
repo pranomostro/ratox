@@ -27,10 +27,8 @@
 #include "util.h"
 
 #define DATAFILE ".ratox.data"
-
-enum {
-	CONNECTDELAY = 5, /* in seconds */
-};
+/* connection delay in seconds */
+#define CONNECTDELAY 5
 
 const char *reqerr[] = {
 	[-TOX_FAERR_TOOLONG]      = "Message is too long",
