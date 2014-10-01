@@ -772,7 +772,6 @@ cbfiledata(Tox *m, int32_t frnum, uint8_t fnum, const uint8_t *data, uint16_t le
 			} else if (errno == EWOULDBLOCK) {
 				continue;
 			}
-			weprintf("write:");
 			break;
 		} else if (n == 0) {
 			break;
