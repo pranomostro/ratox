@@ -1345,7 +1345,7 @@ setnospam(void *data)
 {
 	uint8_t nospam[2 * sizeof(uint32_t) + 1];
 	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
-	int32_t nsval;
+	uint32_t nsval;
 	ssize_t n, i;
 
 	n = fiforead(gslots[NOSPAM].dirfd, &gslots[NOSPAM].fd[IN], gfiles[IN],
@@ -1363,7 +1363,7 @@ setnospam(void *data)
 		}
 	}
 
-	nsval = strtol((char *)nospam, NULL, 16);
+	nsval = strtoul((char *)nospam, NULL, 16);
 	tox_set_nospam(tox, nsval);
 	datasave();
 	printout("Nospam > %08X\n", nsval);
