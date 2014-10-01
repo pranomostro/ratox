@@ -19,7 +19,7 @@ File structure
 In the following paragraph, / refers to the directory ratox has been started in.
 
 Global slots (name/, status/, request/, nospam/)
----------------------------------------
+------------------------------------------------
 
 Global slots allow you to change your name and status message and send and
 accept friend requests.  Each slot contains an in, out and err file or
