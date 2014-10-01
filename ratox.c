@@ -1041,7 +1041,7 @@ localinit(void)
 
 	/* Dump Nospam */
 	ftruncate(gslots[NOSPAM].fd[OUT], 0);
-	dprintf(gslots[NOSPAM].fd[OUT], "%X\n", tox_get_nospam(tox));
+	dprintf(gslots[NOSPAM].fd[OUT], "%08X\n", tox_get_nospam(tox));
 
 	return 0;
 }
