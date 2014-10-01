@@ -480,6 +480,7 @@ cbcalldata(ToxAv *av, int32_t cnum, int16_t *data, int len, void *udata)
 		return;
 
 	buf = (uint8_t *)data;
+	len *= 2;
 	while (len > 0) {
 		n = write(f->fd[FCALL_OUT], &buf[wrote], len);
 		if (n < 0) {
