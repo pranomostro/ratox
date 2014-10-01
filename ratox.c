@@ -549,12 +549,17 @@ cbfiledata(Tox *m, int32_t frnum, uint8_t fnum, const uint8_t *data, uint16_t le
 	while (len > 0) {
 		n = write(f->fd[FFILE_OUT], &data[wrote], len);
 		if (n < 0) {
-			if (errno == EPIPE)
+			if (errno == EPIPE) {
 				cancelrxtransfer(f);
-			if (errno == EWOULDBLOCK)
+				break;
+			} else if (errno == EWOULDBLOCK) {
 				continue;
-		} else if (n == 0)
+			}
+			weprintf("write:");
 			break;
+		} else if (n == 0) {
+			break;
+		}
 		wrote += n;
 		len -= n;
 	}
