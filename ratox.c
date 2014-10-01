@@ -28,6 +28,10 @@
 
 #define DATAFILE ".ratox.data"
 
+enum {
+	CONNECTDELAY = 5, /* in seconds */
+};
+
 const char *reqerr[] = {
 	[-TOX_FAERR_TOOLONG]      = "Message is too long",
 	[-TOX_FAERR_NOMESSAGE]    = "Please add a message to your request",
@@ -1409,7 +1413,7 @@ loop(void)
 				connected = 0;
 			}
 			t1 = time(NULL);
-			if (t1 > t0 + 5) {
+			if (t1 > t0 + CONNECTDELAY) {
 				t0 = time(NULL);
 				printout("DHT > Connecting\n");
 				toxconnect();
