@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include <tox/tox.h>
+#include <tox/toxav.h>
 #include <tox/toxencryptsave.h>
 
 #include "arg.h"
@@ -111,6 +112,8 @@ enum {
 	FSTATUS,
 	FTEXT_OUT,
 	FFILE_PENDING,
+	FCALL_OUT,
+	FCALL_PENDING,
 };
 
 static struct file ffiles[] = {
@@ -123,6 +126,8 @@ static struct file ffiles[] = {
 	[FSTATUS]       = { .type = STATIC, .name = "status",       .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 	[FTEXT_OUT]     = { .type = STATIC, .name = "text_out",     .flags = O_WRONLY | O_APPEND | O_CREAT },
 	[FFILE_PENDING] = { .type = STATIC, .name = "file_pending", .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[FCALL_OUT]     = { .type = FIFO,   .name = "call_out",     .flags = O_WRONLY | O_NONBLOCK         },
+	[FCALL_PENDING] = { .type = STATIC, .name = "call_pending", .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 };
 
 enum {
@@ -150,6 +155,7 @@ struct friend {
 	int fd[LEN(ffiles)];
 	struct transfer tx;
 	int rxstate;
+	ToxAvCallState avstate;
 	TAILQ_ENTRY(friend) entry;
 };
 
@@ -165,6 +171,8 @@ static TAILQ_HEAD(friendhead, friend) friendhead = TAILQ_HEAD_INITIALIZER(friend
 static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
 
 static Tox *tox;
+static ToxAv *toxav;
+static ToxAvCSettings toxavconfig;
 static Tox_Options toxopt;
 static uint8_t *passphrase;
 static uint32_t pplen;
@@ -177,6 +185,18 @@ static void printrat(void);
 static void printout(const char *, ...);
 static void fiforeset(int, int *, struct file);
 static ssize_t fiforead(int, int *, struct file, void *, size_t);
+static void cbcallstarted(void *, int32_t, void *);
+static void cbcallcancelled(void *, int32_t, void *);
+static void cbcallrejected(void *, int32_t, void *);
+static void cbcallended(void *, int32_t, void *);
+static void cbrecvinvite(void *, int32_t, void *);
+static void cbrecvringing(void *, int32_t, void *);
+static void cbrecvstarting(void *, int32_t, void *);
+static void cbrecvending(void *, int32_t, void *);
+static void cbreqtimeout(void *, int32_t, void *);
+static void cbpeertimeout(void *, int32_t, void *);
+static void cbcalltypechange(void *, int32_t, void *);
+static void cbcalldata(ToxAv *, int32_t, int16_t *, int, void *);
 static void cbconnstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfriendmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
@@ -279,6 +299,203 @@ again:
 		eprintf("read %s:", f.name);
 	}
 	return r;
+}
+
+static void
+cbcallstarted(void *av, int32_t cnum, void *udata)
+{
+	ToxAvCSettings avconfig;
+	struct friend *f;
+	int32_t fnum;
+	int r;
+
+	fnum = toxav_get_peer_id(toxav, cnum, 0);
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->num == fnum)
+			break;
+	if (!f)
+		return;
+
+	r = toxav_get_peer_csettings(toxav, cnum, 0, &avconfig);
+	if (r < 0) {
+		weprintf("Failed to determine peer call type\n");
+		return;
+	}
+
+	switch (avconfig.call_type) {
+	case TypeVideo:
+		printout(": %s : Rx AV > Started call without video\n", f->name);
+		break;
+	case TypeAudio:
+		printout(": %s : Rx AV > Started audio call\n", f->name);
+		break;
+	}
+
+	toxav_prepare_transmission(toxav, cnum, av_jbufdc, av_VADd, 0);
+
+	f->avstate = av_CallActive;
+}
+
+static void
+cbcallcancelled(void *av, int32_t cnum, void *udata)
+{
+	struct friend *f;
+	int32_t fnum;
+
+	fnum = toxav_get_peer_id(toxav, cnum, 0);
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->num == fnum)
+			break;
+	if (!f)
+		return;
+
+	printout(": %s : Rx AV > Cancelled\n", f->name);
+	f->avstate = av_CallNonExistant;
+	if (f->fd[FCALL_OUT] != -1) {
+		close(f->fd[FCALL_OUT]);
+		f->fd[FCALL_OUT] = -1;
+	}
+	ftruncate(f->fd[FCALL_PENDING], 0);
+	dprintf(f->fd[FCALL_PENDING], "0\n");
+}
+
+static void
+cbcallrejected(void *av, int32_t cnum, void *udata)
+{
+	printf("Entered %s\n", __func__);
+}
+
+static void
+cbcallended(void *av, int32_t cnum, void *udata)
+{
+	struct friend *f;
+	int32_t fnum;
+
+	fnum = toxav_get_peer_id(toxav, cnum, 0);
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->num == fnum)
+			break;
+	if (!f)
+		return;
+
+	printout(": %s : Rx AV > Ended call\n", f->name);
+	f->avstate = av_CallNonExistant;
+	if (f->fd[FCALL_OUT] != -1) {
+		close(f->fd[FCALL_OUT]);
+		f->fd[FCALL_OUT] = -1;
+	}
+	ftruncate(f->fd[FCALL_PENDING], 0);
+	dprintf(f->fd[FCALL_PENDING], "0\n");
+}
+
+static void
+cbrecvinvite(void *av, int32_t cnum, void *udata)
+{
+	ToxAvCSettings avconfig;
+	struct friend *f;
+	int32_t fnum;
+	int r;
+
+	fnum = toxav_get_peer_id(toxav, cnum, 0);
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->num == fnum)
+			break;
+	if (!f)
+		return;
+
+	r = toxav_get_peer_csettings(toxav, cnum, 0, &avconfig);
+	if (r < 0) {
+		weprintf("Failed to determine peer call type\n");
+		return;
+	}
+
+	switch (avconfig.call_type) {
+	case TypeVideo:
+		printout(": %s : Rx AV > Inviting with video\n", f->name);
+		break;
+	case TypeAudio:
+		printout(": %s : Rx AV > Inviting without video\n", f->name);
+		break;
+	}
+
+	printout(": %s : Rx AV > Audio call settings: srate = %lu, channels = %lu\n",
+		 f->name, avconfig.audio_sample_rate, avconfig.audio_channels);
+
+	ftruncate(f->fd[FCALL_PENDING], 0);
+	dprintf(f->fd[FCALL_PENDING], "1\n");
+
+	f->avstate = av_CallStarting;
+}
+
+static void
+cbrecvringing(void *av, int32_t cnum, void *udata)
+{
+	printf("Entered %s\n", __func__);
+}
+
+static void
+cbrecvstarting(void *av, int32_t cnum, void *udata)
+{
+	printf("Entered %s\n", __func__);
+}
+
+static void
+cbrecvending(void *av, int32_t cnum, void *udata)
+{
+	printf("Entered %s\n", __func__);
+}
+
+static void
+cbreqtimeout(void *av, int32_t cnum, void *udata)
+{
+	printf("Entered %s\n", __func__);
+}
+
+static void
+cbpeertimeout(void *av, int32_t cnum, void *udata)
+{
+	printf("Entered %s\n", __func__);
+}
+
+static void
+cbcalltypechange(void *av, int32_t cnum, void *udata)
+{
+	printf("Entered %s\n", __func__);
+}
+
+static void
+cbcalldata(ToxAv *av, int32_t cnum, int16_t *data, int len, void *udata)
+{
+	struct friend *f;
+	uint8_t *buf;
+	int wrote = 0;
+	ssize_t n;
+	int32_t fnum;
+
+	fnum = toxav_get_peer_id(toxav, cnum, 0);
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->num == fnum)
+			break;
+	if (!f)
+		return;
+
+	buf = (uint8_t *)data;
+	while (len > 0) {
+		n = write(f->fd[FCALL_OUT], &buf[wrote], len);
+		if (n < 0) {
+			if (errno == EPIPE) {
+				/* TODO: terminate call here */
+				break;
+			} else if (errno == EWOULDBLOCK) {
+				continue;
+			}
+			break;
+		} else if (n == 0) {
+			break;
+		}
+		wrote += n;
+		len -= n;
+	}
 }
 
 static void
@@ -850,6 +1067,12 @@ toxinit(void)
 	dataload();
 	datasave();
 
+	toxav = toxav_new(tox, 1);
+	if (!toxav)
+		eprintf("Failed to initialize toxav\n");
+
+	toxavconfig = av_DefaultSettings;
+
 	tox_callback_connection_status(tox, cbconnstatus, NULL);
 	tox_callback_friend_message(tox, cbfriendmessage, NULL);
 	tox_callback_friend_request(tox, cbfriendrequest, NULL);
@@ -859,6 +1082,22 @@ toxinit(void)
 	tox_callback_file_control(tox, cbfilecontrol, NULL);
 	tox_callback_file_send_request(tox, cbfilesendreq, NULL);
 	tox_callback_file_data(tox, cbfiledata, NULL);
+
+	toxav_register_callstate_callback(toxav, cbcallstarted, av_OnStart, NULL);
+	toxav_register_callstate_callback(toxav, cbcallcancelled, av_OnCancel, NULL);
+	toxav_register_callstate_callback(toxav, cbcallrejected, av_OnReject, NULL);
+	toxav_register_callstate_callback(toxav, cbcallended, av_OnEnd, NULL);
+
+	toxav_register_callstate_callback(toxav, cbrecvinvite, av_OnInvite, NULL);
+	toxav_register_callstate_callback(toxav, cbrecvringing, av_OnRinging, NULL);
+	toxav_register_callstate_callback(toxav, cbrecvstarting, av_OnStarting, NULL);
+	toxav_register_callstate_callback(toxav, cbrecvending, av_OnEnding, NULL);
+
+	toxav_register_callstate_callback(toxav, cbreqtimeout, av_OnRequestTimeout, NULL);
+	toxav_register_callstate_callback(toxav, cbpeertimeout, av_OnPeerTimeout, NULL);
+	toxav_register_callstate_callback(toxav, cbcalltypechange, av_OnMediaChange, NULL);
+
+	toxav_register_audio_recv_callback(toxav, cbcalldata, NULL);
 
 	return 0;
 }
@@ -970,6 +1209,11 @@ friendcreate(int32_t frnum)
 
 	ftruncate(f->fd[FFILE_PENDING], 0);
 
+	ftruncate(f->fd[FCALL_PENDING], 0);
+	dprintf(f->fd[FCALL_PENDING], "0\n");
+
+	f->avstate = av_CallNonExistant;
+
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
 
 	return f;
@@ -982,6 +1226,8 @@ frienddestroy(struct friend *f)
 
 	canceltxtransfer(f);
 	cancelrxtransfer(f);
+	if (f->avstate != av_CallNonExistant)
+		toxav_kill_transmission(toxav, 0);
 	for (i = 0; i < LEN(ffiles); i++) {
 		if (f->dirfd != -1) {
 			unlinkat(f->dirfd, ffiles[i].name, 0);
@@ -1267,6 +1513,25 @@ loop(void)
 			}
 		}
 
+		/* Answer pending calls */
+		TAILQ_FOREACH(f, &friendhead, entry) {
+			if (tox_get_friend_connection_status(tox, f->num) == 0)
+				continue;
+			if (f->avstate != av_CallStarting)
+				continue;
+			if (f->fd[FCALL_OUT] == -1) {
+				r = openat(f->dirfd, ffiles[FCALL_OUT].name,
+					   ffiles[FCALL_OUT].flags, 0644);
+				if (r < 0) {
+					if (errno != ENXIO)
+						eprintf("openat %s:", ffiles[FCALL_OUT].name);
+				} else {
+					f->fd[FCALL_OUT] = r;
+					toxav_answer(toxav, 0, &toxavconfig);
+				}
+			}
+		}
+
 		if (n == 0)
 			continue;
 
@@ -1380,6 +1645,7 @@ shutdown(void)
 	if (idfd != -1)
 		close(idfd);
 
+	toxav_kill(toxav);
 	tox_kill(tox);
 }
 
