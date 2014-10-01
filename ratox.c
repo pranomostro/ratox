@@ -1345,6 +1345,7 @@ setnospam(void *data)
 {
 	uint8_t nospam[2 * sizeof(uint32_t) + 1];
 	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
+	int32_t nsval;
 	ssize_t n, i;
 
 	n = fiforead(gslots[NOSPAM].dirfd, &gslots[NOSPAM].fd[IN], gfiles[IN],
@@ -1355,18 +1356,19 @@ setnospam(void *data)
 		n--;
 	nospam[n] = '\0';
 
-	for (i = 0; i < n - 1; i++) {
+	for (i = 0; i < n; i++) {
 		if (nospam[i] < '0' || (nospam[i] > '9' && nospam[i] < 'A') || nospam[i] > 'F') {
 			dprintf(gslots[NOSPAM].fd[ERR], "Input contains invalid characters ![0-9, A-F]\n");
 			goto end;
 		}
 	}
 
-	tox_set_nospam(tox, strtol((char *)nospam, NULL, 16));
+	nsval = strtol((char *)nospam, NULL, 16);
+	tox_set_nospam(tox, nsval);
 	datasave();
-	printout("Nospam > %s\n", nospam);
+	printout("Nospam > %08X\n", nsval);
 	ftruncate(gslots[NOSPAM].fd[OUT], 0);
-	dprintf(gslots[NOSPAM].fd[OUT], "%s\n", nospam);
+	dprintf(gslots[NOSPAM].fd[OUT], "%08X\n", nsval);
 
 	tox_get_address(tox, address);
 	ftruncate(idfd, 0);
