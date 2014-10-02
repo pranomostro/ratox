@@ -199,6 +199,7 @@ static void cbreqtimeout(void *, int32_t, void *);
 static void cbpeertimeout(void *, int32_t, void *);
 static void cbcalltypechange(void *, int32_t, void *);
 static void cbcalldata(ToxAv *, int32_t, int16_t *, int, void *);
+static void cancelrxcall(struct friend *, char *);
 static void cbconnstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfriendmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
@@ -390,14 +391,7 @@ cbcallended(void *av, int32_t cnum, void *udata)
 	if (!f)
 		return;
 
-	printout(": %s : Rx AV > Ended call\n", f->name);
-	f->avstate = av_CallNonExistant;
-	if (f->fd[FCALL_OUT] != -1) {
-		close(f->fd[FCALL_OUT]);
-		f->fd[FCALL_OUT] = -1;
-	}
-	ftruncate(f->fd[FCALL_PENDING], 0);
-	dprintf(f->fd[FCALL_PENDING], "0\n");
+	cancelrxcall(f, "Ended");
 }
 
 static void
@@ -413,14 +407,7 @@ cbcallcancelled(void *av, int32_t cnum, void *udata)
 	if (!f)
 		return;
 
-	printout(": %s : Rx AV > Cancelled\n", f->name);
-	f->avstate = av_CallNonExistant;
-	if (f->fd[FCALL_OUT] != -1) {
-		close(f->fd[FCALL_OUT]);
-		f->fd[FCALL_OUT] = -1;
-	}
-	ftruncate(f->fd[FCALL_PENDING], 0);
-	dprintf(f->fd[FCALL_PENDING], "0\n");
+	cancelrxcall(f, "Cancelled");
 }
 
 static void
@@ -500,6 +487,20 @@ cbcalldata(ToxAv *av, int32_t cnum, int16_t *data, int len, void *udata)
 		len -= n;
 	}
 }
+
+static void
+cancelrxcall(struct friend *f, char *action)
+{
+	printout(": %s : Rx AV > %s\n", f->name, action);
+	f->avstate = av_CallNonExistant;
+	if (f->fd[FCALL_OUT] != -1) {
+		close(f->fd[FCALL_OUT]);
+		f->fd[FCALL_OUT] = -1;
+	}
+	ftruncate(f->fd[FCALL_PENDING], 0);
+	dprintf(f->fd[FCALL_PENDING], "0\n");
+}
+
 
 static void
 cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
