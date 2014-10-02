@@ -1203,7 +1203,7 @@ friendcreate(int32_t frnum)
 	dprintf(f->fd[FONLINE], "%d\n",
 		tox_get_friend_connection_status(tox, frnum));
 
-	r = tox_get_status_message_size(tox, frnum);
+	r = tox_get_status_message(tox, frnum, status, sizeof(status) - 1);
 	if (r > sizeof(status) - 1)
 		r = sizeof(status) - 1;
 	status[r] = '\0';
