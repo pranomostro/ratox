@@ -1662,7 +1662,7 @@ usage(void)
 	fprintf(stderr, " -6\tIPv6 only\n");
 	fprintf(stderr, " -t\tEnable TCP mode (UDP by default)\n");
 	fprintf(stderr, " -p\tEnable TCP socks5 proxy\n");
-	exit(EXIT_FAILURE);
+	exit(1);
 }
 
 int
@@ -1699,5 +1699,5 @@ main(int argc, char *argv[])
 	friendload();
 	loop();
 	shutdown();
-	return EXIT_SUCCESS;
+	return 0;
 }
