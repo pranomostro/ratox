@@ -474,7 +474,8 @@ cbcalldata(ToxAv *av, int32_t cnum, int16_t *data, int len, void *udata)
 		n = write(f->fd[FCALL_OUT], &buf[wrote], len);
 		if (n < 0) {
 			if (errno == EPIPE) {
-				/* TODO: terminate call here */
+				toxav_hangup(toxav, 0);
+				cancelrxcall(f, "Hangup");
 				break;
 			} else if (errno == EWOULDBLOCK) {
 				continue;
@@ -500,7 +501,6 @@ cancelrxcall(struct friend *f, char *action)
 	ftruncate(f->fd[FCALL_PENDING], 0);
 	dprintf(f->fd[FCALL_PENDING], "0\n");
 }
-
 
 static void
 cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
