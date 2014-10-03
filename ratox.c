@@ -275,7 +275,7 @@ fiforeset(int dirfd, int *fd, struct file f)
 	unlinkat(dirfd, f.name, 0);
 	if (*fd != -1)
 		close(*fd);
-	r = mkfifoat(dirfd, f.name, 0644);
+	r = mkfifoat(dirfd, f.name, 0666);
 	if (r < 0 && errno != EEXIST)
 		eprintf("mkfifoat %s:", f.name);
 	r = openat(dirfd, f.name, f.flags);
@@ -937,7 +937,7 @@ datasave(void)
 	uint8_t *data;
 	int fd;
 
-	fd = open(DATAFILE, O_WRONLY | O_TRUNC | O_CREAT , 0644);
+	fd = open(DATAFILE, O_WRONLY | O_TRUNC | O_CREAT , 0666);
 	if (fd < 0)
 		eprintf("open %s:", DATAFILE);
 
@@ -984,7 +984,7 @@ localinit(void)
 			if (gfiles[m].type == FIFO) {
 				fiforeset(gslots[i].dirfd, &gslots[i].fd[m], gfiles[m]);
 			} else if (gfiles[m].type == STATIC || (gfiles[m].type == NONE && !gslots[i].outisfolder)) {
-				r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0644);
+				r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0666);
 				if (r < 0)
 					eprintf("openat %s:", gfiles[m].name);
 				gslots[i].fd[m] = r;
@@ -1019,7 +1019,7 @@ localinit(void)
 	dprintf(gslots[STATUS].fd[OUT], "%s\n", status);
 
 	/* Dump ID */
-	idfd = open("id", O_WRONLY | O_CREAT, 0644);
+	idfd = open("id", O_WRONLY | O_CREAT, 0666);
 	if (idfd < 0)
 		eprintf("open %s:", "id");
 	tox_get_address(tox, address);
@@ -1178,7 +1178,7 @@ friendcreate(int32_t frnum)
 		if (ffiles[i].type == FIFO) {
 			fiforeset(f->dirfd, &f->fd[i], ffiles[i]);
 		} else if (ffiles[i].type == STATIC) {
-			r = openat(f->dirfd, ffiles[i].name, ffiles[i].flags, 0644);
+			r = openat(f->dirfd, ffiles[i].name, ffiles[i].flags, 0666);
 			if (r < 0)
 				eprintf("openat %s:", ffiles[i].name);
 			f->fd[i] = r;
@@ -1491,7 +1491,7 @@ loop(void)
 				continue;
 			if (f->fd[FFILE_OUT] == -1) {
 				r = openat(f->dirfd, ffiles[FFILE_OUT].name,
-					   ffiles[FFILE_OUT].flags, 0644);
+					   ffiles[FFILE_OUT].flags, 0666);
 				if (r < 0) {
 					if (errno != ENXIO)
 						eprintf("openat %s:", ffiles[FFILE_OUT].name);
@@ -1516,7 +1516,7 @@ loop(void)
 				continue;
 			if (f->fd[FCALL_OUT] == -1) {
 				r = openat(f->dirfd, ffiles[FCALL_OUT].name,
-					   ffiles[FCALL_OUT].flags, 0644);
+					   ffiles[FCALL_OUT].flags, 0666);
 				if (r < 0) {
 					if (errno != ENXIO)
 						eprintf("openat %s:", ffiles[FCALL_OUT].name);
