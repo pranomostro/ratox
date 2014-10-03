@@ -148,6 +148,11 @@ struct transfer {
 	int state;
 };
 
+struct call {
+	ToxAvCallState state;
+	int cnum;
+};
+
 struct friend {
 	char name[TOX_MAX_NAME_LENGTH + 1];
 	int32_t num;
@@ -157,7 +162,7 @@ struct friend {
 	int fd[LEN(ffiles)];
 	struct transfer tx;
 	int rxstate;
-	ToxAvCallState avstate;
+	struct call av;
 	TAILQ_ENTRY(friend) entry;
 };
 
@@ -319,6 +324,7 @@ cbcallinvite(void *av, int32_t cnum, void *udata)
 	if (!f)
 		return;
 
+	f->av.num = cnum;
 	r = toxav_get_peer_csettings(toxav, cnum, 0, &avconfig);
 	if (r < 0) {
 		weprintf("Failed to determine peer call type\n");
@@ -340,18 +346,16 @@ cbcallinvite(void *av, int32_t cnum, void *udata)
 	ftruncate(f->fd[FCALL_PENDING], 0);
 	dprintf(f->fd[FCALL_PENDING], "1\n");
 
-	f->avstate = av_CallStarting;
+	f->av.state = av_CallStarting;
 }
 
 static void
 cbcallstarted(void *av, int32_t cnum, void *udata)
 {
 	struct friend *f;
-	int32_t fnum;
 
-	fnum = toxav_get_peer_id(toxav, cnum, 0);
 	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->num == fnum)
+		if (f->av.num == cnum)
 			break;
 	if (!f)
 		return;
@@ -360,18 +364,16 @@ cbcallstarted(void *av, int32_t cnum, void *udata)
 
 	toxav_prepare_transmission(toxav, cnum, av_jbufdc, av_VADd, 0);
 
-	f->avstate = av_CallActive;
+	f->av.state = av_CallActive;
 }
 
 static void
 cbcallended(void *av, int32_t cnum, void *udata)
 {
 	struct friend *f;
-	int32_t fnum;
 
-	fnum = toxav_get_peer_id(toxav, cnum, 0);
 	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->num == fnum)
+		if (f->av.num == cnum)
 			break;
 	if (!f)
 		return;
@@ -383,11 +385,9 @@ static void
 cbcallcancelled(void *av, int32_t cnum, void *udata)
 {
 	struct friend *f;
-	int32_t fnum;
 
-	fnum = toxav_get_peer_id(toxav, cnum, 0);
 	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->num == fnum)
+		if (f->av.num == cnum)
 			break;
 	if (!f)
 		return;
@@ -417,11 +417,9 @@ static void
 cbcallending(void *av, int32_t cnum, void *udata)
 {
 	struct friend *f;
-	int32_t fnum;
 
-	fnum = toxav_get_peer_id(toxav, cnum, 0);
 	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->num == fnum)
+		if (f->av.num == cnum)
 			break;
 	if (!f)
 		return;
@@ -454,11 +452,9 @@ cbcalldata(ToxAv *av, int32_t cnum, int16_t *data, int len, void *udata)
 	uint8_t *buf;
 	int wrote = 0;
 	ssize_t n;
-	int32_t fnum;
 
-	fnum = toxav_get_peer_id(toxav, cnum, 0);
 	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->num == fnum)
+		if (f->av.num == cnum)
 			break;
 	if (!f)
 		return;
@@ -469,7 +465,7 @@ cbcalldata(ToxAv *av, int32_t cnum, int16_t *data, int len, void *udata)
 		n = write(f->fd[FCALL_OUT], &buf[wrote], len);
 		if (n < 0) {
 			if (errno == EPIPE) {
-				toxav_hangup(toxav, 0);
+				toxav_hangup(toxav, f->av.num);
 				break;
 			} else if (errno == EWOULDBLOCK) {
 				continue;
@@ -487,7 +483,8 @@ static void
 cancelrxcall(struct friend *f, char *action)
 {
 	printout(": %s : Rx AV > %s\n", f->name, action);
-	f->avstate = av_CallNonExistant;
+	f->av.state = av_CallNonExistant;
+	f->av.num = -1;
 	if (f->fd[FCALL_OUT] != -1) {
 		close(f->fd[FCALL_OUT]);
 		f->fd[FCALL_OUT] = -1;
@@ -1209,7 +1206,8 @@ friendcreate(int32_t frnum)
 	ftruncate(f->fd[FCALL_PENDING], 0);
 	dprintf(f->fd[FCALL_PENDING], "0\n");
 
-	f->avstate = av_CallNonExistant;
+	f->av.state = av_CallNonExistant;
+	f->av.num = -1;
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
 
@@ -1223,8 +1221,8 @@ frienddestroy(struct friend *f)
 
 	canceltxtransfer(f);
 	cancelrxtransfer(f);
-	if (f->avstate != av_CallNonExistant)
-		toxav_kill_transmission(toxav, 0);
+	if (f->av.state != av_CallNonExistant)
+		toxav_kill_transmission(toxav, f->av.num);
 	for (i = 0; i < LEN(ffiles); i++) {
 		if (f->dirfd != -1) {
 			unlinkat(f->dirfd, ffiles[i].name, 0);
@@ -1516,7 +1514,7 @@ loop(void)
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			if (tox_get_friend_connection_status(tox, f->num) == 0)
 				continue;
-			if (f->avstate != av_CallStarting)
+			if (f->av.state != av_CallStarting)
 				continue;
 			if (f->fd[FCALL_OUT] == -1) {
 				r = openat(f->dirfd, ffiles[FCALL_OUT].name,
@@ -1526,7 +1524,7 @@ loop(void)
 						eprintf("openat %s:", ffiles[FCALL_OUT].name);
 				} else {
 					f->fd[FCALL_OUT] = r;
-					toxav_answer(toxav, 0, &toxavconfig);
+					toxav_answer(toxav, f->av.num, &toxavconfig);
 				}
 			}
 		}
