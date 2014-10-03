@@ -1109,6 +1109,7 @@ toxconnect(void)
 	return 0;
 }
 
+/* Caller has to ensure `idstr' is big enough */
 static void
 id2str(uint8_t *id, char *idstr)
 {
@@ -1122,6 +1123,7 @@ id2str(uint8_t *id, char *idstr)
 	*idstr = '\0';
 }
 
+/* Caller has to ensure that `id' is big enough */
 static void
 str2id(char *idstr, uint8_t *id)
 {
