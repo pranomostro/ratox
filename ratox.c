@@ -346,10 +346,8 @@ cbcallinvite(void *av, int32_t cnum, void *udata)
 static void
 cbcallstarted(void *av, int32_t cnum, void *udata)
 {
-	ToxAvCSettings avconfig;
 	struct friend *f;
 	int32_t fnum;
-	int r;
 
 	fnum = toxav_get_peer_id(toxav, cnum, 0);
 	TAILQ_FOREACH(f, &friendhead, entry)
@@ -358,20 +356,7 @@ cbcallstarted(void *av, int32_t cnum, void *udata)
 	if (!f)
 		return;
 
-	r = toxav_get_peer_csettings(toxav, cnum, 0, &avconfig);
-	if (r < 0) {
-		weprintf("Failed to determine peer call type\n");
-		return;
-	}
-
-	switch (avconfig.call_type) {
-	case TypeVideo:
-		printout(": %s : Rx AV > Started call without video\n", f->name);
-		break;
-	case TypeAudio:
-		printout(": %s : Rx AV > Started audio call\n", f->name);
-		break;
-	}
+	printout(": %s : Rx AV > Started\n", f->name);
 
 	toxav_prepare_transmission(toxav, cnum, av_jbufdc, av_VADd, 0);
 
