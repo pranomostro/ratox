@@ -431,7 +431,17 @@ cbcallstarting(void *av, int32_t cnum, void *udata)
 static void
 cbcallending(void *av, int32_t cnum, void *udata)
 {
-	printf("Entered %s\n", __func__);
+	struct friend *f;
+	int32_t fnum;
+
+	fnum = toxav_get_peer_id(toxav, cnum, 0);
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->num == fnum)
+			break;
+	if (!f)
+		return;
+
+	cancelrxcall(f, "Ending");
 }
 
 static void
@@ -475,7 +485,6 @@ cbcalldata(ToxAv *av, int32_t cnum, int16_t *data, int len, void *udata)
 		if (n < 0) {
 			if (errno == EPIPE) {
 				toxav_hangup(toxav, 0);
-				cancelrxcall(f, "Hangup");
 				break;
 			} else if (errno == EWOULDBLOCK) {
 				continue;
