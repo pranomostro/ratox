@@ -150,7 +150,7 @@ struct transfer {
 
 struct call {
 	ToxAvCallState state;
-	int cnum;
+	int num;
 };
 
 struct friend {
