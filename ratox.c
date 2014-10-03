@@ -26,11 +26,6 @@
 #include "readpassphrase.h"
 #include "util.h"
 
-#define DATAFILE ".ratox.data"
-/* connection delay in seconds */
-#define CONNECTDELAY 5
-#define MAXCALLS 3
-
 const char *reqerr[] = {
 	[-TOX_FAERR_TOOLONG]      = "Message is too long",
 	[-TOX_FAERR_NOMESSAGE]    = "Please add a message to your request",
