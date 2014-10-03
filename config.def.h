@@ -2,7 +2,7 @@
 #define DATAFILE ".ratox.data"
 /* connection delay in seconds */
 #define CONNECTDELAY 5
-#define MAXCALLS 3
+#define MAXCALLS 8
 
 static int encryptdatafile = 0;
 
