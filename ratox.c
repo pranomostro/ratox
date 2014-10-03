@@ -29,6 +29,7 @@
 #define DATAFILE ".ratox.data"
 /* connection delay in seconds */
 #define CONNECTDELAY 5
+#define MAXCALLS 3
 
 const char *reqerr[] = {
 	[-TOX_FAERR_TOOLONG]      = "Message is too long",
@@ -1061,7 +1062,7 @@ toxinit(void)
 	dataload();
 	datasave();
 
-	toxav = toxav_new(tox, 1);
+	toxav = toxav_new(tox, MAXCALLS);
 	if (!toxav)
 		eprintf("Failed to initialize toxav\n");
 
