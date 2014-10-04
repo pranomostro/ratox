@@ -551,8 +551,8 @@ sendfriendcalldata(struct friend *f)
 	ssize_t n, payloadsize;
 
 	n = fiforead(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN],
-	             f->av.frame + f->av.incompleteframe * f->av.n,
-	             framesize * sizeof(int16_t) - f->av.incompleteframe * f->av.n);
+		     f->av.frame + f->av.incompleteframe * f->av.n,
+		     framesize * sizeof(int16_t) - f->av.incompleteframe * f->av.n);
 	if (n == 0) {
 		memset(f->av.frame + f->av.incompleteframe * f->av.n, 0,
 		       framesize * sizeof(int16_t) - f->av.incompleteframe * f->av.n);
@@ -567,8 +567,8 @@ sendfriendcalldata(struct friend *f)
 	}
 
 	payloadsize = toxav_prepare_audio_frame(toxav, f->av.num,
-	                                         f->av.payload, sizeof(f->av.payload),
-	                                         (int16_t *)f->av.frame, framesize);
+						f->av.payload, sizeof(f->av.payload),
+						(int16_t *)f->av.frame, framesize);
 	if (payloadsize < 0)
 		eprintf("failed to encode payload\n");
 
@@ -582,7 +582,6 @@ sendfriendcalldata(struct friend *f)
 		f->av.state = av_CallNonExistant;
 		return;
 	}
-
 }
 
 static void
