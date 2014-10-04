@@ -103,28 +103,30 @@ static struct slot gslots[] = {
 enum {
 	FTEXT_IN,
 	FFILE_IN,
+	FCALL_IN,
+	FTEXT_OUT,
 	FFILE_OUT,
+	FCALL_OUT,
 	FREMOVE,
 	FONLINE,
 	FNAME,
 	FSTATUS,
-	FTEXT_OUT,
 	FFILE_PENDING,
-	FCALL_OUT,
 	FCALL_PENDING,
 };
 
 static struct file ffiles[] = {
 	[FTEXT_IN]      = { .type = FIFO,   .name = "text_in",      .flags = O_RDONLY | O_NONBLOCK         },
 	[FFILE_IN]      = { .type = FIFO,   .name = "file_in",      .flags = O_RDONLY | O_NONBLOCK         },
+	[FCALL_IN]      = { .type = FIFO,   .name = "call_in",      .flags = O_RDONLY | O_NONBLOCK         },
+	[FTEXT_OUT]     = { .type = STATIC, .name = "text_out",     .flags = O_WRONLY | O_APPEND | O_CREAT },
 	[FFILE_OUT]     = { .type = FIFO,   .name = "file_out",     .flags = O_WRONLY | O_NONBLOCK         },
+	[FCALL_OUT]     = { .type = FIFO,   .name = "call_out",     .flags = O_WRONLY | O_NONBLOCK         },
 	[FREMOVE]       = { .type = FIFO,   .name = "remove",       .flags = O_RDONLY | O_NONBLOCK         },
 	[FONLINE]       = { .type = STATIC, .name = "online",       .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 	[FNAME]         = { .type = STATIC, .name = "name",         .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 	[FSTATUS]       = { .type = STATIC, .name = "status",       .flags = O_WRONLY | O_TRUNC  | O_CREAT },
-	[FTEXT_OUT]     = { .type = STATIC, .name = "text_out",     .flags = O_WRONLY | O_APPEND | O_CREAT },
 	[FFILE_PENDING] = { .type = STATIC, .name = "file_pending", .flags = O_WRONLY | O_TRUNC  | O_CREAT },
-	[FCALL_OUT]     = { .type = FIFO,   .name = "call_out",     .flags = O_WRONLY | O_NONBLOCK         },
 	[FCALL_PENDING] = { .type = STATIC, .name = "call_pending", .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 };
 
@@ -145,8 +147,12 @@ struct transfer {
 };
 
 struct call {
-	ToxAvCallState state;
 	int num;
+	ToxAvCallState state;
+	uint8_t *frame;
+	uint8_t payload[RTP_PAYLOAD_SIZE];
+	ssize_t n;
+	int incompleteframe;
 };
 
 struct friend {
@@ -176,6 +182,7 @@ static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
 static Tox *tox;
 static ToxAv *toxav;
 static ToxAvCSettings toxavconfig;
+static int framesize;
 static Tox_Options toxopt;
 static uint8_t *passphrase;
 static uint32_t pplen;
@@ -201,6 +208,8 @@ static void cbpeertimeout(void *, int32_t, void *);
 static void cbcalltypechange(void *, int32_t, void *);
 static void cbcalldata(ToxAv *, int32_t, int16_t *, int, void *);
 static void cancelrxcall(struct friend *, char *);
+static void canceltxcall(struct friend *, char *);
+static void sendfriendcalldata(struct friend *);
 static void cbconnstatus(Tox *, int32_t, uint8_t, void *);
 static void cbfriendmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
@@ -375,6 +384,7 @@ cbcallended(void *av, int32_t cnum, void *udata)
 		return;
 
 	cancelrxcall(f, "Ended");
+	canceltxcall(f, "Ended");
 }
 
 static void
@@ -389,24 +399,49 @@ cbcallcancelled(void *av, int32_t cnum, void *udata)
 		return;
 
 	cancelrxcall(f, "Cancelled");
+	canceltxcall(f, "Cancelled");
 }
 
 static void
 cbcallrejected(void *av, int32_t cnum, void *udata)
 {
-	printf("Entered %s\n", __func__);
+	struct friend *f;
+
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->av.num == cnum)
+			break;
+	if (!f)
+		return;
+
+	canceltxcall(f, "Rejected");
 }
 
 static void
 cbcallringing(void *av, int32_t cnum, void *udata)
 {
-	printf("Entered %s\n", __func__);
+	return;
 }
 
 static void
 cbcallstarting(void *av, int32_t cnum, void *udata)
 {
-	printf("Entered %s\n", __func__);
+	struct friend *f;
+
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->av.num == cnum)
+			break;
+	if (!f)
+		return;
+
+	printout(" : %s : Tx AV > Started\n", f->name);
+
+	f->av.frame = malloc(sizeof(int16_t) * framesize);
+	if (!f->av.frame)
+		eprintf("malloc:");
+	f->av.n = 0;
+	f->av.incompleteframe = 0;
+	f->av.state = av_CallActive;
+	toxav_prepare_transmission(toxav, cnum, av_jbufdc, av_VADd, 0);
 }
 
 static void
@@ -421,11 +456,21 @@ cbcallending(void *av, int32_t cnum, void *udata)
 		return;
 
 	cancelrxcall(f, "Ending");
+	canceltxcall(f, "Ending");
 }
 
 static void
 cbreqtimeout(void *av, int32_t cnum, void *udata)
 {
+	struct friend *f;
+
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->av.num == cnum)
+			break;
+	if (!f)
+		return;
+	cancelrxcall(f, "Timeout");
+	canceltxcall(f, "Timeout");
 	printf("Entered %s\n", __func__);
 }
 
@@ -487,6 +532,57 @@ cancelrxcall(struct friend *f, char *action)
 	}
 	ftruncate(f->fd[FCALL_PENDING], 0);
 	dprintf(f->fd[FCALL_PENDING], "0\n");
+}
+
+static void
+canceltxcall(struct friend *f, char *action)
+{
+	printout(": %s : Tx AV > %s\n", f->name, action);
+	f->av.state = av_CallNonExistant;
+	f->av.num = -1;
+	free(f->av.frame);
+	f->av.frame = NULL;
+	fiforeset(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN]);
+}
+
+static void
+sendfriendcalldata(struct friend *f)
+{
+	ssize_t n, payloadsize;
+
+	n = fiforead(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN],
+	             f->av.frame + f->av.incompleteframe * f->av.n,
+	             framesize * sizeof(int16_t) - f->av.incompleteframe * f->av.n);
+	if (n == 0) {
+		memset(f->av.frame + f->av.incompleteframe * f->av.n, 0,
+		       framesize * sizeof(int16_t) - f->av.incompleteframe * f->av.n);
+	} else if (n == -1) {
+		return;
+	} else if (n == (framesize * sizeof(int16_t) - f->av.incompleteframe * f->av.n)) {
+		f->av.incompleteframe = 0;
+		f->av.n = 0;
+	} else {
+		f->av.n += n;
+		return;
+	}
+
+	payloadsize = toxav_prepare_audio_frame(toxav, f->av.num,
+	                                         f->av.payload, sizeof(f->av.payload),
+	                                         (int16_t *)f->av.frame, framesize);
+	if (payloadsize < 0)
+		eprintf("failed to encode payload\n");
+
+	toxav_send_audio(toxav, f->av.num, f->av.payload, payloadsize);
+
+	if (n == 0) {
+		cancelrxcall(f, "Ended");
+		canceltxcall(f, "Ended");
+		toxav_kill_transmission(toxav, f->av.num);
+		toxav_hangup(toxav, f->av.num);
+		f->av.state = av_CallNonExistant;
+		return;
+	}
+
 }
 
 static void
@@ -1062,6 +1158,7 @@ toxinit(void)
 		eprintf("Failed to initialize toxav\n");
 
 	toxavconfig = av_DefaultSettings;
+	framesize = (toxavconfig.audio_sample_rate * toxavconfig.audio_frame_duration / 1000);
 
 	tox_callback_connection_status(tox, cbconnstatus, NULL);
 	tox_callback_friend_message(tox, cbfriendmessage, NULL);
@@ -1204,6 +1301,7 @@ friendcreate(int32_t frnum)
 	ftruncate(f->fd[FCALL_PENDING], 0);
 	dprintf(f->fd[FCALL_PENDING], "0\n");
 
+	free(f->av.frame);
 	f->av.state = av_CallNonExistant;
 	f->av.num = -1;
 
@@ -1433,12 +1531,18 @@ loop(void)
 				FD_SET(f->fd[FTEXT_IN], &rfds);
 				if (f->fd[FTEXT_IN] > fdmax)
 					fdmax = f->fd[FTEXT_IN];
-				if (f->tx.state == TRANSFER_INITIATED ||
-				    f->tx.state == TRANSFER_PAUSED)
-					continue;
-				FD_SET(f->fd[FFILE_IN], &rfds);
-				if (f->fd[FFILE_IN] > fdmax)
-					fdmax = f->fd[FFILE_IN];
+				if (f->tx.state == TRANSFER_NONE ||
+				    f->tx.state == TRANSFER_INPROGRESS) {
+					FD_SET(f->fd[FFILE_IN], &rfds);
+					if (f->fd[FFILE_IN] > fdmax)
+						fdmax = f->fd[FFILE_IN];
+				}
+				if (f->av.state == av_CallNonExistant ||
+				    f->av.state == av_CallActive) {
+					FD_SET(f->fd[FCALL_IN], &rfds);
+					if (f->fd[FCALL_IN] > fdmax)
+						fdmax = f->fd[FCALL_IN];
+				}
 			}
 			FD_SET(f->fd[FREMOVE], &rfds);
 			if (f->fd[FREMOVE] > fdmax)
@@ -1579,6 +1683,20 @@ loop(void)
 					break;
 				case TRANSFER_INPROGRESS:
 					sendfriendfile(f);
+					break;
+				}
+			}
+			if (FD_ISSET(f->fd[FCALL_IN], &rfds)) {
+				switch (f->av.state) {
+				case av_CallNonExistant:
+					toxav_call(toxav, &f->av.num, f->num, &toxavconfig, RINGINGDELAY);
+					f->av.state = av_CallInviting;
+					printout(": %s : Tx AV > Calling\n", f->name);
+					break;
+				case av_CallActive:
+					sendfriendcalldata(f);
+					break;
+				default:
 					break;
 				}
 			}
