@@ -242,7 +242,8 @@ static void initshutdown(int);
 static void shutdown(void);
 static void usage(void);
 
-static struct timespec timediff(struct timespec t1, struct timespec t2)
+static struct timespec
+timediff(struct timespec t1, struct timespec t2)
 {
 	struct timespec tmp;
 
