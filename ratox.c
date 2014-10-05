@@ -1320,7 +1320,6 @@ friendcreate(int32_t frnum)
 	ftruncate(f->fd[FCALL_PENDING], 0);
 	dprintf(f->fd[FCALL_PENDING], "0\n");
 
-	free(f->av.frame);
 	f->av.state = av_CallNonExistant;
 	f->av.num = -1;
 
@@ -1336,8 +1335,11 @@ frienddestroy(struct friend *f)
 
 	canceltxtransfer(f);
 	cancelrxtransfer(f);
-	if (f->av.state != av_CallNonExistant)
+	if (f->av.state != av_CallNonExistant) {
+		cancelrxcall(f, "Destroying");
+		canceltxcall(f, "Destroying");
 		toxav_kill_transmission(toxav, f->av.num);
+	}
 	for (i = 0; i < LEN(ffiles); i++) {
 		if (f->dirfd != -1) {
 			unlinkat(f->dirfd, ffiles[i].name, 0);
