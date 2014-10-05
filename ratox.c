@@ -203,6 +203,7 @@ static void cbcallrejected(void *, int32_t, void *);
 static void cbcallended(void *, int32_t, void *);
 static void cbcallinvite(void *, int32_t, void *);
 static void cbcallringing(void *, int32_t, void *);
+static void preparetxcall(struct friend *);
 static void cbcallstarting(void *, int32_t, void *);
 static void cbcallending(void *, int32_t, void *);
 static void cbreqtimeout(void *, int32_t, void *);
@@ -442,6 +443,21 @@ cbcallringing(void *av, int32_t cnum, void *udata)
 }
 
 static void
+preparetxcall(struct friend *f)
+{
+	if (f->av.frame)
+		return;
+	f->av.frame = malloc(sizeof(int16_t) * framesize);
+	if (!f->av.frame)
+		eprintf("malloc:");
+	f->av.n = 0;
+	f->av.incompleteframe = 0;
+	f->av.lastsent.tv_sec = 0;
+	f->av.lastsent.tv_nsec = 0;
+	f->av.state = av_CallActive;
+}
+
+static void
 cbcallstarting(void *av, int32_t cnum, void *udata)
 {
 	struct friend *f;
@@ -453,15 +469,7 @@ cbcallstarting(void *av, int32_t cnum, void *udata)
 		return;
 
 	printout(" : %s : Tx AV > Started\n", f->name);
-
-	f->av.frame = malloc(sizeof(int16_t) * framesize);
-	if (!f->av.frame)
-		eprintf("malloc:");
-	f->av.n = 0;
-	f->av.incompleteframe = 0;
-	f->av.lastsent.tv_sec = 0;
-	f->av.lastsent.tv_nsec = 0;
-	f->av.state = av_CallActive;
+	preparetxcall(f);
 	toxav_prepare_transmission(toxav, cnum, av_jbufdc, av_VADd, 0);
 }
 
@@ -571,6 +579,8 @@ sendfriendcalldata(struct friend *f)
 {
 	ssize_t n, payloadsize;
 	struct timespec now, diff;
+
+	preparetxcall(f);
 
 	n = fiforead(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN],
 		     f->av.frame + f->av.incompleteframe * f->av.n,
