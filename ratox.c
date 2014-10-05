@@ -153,6 +153,7 @@ struct call {
 	uint8_t payload[RTP_PAYLOAD_SIZE];
 	ssize_t n;
 	int incompleteframe;
+	struct timespec lastsent;
 };
 
 struct friend {
@@ -191,6 +192,7 @@ static int ipv6;
 static int tcpflag;
 static int proxyflag;
 
+static struct timespec timediff(struct timespec, struct timespec);
 static void printrat(void);
 static void printout(const char *, ...);
 static void fiforeset(int, int *, struct file);
@@ -239,6 +241,22 @@ static void loop(void);
 static void initshutdown(int);
 static void shutdown(void);
 static void usage(void);
+
+static struct timespec timediff(struct timespec t1, struct timespec t2)
+{
+	struct timespec tmp;
+
+	tmp.tv_sec = t2.tv_sec - t1.tv_sec;
+
+	if ((t2.tv_nsec - t1.tv_nsec) > 0) {
+		tmp.tv_nsec = (t2.tv_nsec - t1.tv_nsec);
+	} else {
+		tmp.tv_nsec = 1E9 - (t1.tv_nsec - t2.tv_nsec);
+		tmp.tv_sec--;
+	}
+
+	return tmp;
+}
 
 static void
 printrat(void)
@@ -440,6 +458,8 @@ cbcallstarting(void *av, int32_t cnum, void *udata)
 		eprintf("malloc:");
 	f->av.n = 0;
 	f->av.incompleteframe = 0;
+	f->av.lastsent.tv_sec = 0;
+	f->av.lastsent.tv_nsec = 0;
 	f->av.state = av_CallActive;
 	toxav_prepare_transmission(toxav, cnum, av_jbufdc, av_VADd, 0);
 }
@@ -549,13 +569,18 @@ static void
 sendfriendcalldata(struct friend *f)
 {
 	ssize_t n, payloadsize;
+	struct timespec now, diff;
 
 	n = fiforead(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN],
 		     f->av.frame + f->av.incompleteframe * f->av.n,
 		     framesize * sizeof(int16_t) - f->av.incompleteframe * f->av.n);
 	if (n == 0) {
-		memset(f->av.frame + f->av.incompleteframe * f->av.n, 0,
-		       framesize * sizeof(int16_t) - f->av.incompleteframe * f->av.n);
+		cancelrxcall(f, "Ended");
+		canceltxcall(f, "Ended");
+		toxav_kill_transmission(toxav, f->av.num);
+		toxav_hangup(toxav, f->av.num);
+		f->av.state = av_CallNonExistant;
+		return;
 	} else if (n == -1) {
 		return;
 	} else if (n == (framesize * sizeof(int16_t) - f->av.incompleteframe * f->av.n)) {
@@ -572,16 +597,14 @@ sendfriendcalldata(struct friend *f)
 	if (payloadsize < 0)
 		eprintf("failed to encode payload\n");
 
-	toxav_send_audio(toxav, f->av.num, f->av.payload, payloadsize);
-
-	if (n == 0) {
-		cancelrxcall(f, "Ended");
-		canceltxcall(f, "Ended");
-		toxav_kill_transmission(toxav, f->av.num);
-		toxav_hangup(toxav, f->av.num);
-		f->av.state = av_CallNonExistant;
-		return;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	diff = timediff(f->av.lastsent, now);
+	if (diff.tv_nsec == 0 && diff.tv_nsec < toxavconfig.audio_frame_duration * 1000) {
+		diff.tv_nsec = toxavconfig.audio_frame_duration * 1000 - diff.tv_nsec;
+		nanosleep(&diff, NULL);
 	}
+	f->av.lastsent = now;
+	toxav_send_audio(toxav, f->av.num, f->av.payload, payloadsize);
 }
 
 static void
