@@ -445,8 +445,6 @@ cbcallringing(void *av, int32_t cnum, void *udata)
 static void
 preparetxcall(struct friend *f)
 {
-	if (f->av.frame)
-		return;
 	f->av.frame = malloc(sizeof(int16_t) * framesize);
 	if (!f->av.frame)
 		eprintf("malloc:");
@@ -580,7 +578,8 @@ sendfriendcalldata(struct friend *f)
 	ssize_t n, payloadsize;
 	struct timespec now, diff;
 
-	preparetxcall(f);
+	if (!f->av.frame)
+		preparetxcall(f);
 
 	n = fiforead(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN],
 		     f->av.frame + f->av.incompleteframe * f->av.n,
