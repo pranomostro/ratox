@@ -600,11 +600,11 @@ sendfriendcalldata(struct friend *f)
 
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	diff = timediff(f->av.lastsent, now);
-	if (diff.tv_nsec == 0 && diff.tv_nsec < toxavconfig.audio_frame_duration * 1E6) {
+	if (diff.tv_sec == 0 && diff.tv_nsec < toxavconfig.audio_frame_duration * 1E6) {
 		diff.tv_nsec = toxavconfig.audio_frame_duration * 1E6 - diff.tv_nsec;
 		nanosleep(&diff, NULL);
 	}
-	f->av.lastsent = now;
+	clock_gettime(CLOCK_MONOTONIC, &f->av.lastsent);
 	toxav_send_audio(toxav, f->av.num, f->av.payload, payloadsize);
 }
 
