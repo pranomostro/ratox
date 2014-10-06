@@ -466,7 +466,7 @@ cbcallstarting(void *av, int32_t cnum, void *udata)
 	if (!f)
 		return;
 
-	printout(" : %s : Tx AV > Started\n", f->name);
+	printout(": %s : Tx AV > Started\n", f->name);
 	preparetxcall(f);
 	toxav_prepare_transmission(toxav, cnum, av_jbufdc, av_VADd, 0);
 }
