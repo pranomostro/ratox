@@ -586,6 +586,7 @@ sendfriendcalldata(struct friend *f)
 		     framesize * sizeof(int16_t) - f->av.incompleteframe * f->av.n);
 	if (n == 0) {
 		toxav_hangup(toxav, f->av.num);
+		f->av.state = av_CallNonExistant;
 		return;
 	} else if (n == -1) {
 		return;
