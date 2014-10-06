@@ -1646,8 +1646,6 @@ loop(void)
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			if (tox_get_friend_connection_status(tox, f->num) == 0)
 				continue;
-			if (f->av.state != av_CallStarting)
-				continue;
 			if (f->fd[FCALL_OUT] == -1) {
 				r = openat(f->dirfd, ffiles[FCALL_OUT].name,
 					   ffiles[FCALL_OUT].flags, 0666);
@@ -1656,7 +1654,8 @@ loop(void)
 						eprintf("openat %s:", ffiles[FCALL_OUT].name);
 				} else {
 					f->fd[FCALL_OUT] = r;
-					toxav_answer(toxav, f->av.num, &toxavconfig);
+					if (f->av.state == av_CallStarting)
+						toxav_answer(toxav, f->av.num, &toxavconfig);
 				}
 			}
 		}
