@@ -755,9 +755,9 @@ static void
 cbuserstate(Tox *m, int32_t frnum, uint8_t status, void *udata)
 {
 	struct friend *f;
-	char *ustatus[] = { "none", "away", "busy", "invalid" };
+	char *ustate[] = { "none", "away", "busy", "invalid" };
 
-	if (status >= LEN(ustatus)) {
+	if (status >= LEN(ustate)) {
 		weprintf("Received invalid user status: %d\n", status);
 		return;
 	}
@@ -766,8 +766,8 @@ cbuserstate(Tox *m, int32_t frnum, uint8_t status, void *udata)
 		if (f->num == frnum) {
 			ftruncate(f->fd[FSTATE], 0);
 			lseek(f->fd[FSTATE], 0, SEEK_SET);
-			dprintf(f->fd[FSTATE], "%s\n", ustatus[status]);
-			printout(": %s : State > %s\n", f->name, ustatus[status]);
+			dprintf(f->fd[FSTATE], "%s\n", ustate[status]);
+			printout(": %s : State > %s\n", f->name, ustate[status]);
 			break;
 		}
 	}
@@ -1106,7 +1106,7 @@ localinit(void)
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
 	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
 	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
-	char *ustatus[] = { "none", "away", "busy" };
+	char *ustate[] = { "none", "away", "busy" };
 	DIR *d;
 	int r;
 	size_t i, m;
@@ -1163,13 +1163,13 @@ localinit(void)
 
 	/* Dump user state */
 	r = tox_get_self_user_status(tox);
-	if (r >= LEN(ustatus)) {
+	if (r >= LEN(ustate)) {
 		ftruncate(gslots[STATE].fd[ERR], 0);
 		dprintf(gslots[STATE].fd[ERR], "invalid\n");
 		weprintf("Invalid user status: %d\n", r);
 	} else {
 		ftruncate(gslots[STATE].fd[OUT], 0);
-		dprintf(gslots[STATE].fd[OUT], "%s\n", ustatus[r]);
+		dprintf(gslots[STATE].fd[OUT], "%s\n", ustate[r]);
 	}
 
 	/* Dump ID */
@@ -1294,7 +1294,7 @@ friendcreate(int32_t frnum)
 {
 	struct friend *f;
 	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
-	char *ustatus[] = { "none", "away", "busy", "invalid" };
+	char *ustate[] = { "none", "away", "busy", "invalid" };
 	size_t i;
 	DIR *d;
 	int r;
@@ -1358,13 +1358,13 @@ friendcreate(int32_t frnum)
 	ftruncate(f->fd[FSTATUS], 0);
 	dprintf(f->fd[FSTATUS], "%s\n", status);
 
-	/* Dump user status */
+	/* Dump user state */
 	r = tox_get_user_status(tox, frnum);
-	if (r >= LEN(ustatus)) {
+	if (r >= LEN(ustate)) {
 		weprintf("Invalid user status: %d\n", r);
 	} else {
 		ftruncate(f->fd[FSTATE], 0);
-		dprintf(f->fd[FSTATE], "%s\n", ustatus[r]);
+		dprintf(f->fd[FSTATE], "%s\n", ustate[r]);
 	}
 
 	/* Dump file pending state */
