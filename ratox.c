@@ -1377,7 +1377,7 @@ friendload(void)
 	uint32_t i;
 
 	sz = tox_count_friendlist(tox);
-	frnums = malloc(sz);
+	frnums = malloc(sz * sizeof(*frnums));
 	if (!frnums)
 		eprintf("malloc:");
 
