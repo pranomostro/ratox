@@ -1446,16 +1446,25 @@ sendfriendreq(void *data)
 		return;
 	buf[n] = '\0';
 
-	for (p = buf; *p && isspace(*p) == 0; p++)
+	/* locate start of msg */
+	for (p = buf; *p && !isspace(*p); p++)
 		;
-	if (*p != '\0') {
-		*p = '\0';
-		while (isspace(*p++) != 0)
-			;
-		if (*p != '\0')
-			msg = p;
+	if (*p == '\0')
+		goto out; /* no msg */
+	*p++ = '\0';
+	if (*p == '\0') {
+		goto out; /* no msg */
+	} else {
+		msg = p;
 		if (msg[strlen(msg) - 1] == '\n')
 			msg[strlen(msg) - 1] = '\0';
+	}
+out:
+	if (strlen(buf) != sizeof(id) * 2) {
+		ftruncate(gslots[REQUEST].fd[ERR], 0);
+		lseek(gslots[REQUEST].fd[ERR], 0, SEEK_SET);
+		dprintf(gslots[REQUEST].fd[ERR], "Invalid friend ID\n");
+		return;
 	}
 	str2id(buf, id);
 
