@@ -755,7 +755,7 @@ static void
 cbuserstate(Tox *m, int32_t frnum, uint8_t status, void *udata)
 {
 	struct friend *f;
-	char *ustatus[] = { "none", "away", "busy" };
+	char *ustatus[] = { "none", "away", "busy", "invalid" };
 
 	if (status >= LEN(ustatus)) {
 		weprintf("Received invalid user status: %d\n", status);
@@ -1164,6 +1164,8 @@ localinit(void)
 	/* Dump user state */
 	r = tox_get_self_user_status(tox);
 	if (r >= LEN(ustatus)) {
+		ftruncate(gslots[STATE].fd[ERR], 0);
+		dprintf(gslots[STATE].fd[ERR], "invalid\n");
 		weprintf("Invalid user status: %d\n", r);
 	} else {
 		ftruncate(gslots[STATE].fd[OUT], 0);
@@ -1292,7 +1294,7 @@ friendcreate(int32_t frnum)
 {
 	struct friend *f;
 	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
-	char *ustatus[] = { "none", "away", "busy" };
+	char *ustatus[] = { "none", "away", "busy", "invalid" };
 	size_t i;
 	DIR *d;
 	int r;
@@ -1339,13 +1341,16 @@ friendcreate(int32_t frnum)
 		}
 	}
 
+	/* Dump name */
 	ftruncate(f->fd[FNAME], 0);
 	dprintf(f->fd[FNAME], "%s\n", f->name);
 
+	/* Dump online state */
 	ftruncate(f->fd[FONLINE], 0);
 	dprintf(f->fd[FONLINE], "%d\n",
 		tox_get_friend_connection_status(tox, frnum));
 
+	/* Dump status message */
 	r = tox_get_status_message(tox, frnum, status, sizeof(status) - 1);
 	if (r > sizeof(status) - 1)
 		r = sizeof(status) - 1;
@@ -1353,6 +1358,7 @@ friendcreate(int32_t frnum)
 	ftruncate(f->fd[FSTATUS], 0);
 	dprintf(f->fd[FSTATUS], "%s\n", status);
 
+	/* Dump user status */
 	r = tox_get_user_status(tox, frnum);
 	if (r >= LEN(ustatus)) {
 		weprintf("Invalid user status: %d\n", r);
@@ -1361,8 +1367,10 @@ friendcreate(int32_t frnum)
 		dprintf(f->fd[FSTATE], "%s\n", ustatus[r]);
 	}
 
+	/* Dump file pending state */
 	ftruncate(f->fd[FFILE_PENDING], 0);
 
+	/* Dump call pending state */
 	ftruncate(f->fd[FCALL_PENDING], 0);
 	dprintf(f->fd[FCALL_PENDING], "0\n");
 
@@ -1490,7 +1498,8 @@ setuserstate(void *data)
 	if (i == LEN(ustate)) {
 		ftruncate(gslots[STATE].fd[ERR], 0);
 		lseek(gslots[STATE].fd[ERR], 0, SEEK_SET);
-		dprintf(gslots[STATE].fd[ERR], "Invalid user state: %s\n", buf);
+		dprintf(gslots[STATE].fd[ERR], "invalid\n");
+		weprintf("Invalid user status: %s\n", buf);
 		return;
 	}
 	ftruncate(gslots[STATE].fd[OUT], 0);
