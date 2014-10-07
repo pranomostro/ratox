@@ -1468,7 +1468,7 @@ out:
 	}
 	str2id(buf, id);
 
-	r = tox_add_friend(tox, id, (uint8_t *)buf, strlen(buf));
+	r = tox_add_friend(tox, id, (uint8_t *)msg, strlen(msg));
 	ftruncate(gslots[REQUEST].fd[ERR], 0);
 	lseek(gslots[REQUEST].fd[ERR], 0, SEEK_SET);
 
