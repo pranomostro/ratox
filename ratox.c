@@ -83,12 +83,14 @@ struct slot {
 
 static void setname(void *);
 static void setstatus(void *);
+static void setuserstate(void *);
 static void sendfriendreq(void *);
 static void setnospam(void *);
 
 enum {
 	NAME,
 	STATUS,
+	STATE,
 	REQUEST,
 	NOSPAM
 };
@@ -96,6 +98,7 @@ enum {
 static struct slot gslots[] = {
 	[NAME]    = { .name = "name",	 .cb = setname,	      .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
 	[STATUS]  = { .name = "status",	 .cb = setstatus,     .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
+	[STATE]   = { .name = "state",   .cb = setuserstate,  .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
 	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outisfolder = 1, .dirfd = -1, .fd = {-1, -1, -1} },
 	[NOSPAM]  = { .name = "nospam",  .cb = setnospam,     .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} }
 };
@@ -111,6 +114,7 @@ enum {
 	FONLINE,
 	FNAME,
 	FSTATUS,
+	FSTATE,
 	FFILE_PENDING,
 	FCALL_PENDING,
 };
@@ -126,6 +130,7 @@ static struct file ffiles[] = {
 	[FONLINE]       = { .type = STATIC, .name = "online",       .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 	[FNAME]         = { .type = STATIC, .name = "name",         .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 	[FSTATUS]       = { .type = STATIC, .name = "status",       .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[FSTATE]        = { .type = STATIC, .name = "state",        .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 	[FFILE_PENDING] = { .type = STATIC, .name = "file_pending", .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 	[FCALL_PENDING] = { .type = STATIC, .name = "call_pending", .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 };
@@ -218,7 +223,7 @@ static void cbfriendmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
 static void cbnamechange(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbstatusmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
-static void cbuserstatus(Tox *, int32_t, uint8_t, void *);
+static void cbuserstate(Tox *, int32_t, uint8_t, void *);
 static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
 static void cbfilesendreq(Tox *, int32_t, uint8_t, uint64_t, const uint8_t *, uint16_t, void *);
 static void cbfiledata(Tox *, int32_t, uint8_t, const uint8_t *, uint16_t, void *);
@@ -747,22 +752,26 @@ cbstatusmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *
 }
 
 static void
-cbuserstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
+cbuserstate(Tox *m, int32_t frnum, uint8_t status, void *udata)
 {
 	struct friend *f;
-	char *statusstr[] = { "none", "away", "busy" };
+	char *ustatus[] = { "none", "away", "busy" };
 
-	if (status >= LEN(statusstr)) {
+	if (status >= LEN(ustatus)) {
 		weprintf("Received invalid user status: %d\n", status);
 		return;
 	}
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->num == frnum) {
-			printout(": %s : State > %s\n", f->name, statusstr[status]);
+			ftruncate(f->fd[FSTATE], 0);
+			lseek(f->fd[FSTATE], 0, SEEK_SET);
+			dprintf(f->fd[FSTATE], "%s\n", ustatus[status]);
+			printout(": %s : State > %s\n", f->name, ustatus[status]);
 			break;
 		}
 	}
+	datasave();
 }
 
 static void
@@ -1097,6 +1106,7 @@ localinit(void)
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
 	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
 	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
+	char *ustatus[] = { "none", "away", "busy" };
 	DIR *d;
 	int r;
 	size_t i, m;
@@ -1151,6 +1161,15 @@ localinit(void)
 	ftruncate(gslots[STATUS].fd[OUT], 0);
 	dprintf(gslots[STATUS].fd[OUT], "%s\n", status);
 
+	/* Dump user state */
+	r = tox_get_self_user_status(tox);
+	if (r >= LEN(ustatus)) {
+		weprintf("Invalid user status: %d\n", r);
+	} else {
+		ftruncate(gslots[STATE].fd[OUT], 0);
+		dprintf(gslots[STATE].fd[OUT], "%s\n", ustatus[r]);
+	}
+
 	/* Dump ID */
 	idfd = open("id", O_WRONLY | O_CREAT, 0666);
 	if (idfd < 0)
@@ -1202,7 +1221,7 @@ toxinit(void)
 	tox_callback_friend_request(tox, cbfriendrequest, NULL);
 	tox_callback_name_change(tox, cbnamechange, NULL);
 	tox_callback_status_message(tox, cbstatusmessage, NULL);
-	tox_callback_user_status(tox, cbuserstatus, NULL);
+	tox_callback_user_status(tox, cbuserstate, NULL);
 	tox_callback_file_control(tox, cbfilecontrol, NULL);
 	tox_callback_file_send_request(tox, cbfilesendreq, NULL);
 	tox_callback_file_data(tox, cbfiledata, NULL);
@@ -1273,6 +1292,7 @@ friendcreate(int32_t frnum)
 {
 	struct friend *f;
 	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
+	char *ustatus[] = { "none", "away", "busy" };
 	size_t i;
 	DIR *d;
 	int r;
@@ -1332,6 +1352,14 @@ friendcreate(int32_t frnum)
 	status[r] = '\0';
 	ftruncate(f->fd[FSTATUS], 0);
 	dprintf(f->fd[FSTATUS], "%s\n", status);
+
+	r = tox_get_user_status(tox, frnum);
+	if (r >= LEN(ustatus)) {
+		weprintf("Invalid user status: %d\n", r);
+	} else {
+		ftruncate(f->fd[FSTATE], 0);
+		dprintf(f->fd[FSTATE], "%s\n", ustatus[r]);
+	}
 
 	ftruncate(f->fd[FFILE_PENDING], 0);
 
@@ -1429,6 +1457,47 @@ setstatus(void *data)
 	ftruncate(gslots[STATUS].fd[OUT], 0);
 	lseek(gslots[STATUS].fd[OUT], 0, SEEK_SET);
 	dprintf(gslots[STATUS].fd[OUT], "%s\n", status);
+}
+
+static void
+setuserstate(void *data)
+{
+	char buf[PIPE_BUF];
+	ssize_t n;
+	size_t i;
+	struct {
+		char *name;
+		int n;
+	} ustate[] = {
+		{ .name = "none", .n = TOX_USERSTATUS_NONE },
+		{ .name = "away", .n = TOX_USERSTATUS_AWAY },
+		{ .name = "busy", .n = TOX_USERSTATUS_BUSY },
+	};
+
+	n = fiforead(gslots[STATE].dirfd, &gslots[STATE].fd[IN], gfiles[IN],
+		     buf, sizeof(buf) - 1);
+	if (n <= 0)
+		return;
+	if (buf[n - 1] == '\n')
+		n--;
+	buf[n] = '\0';
+	for (i = 0; i < LEN(ustate); i++) {
+		if (strcmp(buf, ustate[i].name) == 0) {
+			tox_set_user_status(tox, ustate[i].n);
+			break;
+		}
+	}
+	if (i == LEN(ustate)) {
+		ftruncate(gslots[STATE].fd[ERR], 0);
+		lseek(gslots[STATE].fd[ERR], 0, SEEK_SET);
+		dprintf(gslots[STATE].fd[ERR], "Invalid user state: %s\n", buf);
+		return;
+	}
+	ftruncate(gslots[STATE].fd[OUT], 0);
+	lseek(gslots[STATE].fd[OUT], 0, SEEK_SET);
+	dprintf(gslots[STATE].fd[OUT], "%s\n", buf);
+	datasave();
+	printout("User state > %s\n", buf);
 }
 
 static void
