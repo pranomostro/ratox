@@ -511,7 +511,6 @@ cbreqtimeout(void *av, int32_t cnum, void *udata)
 		return;
 	cancelrxcall(f, "Timeout");
 	canceltxcall(f, "Timeout");
-	printf("Entered %s\n", __func__);
 }
 
 static void
