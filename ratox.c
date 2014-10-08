@@ -1764,7 +1764,7 @@ loop(void)
 				case av_CallActive:
 					if ((fd = openat(f->dirfd, ffiles[FCALL_OUT].name, ffiles[FCALL_OUT].flags)) == -1 &&
 					    errno == ENXIO) {
-						cancelcall(f, "Ended");
+						toxav_hangup(toxav, f->av.num);
 					} else {
 						close(fd);
 					}
