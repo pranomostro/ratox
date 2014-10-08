@@ -630,6 +630,7 @@ static void
 cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 {
 	struct friend *f;
+	struct request *req, *rtmp;
 	char name[TOX_MAX_NAME_LENGTH + 1];
 	int r;
 
@@ -650,11 +651,22 @@ cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 			ftruncate(f->fd[FONLINE], 0);
 			lseek(f->fd[FONLINE], 0, SEEK_SET);
 			dprintf(f->fd[FONLINE], "%d\n", status);
-			return;
+			break;
 		}
 	}
 
-	friendcreate(frnum);
+	/* Remove the pending request-FIFO if it exists */
+	for (req = TAILQ_FIRST(&reqhead); req; req = rtmp) {
+		rtmp = TAILQ_NEXT(req, entry);
+
+		if (memcmp(f->id, req->id, TOX_CLIENT_ID_SIZE))
+			continue;
+		unlinkat(gslots[REQUEST].fd[OUT], req->idstr, 0);
+		close(req->fd);
+		TAILQ_REMOVE(&reqhead, req, entry);
+		free(req->msg);
+		free(req);
+	}
 }
 
 static void
@@ -1544,6 +1556,7 @@ out:
 		dprintf(gslots[REQUEST].fd[ERR], "%s\n", reqerr[-r]);
 		return;
 	}
+	friendcreate(r);
 	datasave();
 	printout("Request > Sent\n");
 }
@@ -1795,11 +1808,13 @@ loop(void)
 				continue;
 			if (c != '0' && c != '1')
 				continue;
+			r = tox_add_friend_norequest(tox, req->id);
 			if (c == '1') {
-				tox_add_friend_norequest(tox, req->id);
+				friendcreate(r);
 				printout("Request : %s > Accepted\n", req->idstr);
 				datasave();
 			} else {
+				tox_del_friend(tox, r);
 				printout("Request : %s > Rejected\n", req->idstr);
 			}
 			unlinkat(gslots[REQUEST].fd[OUT], req->idstr, 0);
