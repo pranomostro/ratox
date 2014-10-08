@@ -1597,7 +1597,7 @@ loop(void)
 	time_t t0, t1, now;
 	int connected = 0;
 	int i, n, r;
-	int fdmax;
+	int fd, fdmax;
 	char c;
 	fd_set rfds;
 	struct timeval tv;
@@ -1679,12 +1679,19 @@ loop(void)
 		}
 
 		/* Check for broken transfers, i.e. the friend went offline
-		 * in the middle of a transfer.
+		 * in the middle of a transfer or you close file_out.
 		 */
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			if (tox_get_friend_connection_status(tox, f->num) == 0) {
 				canceltxtransfer(f);
 				cancelrxtransfer(f);
+			}
+			if (f->rxstate == TRANSFER_INPROGRESS &&
+			    (fd = openat(f->dirfd, ffiles[FFILE_OUT].name, ffiles[FFILE_OUT].flags, 0666)) == -1 &&
+			    errno == ENXIO) {
+				cancelrxtransfer(f);
+			} else {
+				close(fd);
 			}
 		}
 
@@ -1747,9 +1754,23 @@ loop(void)
 					f->fd[FCALL_OUT] = r;
 				}
 			}
-			if (f->av.num != -1)
-				if (toxav_get_call_state(toxav, f->av.num) == av_CallStarting)
+			if (f->av.num != -1) {
+				switch (toxav_get_call_state(toxav, f->av.num)) {
+				case av_CallStarting:
 					toxav_answer(toxav, f->av.num, &toxavconfig);
+					break;
+				case av_CallActive:
+					if ((fd = openat(f->dirfd, ffiles[FCALL_OUT].name, ffiles[FCALL_OUT].flags)) == -1 &&
+					    errno == ENXIO) {
+						cancelcall(f, "Ended");
+					} else {
+						close(fd);
+					}
+					break;
+				default:
+					break;
+				}
+			}
 		}
 
 		if (n == 0)
