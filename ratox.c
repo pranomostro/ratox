@@ -1764,9 +1764,10 @@ loop(void)
 					toxav_answer(toxav, f->av.num, &toxavconfig);
 					break;
 				case av_CallActive:
-					if ((fd = openat(f->dirfd, ffiles[FCALL_OUT].name, ffiles[FCALL_OUT].flags)) == -1 &&
-					    errno == ENXIO) {
-						toxav_hangup(toxav, f->av.num);
+					fd = openat(f->dirfd, ffiles[FCALL_OUT].name, ffiles[FCALL_OUT].flags);
+					if (fd < 0) {
+						if (errno == ENXIO)
+							toxav_hangup(toxav, f->av.num);
 					} else {
 						close(fd);
 					}
