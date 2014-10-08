@@ -1,10 +1,13 @@
 What is ratox?
 ==============
 
-ratox is a client implementation of the rather popular tox protocol.
+ratox is a client implementation of the rather popular tox protocol[0].
 Unlike other clients relying on GUIs as an interface to the user, ratox is
 developed with the UNIX-philosophy in mind and allows complete
 interaction through named pipes.
+
+There's also a set of scripts[1] developed by various people that build on
+top of the FIFO interface.
 
 Getting started
 ===============
@@ -16,50 +19,46 @@ folders allowing you to control the client.
 File structure
 ==============
 
-In the following paragraph, / refers to the directory ratox has been started in.
+A typical filesystem structure is shown below along with some comments
+to help explain the semantics of the individual files.
 
-Global slots (name/, status/, request/, nospam/)
-------------------------------------------------
-
-Global slots allow you to change your name and status message and send and
-accept friend requests.  Each slot contains an in, out and err file or
-directory respectively.  The in-file is a pipe waiting for user-input.
-If you want to change your name or status, just pipe it to it.  To send a
-friend request, pipe the Tox-ID to request/in.  The out-file contains the
-current state of a given parameter.  In request/, out is a directory
-containing named pipes for each pending request.  To accept or reject a
-friend request, pipe a 1 or 0 to a FIFO respectively.
-
-Friend slots
-------------
-
-For each friend added, ratox will create a folder in / named after the friend's ID.
-It contains files and FIFOs to interact with your friends.  text_in and file_in allow
-you to send messages and files just by piping them to them.  text_out and file_out allow
-you to read your friend's messages and accept file-transmissions.  Accepting a file
-transmission is as easy as just piping the file_out to a file or other stream.
-online, name, status and file_pending are state-files giving you information on the
-friend's status.  If you pipe a 1 to remove, the friend will be removed.
-
-id file
--------
-
-/id contains your own Tox-ID to pass on to your friends if you want them to add you.
-
-Command Line Options
-====================
-
--4 and -6 allow you to switch between IPv4 and IPv6 mode respectively.
--t enables TCP mode.  By default, Tox operates with UDP and is recommended, as
-TCP mode implies certain security considerations.
--p enables the TCP SOCKS5-proxy as specified in the config.h.  Running ratox behind
-a ssh-proxy is as simple as setting
-
-static char proxyaddr[] = "localhost";
-static uint16_t proxyport = 8080;
-
-in config.h (already set by default) and running ssh -C2qTnN -D 8080 user@example.org
-in a separate terminal and launching ratox with ratox -p.
+.
+|-- .ratox.data			# ratox save file
+|-- 0A734CBA717CEB7883D....	# friend's ID excluding nospam + checksum
+|   |-- call_in			# arecord -r 48000 -c 1 -f S16_LE > call_in
+|   |-- call_out		# aplay -r 48000 -c 1 -f S16_LE - < call_out
+|   |-- call_pending		# 1 if pending, 0 otherwise
+|   |-- file_in			# cat foo > file_in to send a file
+|   |-- file_out		# cat file_out > bar to receive a file
+|   |-- file_pending		# contains filename if transfer pending, empty otherwise
+|   |-- name			# friend's nickname
+|   |-- online			# 1 if friend online, 0 otherwise
+|   |-- remove			# echo 1 > remove
+|   |-- state			# {none,away,busy}
+|   |-- status			# friend's status message
+|   |-- text_in			# echo yo dude > text_in
+|   `-- text_out		# tail -f text_out
+|-- id				# our own ID
+|-- name			# changing your nick
+|   |-- err			# nickname related errors
+|   |-- in			# echo my-new-nick > in
+|   `-- out			# cat out to show your name
+|-- nospam			# changing your nospam
+|   |-- err			# nospam related errors
+|   |-- in			# echo AABBCCDD > in
+|   `-- out			# cat out to show your nospam
+|-- request			# initiate/accept friend requests
+|   |-- err			# request related errors
+|   |-- in			# echo LONGASSID yo dude add me > in
+|   `-- out			# echo 1 > out/LONGASSID to accept a request
+|-- state			# changing your user state
+|   |-- err			# user status related errors
+|   |-- in			# echo away > in could be any of {none,away,busy}
+|   `-- out			# cat out to show your user state
+`-- status			# changing your status message
+    |-- err			# status message related errors
+    |-- in			# cat I am bored to death > in
+    `-- out			# cat out to show your status message
 
 Features
 ========
@@ -103,5 +102,8 @@ Builds and works on *BSD and Linux, probably others as well.
 Contact
 =======
 
-Development happens on #2f30 at Freenode.  Feel free to join
-if you have any questions or patches etc.
+You can reach us through the freenode IRC network at #2f30.
+If you have any patches, ideas or feedback feel free to join.
+
+[0] https://tox.im/
+[1] http://git.2f30.org/ratox-nuggets/
