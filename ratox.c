@@ -418,6 +418,7 @@ cbcallended(void *av, int32_t cnum, void *udata)
 
 	cancelrxcall(f, "Ended");
 	canceltxcall(f, "Ended");
+	toxav_kill_transmission(toxav, cnum);
 }
 
 static void
@@ -433,6 +434,7 @@ cbcallcancelled(void *av, int32_t cnum, void *udata)
 
 	cancelrxcall(f, "Cancelled");
 	canceltxcall(f, "Cancelled");
+	toxav_kill_transmission(toxav, cnum);
 }
 
 static void
@@ -447,6 +449,8 @@ cbcallrejected(void *av, int32_t cnum, void *udata)
 		return;
 
 	canceltxcall(f, "Rejected");
+	cancelrxcall(f, "Rejected");
+	toxav_kill_transmission(toxav, cnum);
 }
 
 static void
@@ -497,6 +501,7 @@ cbcallending(void *av, int32_t cnum, void *udata)
 
 	cancelrxcall(f, "Ending");
 	canceltxcall(f, "Ending");
+	toxav_kill_transmission(toxav, cnum);
 }
 
 static void
@@ -511,6 +516,7 @@ cbreqtimeout(void *av, int32_t cnum, void *udata)
 		return;
 	cancelrxcall(f, "Timeout");
 	canceltxcall(f, "Timeout");
+	toxav_kill_transmission(toxav, cnum);
 }
 
 static void
