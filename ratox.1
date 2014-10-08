@@ -1,0 +1,79 @@
+.TH RATOX "1" "October 2014"
+
+.SH NAME
+ratox - FIFO based tox client
+
+.SH SYNOPSIS
+.B ratox
+[\fIOPTION1\fR) [\fIOPTION2\fR]...
+
+.SH DESCRIPTION
+ratox is a client implementation of the rather popular tox protocol.
+Unlike other clients relying on GUIs as an interface to the user, ratox is
+developed with the UNIX-philosophy in mind and allows complete
+interaction through named pipes.
+.TP
+\fB\-4\fR
+Switch to IPv4-only mode
+.TP
+\fB\-6\fR
+Switch to IPv6-only mode
+.TP
+\fB\-t\fR
+Enable TCP mode. By default, Tox operates with UDP and is recommended, as TCP mode implies certain security considerations.
+.TP
+\fB\-p\fR
+Enable TCP SOCKS5 proxy as specified in config.def.h when the package was built.
+When this option is enabled, ratox will use a proxy on \fI127.0.0.1\fR and port
+\fI9050\fR (note that this is a divergence from upstream). \fBChanging the host
+and port requires rebuilding the package!\fR
+
+.SH File structure
+In the following, \fI/\fR refers to the directory ratox has been started in.
+.BR
+
+.SH Global slots (\fIname/\fR, \fIstatus/\fR, \fIrequest/\fR)
+
+Global slots allow you to change your name and status message and send and
+accept friend requests.  Each slot contains an \fBin\fR, \fBout\fR and
+\fBerr\fR file or directory respectively.
+
+The \fBin\fR-file is a pipe waiting for user-input. If you want to change your
+name or status, just pipe it to it. To send a friend request, pipe the Tox-ID
+to \fBrequest/in\fR.
+
+The \fBout\fR-file contains the current state of a given parameter. In
+\fIrequest/\fR, out is a directory containing named pipes for each pending
+request. To accept or reject a friend request, pipe a \fI1\fR or \fI0\fR to a
+FIFO respectively.
+
+.SH Friend slots
+
+For each friend added, ratox will create a folder in \fI/\fR named after the
+friend's ID. It contains files and FIFOs to interact with your friends.
+
+\fBtext_in\fR and \fBfile_in\fR allow you to send messages and files just by piping them to them.
+\fBtext_out\fR and \fBfile_out\fR allow you to read your friend's messages and accept file-transmissions.
+
+Accepting a file transmission is as easy as just piping the \fBfile_out\fR to a
+file or other stream.
+
+\fBonline\fR, \fBname\fR, \fBstatus\fR and \fBfile_pending\fR are state-files
+giving you information on the friend's status.
+If you pipe a \fI1\fR to \fBremove\fR, the friend will be removed.
+
+.SH id file
+
+\fB/id\fR contains your own Tox-ID to pass on to your friends if you want them to add you.
+
+.SH "SEE ALSO"
+.br
+.B Homepage:
+http://ratox.2f30.org/
+.br
+
+.SH AUTHOR
+This manual page was written by kytv <killyourtv@i2pmail.org> for the Debian system (but may be used by others).
+.br
+Permission is granted to copy, distribute and/or modify this document under the terms of the ISC License.
+

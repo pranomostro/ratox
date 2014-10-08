@@ -44,11 +44,16 @@ install: all
 	@echo installing executable to $(DESTDIR)$(PREFIX)/bin
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin
 	@cp -f $(BIN) $(DESTDIR)$(PREFIX)/bin
-	@cd $(DESTDIR)$(PREFIX)/bin && chmod 755 $(BIN)
+	@chmod 755 $(DESTDIR)$(PREFIX)/bin/$(BIN)
+	@echo installing manual page to $(DESTDIR)$(MANPREFIX)/man1
+	@mkdir -p $(DESTDIR)$(MANPREFIX)/man1
+	@cp -f ratox.1 $(DESTDIR)$(MANPREFIX)/man1
 
 uninstall:
 	@echo removing executable from $(DESTDIR)$(PREFIX)/bin
-	@cd $(DESTDIR)$(PREFIX)/bin && rm -f $(BIN)
+	@rm -f $(DESTDIR)$(PREFIX)/bin/$(BIN)
+	@echo removing manual page from $(DESTDIR)$(MANPREFIX)/man1
+	@rm $(DESTDIR)$(MANPREFIX)/man1/ratox.1
 
 clean:
 	@echo cleaning
