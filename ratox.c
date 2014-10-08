@@ -514,15 +514,24 @@ cbreqtimeout(void *av, int32_t cnum, void *udata)
 			break;
 	if (!f)
 		return;
-	cancelrxcall(f, "Timeout");
-	canceltxcall(f, "Timeout");
+	cancelrxcall(f, "Request timeout");
+	canceltxcall(f, "Request timeout");
 	toxav_kill_transmission(toxav, cnum);
 }
 
 static void
 cbpeertimeout(void *av, int32_t cnum, void *udata)
 {
-	printf("Entered %s\n", __func__);
+	struct friend *f;
+
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->av.num == cnum)
+			break;
+	if (!f)
+		return;
+	cancelrxcall(f, "Peer timeout");
+	canceltxcall(f, "Peer timeout");
+	toxav_kill_transmission(toxav, cnum);
 }
 
 static void
