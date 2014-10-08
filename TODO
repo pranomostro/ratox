@@ -1,2 +1,3 @@
 * Expose the ID + nospam + checksum for friends
   in the directory name.
+* Move ToxAvCSettings to the call struct.
