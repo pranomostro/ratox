@@ -26,6 +26,10 @@
 #include "readpassphrase.h"
 #include "util.h"
 
+#ifndef O_DIRECTORY
+#define O_DIRECTORY 0
+#endif
+
 const char *reqerr[] = {
 	[-TOX_FAERR_TOOLONG]      = "Message is too long",
 	[-TOX_FAERR_NOMESSAGE]    = "Please add a message to your request",
