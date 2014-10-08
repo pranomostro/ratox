@@ -1687,10 +1687,12 @@ loop(void)
 				canceltxtransfer(f);
 				cancelrxtransfer(f);
 			}
-			if (f->rxstate == TRANSFER_INPROGRESS &&
-			    (fd = openat(f->dirfd, ffiles[FFILE_OUT].name, ffiles[FFILE_OUT].flags, 0666)) == -1 &&
-			    errno == ENXIO) {
-				cancelrxtransfer(f);
+			if (f->rxstate != TRANSFER_INPROGRESS)
+				continue;
+			fd = openat(f->dirfd, ffiles[FFILE_OUT].name, ffiles[FFILE_OUT].flags, 0666);
+			if (fd < 0) {
+				if (errno == ENXIO)
+					cancelrxtransfer(f);
 			} else {
 				close(fd);
 			}
