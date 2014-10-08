@@ -1831,7 +1831,7 @@ loop(void)
 				case av_CallNonExistant:
 					toxav_call(toxav, &f->av.num, f->num, &toxavconfig, RINGINGDELAY);
 					f->av.state = av_CallInviting;
-					printout(": %s : Tx AV > Calling\n", f->name);
+					printout(": %s : Tx AV > Inviting\n", f->name);
 					break;
 				case av_CallActive:
 					sendfriendcalldata(f);
