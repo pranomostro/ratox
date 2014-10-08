@@ -1389,7 +1389,7 @@ frienddestroy(struct friend *f)
 
 	canceltxtransfer(f);
 	cancelrxtransfer(f);
-	if (toxav_get_call_state(toxav, f->av.num) != av_CallNonExistant)
+	if (f->av.num != -1 && toxav_get_call_state(toxav, f->av.num) != av_CallNonExistant)
 		cancelcall(f, "Destroying");
 	for (i = 0; i < LEN(ffiles); i++) {
 		if (f->dirfd != -1) {
