@@ -114,7 +114,8 @@ ratox.
 Portability
 ===========
 
-Builds and works on *BSD and Linux, probably others as well.
+Builds and works on *BSD and Linux.  To build on OSX you need
+to apply a patch[2].
 
 Contact
 =======
@@ -124,3 +125,4 @@ If you have any patches, ideas or feedback feel free to join.
 
 [0] https://tox.im/
 [1] http://git.2f30.org/ratox-nuggets/
+[2] http://u.2f30.org/sin/patches/ratox/0001-Add-OSX-replacements-for-certain-functions.patch
