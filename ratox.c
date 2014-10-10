@@ -1615,6 +1615,7 @@ loop(void)
 	char c;
 	fd_set rfds;
 	struct timeval tv;
+	struct file reqfifo;
 
 	t0 = time(NULL);
 	printout("DHT > Connecting\n");
@@ -1804,7 +1805,10 @@ loop(void)
 			rtmp = TAILQ_NEXT(req, entry);
 			if (FD_ISSET(req->fd, &rfds) == 0)
 				continue;
-			if (read(req->fd, &c, 1) != 1)
+			reqfifo.name = req->idstr;
+			reqfifo.flags = O_RDONLY | O_NONBLOCK;
+			if (fiforead(gslots[REQUEST].fd[OUT], &req->fd, reqfifo,
+				     &c, 1) != 1)
 				continue;
 			if (c != '0' && c != '1')
 				continue;
