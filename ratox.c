@@ -210,7 +210,7 @@ static int proxyflag;
 
 static struct timespec timediff(struct timespec, struct timespec);
 static void printrat(void);
-static void printout(const char *, ...);
+static void logmsg(const char *, ...);
 static void fiforeset(int, int *, struct file);
 static ssize_t fiforead(int, int *, struct file, void *, size_t);
 static void cbcallinvite(void *, int32_t, void *);
@@ -297,7 +297,7 @@ printrat(void)
 }
 
 static void
-printout(const char *fmt, ...)
+logmsg(const char *fmt, ...)
 {
 	va_list ap;
 	char buft[64];
@@ -379,14 +379,14 @@ cbcallinvite(void *av, int32_t cnum, void *udata)
 
 	switch (avconfig.call_type) {
 	case TypeVideo:
-		printout(": %s : Rx AV > Inviting with video\n", f->name);
+		logmsg(": %s : Rx AV > Inviting with video\n", f->name);
 		break;
 	case TypeAudio:
-		printout(": %s : Rx AV > Inviting without video\n", f->name);
+		logmsg(": %s : Rx AV > Inviting without video\n", f->name);
 		break;
 	}
 
-	printout(": %s : Rx AV > Audio call settings: srate = %lu, channels = %lu\n",
+	logmsg(": %s : Rx AV > Audio call settings: srate = %lu, channels = %lu\n",
 		 f->name, avconfig.audio_sample_rate, avconfig.audio_channels);
 
 	ftruncate(f->fd[FCALL_PENDING], 0);
@@ -412,7 +412,7 @@ cbcallstarted(void *av, int32_t cnum, void *udata)
 		cancelcall(f, "Failed");
 		return;
 	}
-	printout(": %s : Rx AV > Started\n", f->name);
+	logmsg(": %s : Rx AV > Started\n", f->name);
 }
 
 static void
@@ -494,7 +494,7 @@ cbcallstarting(void *av, int32_t cnum, void *udata)
 		cancelcall(f, "Failed");
 		return;
 	}
-	printout(": %s : Tx AV > Started\n", f->name);
+	logmsg(": %s : Tx AV > Started\n", f->name);
 }
 
 static void
@@ -589,7 +589,7 @@ cancelcall(struct friend *f, char *action)
 {
 	int r;
 
-	printout(": %s : Rx/Tx AV > %s\n", f->name, action);
+	logmsg(": %s : Rx/Tx AV > %s\n", f->name, action);
 
 	if (f->av.num != -1) {
 		r = toxav_kill_transmission(toxav, f->av.num);
@@ -677,7 +677,7 @@ cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 	else
 		name[r] = '\0';
 
-	printout(": %s > %s\n", name, status == 0 ? "Offline" : "Online");
+	logmsg(": %s > %s\n", name, status == 0 ? "Offline" : "Online");
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->num == frnum) {
@@ -718,7 +718,7 @@ cbfriendmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *
 			t = time(NULL);
 			strftime(buft, sizeof(buft), "%F %R", localtime(&t));
 			dprintf(f->fd[FTEXT_OUT], "%s %s\n", buft, msg);
-			printout(": %s > %s\n", f->name, msg);
+			logmsg(": %s > %s\n", f->name, msg);
 			break;
 		}
 	}
@@ -752,7 +752,7 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, vo
 
 	TAILQ_INSERT_TAIL(&reqhead, req, entry);
 
-	printout("Request : %s > %s\n",
+	logmsg("Request : %s > %s\n",
 		 req->idstr, req->msg);
 }
 
@@ -772,7 +772,7 @@ cbnamechange(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *use
 			ftruncate(f->fd[FNAME], 0);
 			lseek(f->fd[FNAME], 0, SEEK_SET);
 			dprintf(f->fd[FNAME], "%s\n", name);
-			printout(": %s : Name > %s\n", f->name, name);
+			logmsg(": %s : Name > %s\n", f->name, name);
 			memcpy(f->name, name, len + 1);
 			break;
 		}
@@ -794,7 +794,7 @@ cbstatusmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *
 			ftruncate(f->fd[FSTATUS], 0);
 			lseek(f->fd[FSTATUS], 0, SEEK_SET);
 			dprintf(f->fd[FSTATUS], "%s\n", status);
-			printout(": %s : Status > %s\n", f->name, status);
+			logmsg(": %s : Status > %s\n", f->name, status);
 			break;
 		}
 	}
@@ -816,7 +816,7 @@ cbuserstate(Tox *m, int32_t frnum, uint8_t state, void *udata)
 			ftruncate(f->fd[FSTATE], 0);
 			lseek(f->fd[FSTATE], 0, SEEK_SET);
 			dprintf(f->fd[FSTATE], "%s\n", ustate[state]);
-			printout(": %s : State > %s\n", f->name, ustate[state]);
+			logmsg(": %s : State > %s\n", f->name, ustate[state]);
 			break;
 		}
 	}
@@ -839,7 +839,7 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 	case TOX_FILECONTROL_ACCEPT:
 		if (rec_sen == 1) {
 			if (f->tx.state == TRANSFER_PAUSED) {
-				printout(": %s : Tx > Resumed\n", f->name);
+				logmsg(": %s : Tx > Resumed\n", f->name);
 				f->tx.state = TRANSFER_INPROGRESS;
 			} else {
 				f->tx.fnum = fnum;
@@ -850,38 +850,38 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 				f->tx.n = 0;
 				f->tx.pendingbuf = 0;
 				f->tx.state = TRANSFER_INPROGRESS;
-				printout(": %s : Tx > In Progress\n", f->name);
+				logmsg(": %s : Tx > In Progress\n", f->name);
 			}
 		}
 		break;
 	case TOX_FILECONTROL_PAUSE:
 		if (rec_sen == 1) {
 			if (f->tx.state == TRANSFER_INPROGRESS) {
-				printout(": %s : Tx > Paused\n", f->name);
+				logmsg(": %s : Tx > Paused\n", f->name);
 				f->tx.state = TRANSFER_PAUSED;
 			}
 		}
 		break;
 	case TOX_FILECONTROL_KILL:
 		if (rec_sen == 1) {
-			printout(": %s : Tx > Rejected\n", f->name);
+			logmsg(": %s : Tx > Rejected\n", f->name);
 			f->tx.state = TRANSFER_NONE;
 			free(f->tx.buf);
 			f->tx.buf = NULL;
 			fiforeset(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN]);
 		} else {
-			printout(": %s : Rx > Cancelled by Sender\n", f->name);
+			logmsg(": %s : Rx > Cancelled by Sender\n", f->name);
 			cancelrxtransfer(f);
 		}
 		break;
 	case TOX_FILECONTROL_FINISHED:
 		if (rec_sen == 1) {
-			printout(": %s : Tx > Complete\n", f->name);
+			logmsg(": %s : Tx > Complete\n", f->name);
 			f->tx.state = TRANSFER_NONE;
 			free(f->tx.buf);
 			f->tx.buf = NULL;
 		} else {
-			printout(": %s : Rx > Complete\n", f->name);
+			logmsg(": %s : Rx > Complete\n", f->name);
 			if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_FINISHED, NULL, 0) < 0)
 				weprintf("Failed to signal file completion to the sender\n");
 			if (f->fd[FFILE_OUT] != -1) {
@@ -917,7 +917,7 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 
 	/* We only support a single transfer at a time */
 	if (f->rxstate == TRANSFER_INPROGRESS) {
-		printout(": %s : Rx > Rejected %s, already one in progress\n",
+		logmsg(": %s : Rx > Rejected %s, already one in progress\n",
 			 f->name, filename);
 		if (tox_file_send_control(tox, f->num, 1, fnum, TOX_FILECONTROL_KILL, NULL, 0) < 0)
 			weprintf("Failed to kill new Rx transfer\n");
@@ -928,7 +928,7 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 	lseek(f->fd[FFILE_PENDING], 0, SEEK_SET);
 	dprintf(f->fd[FFILE_PENDING], "%s\n", filename);
 	f->rxstate = TRANSFER_PENDING;
-	printout(": %s : Rx > Pending %s\n", f->name, filename);
+	logmsg(": %s : Rx > Pending %s\n", f->name, filename);
 }
 
 static void
@@ -967,7 +967,7 @@ canceltxtransfer(struct friend *f)
 {
 	if (f->tx.state == TRANSFER_NONE)
 		return;
-	printout(": %s : Tx > Cancelling\n", f->name);
+	logmsg(": %s : Tx > Cancelling\n", f->name);
 	if (tox_file_send_control(tox, f->num, 0, 0, TOX_FILECONTROL_KILL, NULL, 0) < 0)
 		weprintf("Failed to kill Tx transfer\n");
 	f->tx.state = TRANSFER_NONE;
@@ -981,7 +981,7 @@ cancelrxtransfer(struct friend *f)
 {
 	if (f->rxstate == TRANSFER_NONE)
 		return;
-	printout(": %s : Rx > Cancelling\n", f->name);
+	logmsg(": %s : Rx > Cancelling\n", f->name);
 	if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_KILL, NULL, 0) < 0)
 		weprintf("Failed to kill Rx transfer\n");
 	if (f->fd[FFILE_OUT] != -1) {
@@ -1057,7 +1057,7 @@ removefriend(struct friend *f)
 		return;
 	tox_del_friend(tox, f->num);
 	datasave();
-	printout(": %s > Removed\n", f->name);
+	logmsg(": %s > Removed\n", f->name);
 	frienddestroy(f);
 }
 
@@ -1108,14 +1108,14 @@ dataload(void)
 
 	if (tox_is_save_encrypted(data) == 1) {
 		if (encryptdatafile == 0)
-			printout("Data : %s > Encrypted, but saving unencrypted\n", DATAFILE);
+			logmsg("Data : %s > Encrypted, but saving unencrypted\n", DATAFILE);
 		while (readpass("Data : Passphrase > ") < 0 ||
 		       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0);
 	} else {
 		if (tox_load(tox, data, sz) < 0)
 			eprintf("Data : %s > Failed to load\n", DATAFILE);
 		if (encryptdatafile == 1) {
-			printout("Data : %s > Not encrypted, but saving encrypted\n", DATAFILE);
+			logmsg("Data : %s > Not encrypted, but saving encrypted\n", DATAFILE);
 			while (readpass("Data : New passphrase > ") < 0);
 		}
 	}
@@ -1252,12 +1252,12 @@ toxinit(void)
 	if (proxyflag == 1) {
 		tcpflag = 1;
 		toxopt.udp_disabled = tcpflag;
-		printout("Net > Forcing TCP mode\n");
+		logmsg("Net > Forcing TCP mode\n");
 		snprintf(toxopt.proxy_address, sizeof(toxopt.proxy_address),
 			 "%s", proxyaddr);
 		toxopt.proxy_port = proxyport;
 		toxopt.proxy_enabled = 1;
-		printout("Net > Using proxy %s:%hu\n", proxyaddr, proxyport);
+		logmsg("Net > Using proxy %s:%hu\n", proxyaddr, proxyport);
 	}
 
 	tox = tox_new(&toxopt);
@@ -1503,7 +1503,7 @@ setname(void *data)
 		return;
 	}
 	datasave();
-	printout("Name > %s\n", name);
+	logmsg("Name > %s\n", name);
 	ftruncate(gslots[NAME].fd[OUT], 0);
 	lseek(gslots[NAME].fd[OUT], 0, SEEK_SET);
 	dprintf(gslots[NAME].fd[OUT], "%s\n", name);
@@ -1529,7 +1529,7 @@ setstatus(void *data)
 		return;
 	}
 	datasave();
-	printout("Status > %s\n", status);
+	logmsg("Status > %s\n", status);
 	ftruncate(gslots[STATUS].fd[OUT], 0);
 	lseek(gslots[STATUS].fd[OUT], 0, SEEK_SET);
 	dprintf(gslots[STATUS].fd[OUT], "%s\n", status);
@@ -1566,7 +1566,7 @@ setuserstate(void *data)
 	lseek(gslots[STATE].fd[OUT], 0, SEEK_SET);
 	dprintf(gslots[STATE].fd[OUT], "%s\n", buf);
 	datasave();
-	printout(": State > %s\n", buf);
+	logmsg(": State > %s\n", buf);
 }
 
 static void
@@ -1616,7 +1616,7 @@ out:
 	}
 	friendcreate(r);
 	datasave();
-	printout("Request > Sent\n");
+	logmsg("Request > Sent\n");
 }
 
 static void
@@ -1645,7 +1645,7 @@ setnospam(void *data)
 	nsval = strtoul((char *)nospam, NULL, 16);
 	tox_set_nospam(tox, nsval);
 	datasave();
-	printout("Nospam > %08X\n", nsval);
+	logmsg("Nospam > %08X\n", nsval);
 	ftruncate(gslots[NOSPAM].fd[OUT], 0);
 	lseek(gslots[NOSPAM].fd[OUT], 0, SEEK_SET);
 	dprintf(gslots[NOSPAM].fd[OUT], "%08X\n", nsval);
@@ -1676,12 +1676,12 @@ loop(void)
 	struct file reqfifo;
 
 	t0 = time(NULL);
-	printout("DHT > Connecting\n");
+	logmsg("DHT > Connecting\n");
 	toxconnect();
 	while (running) {
 		if (tox_isconnected(tox) == 1) {
 			if (connected == 0) {
-				printout("DHT > Connected\n");
+				logmsg("DHT > Connected\n");
 				/* Cancel any pending transfers */
 				TAILQ_FOREACH(f, &friendhead, entry) {
 					canceltxtransfer(f);
@@ -1691,13 +1691,13 @@ loop(void)
 			}
 		} else {
 			if (connected == 1) {
-				printout("DHT > Disconnected\n");
+				logmsg("DHT > Disconnected\n");
 				connected = 0;
 			}
 			t1 = time(NULL);
 			if (t1 > t0 + CONNECTDELAY) {
 				t0 = time(NULL);
-				printout("DHT > Connecting\n");
+				logmsg("DHT > Connecting\n");
 				toxconnect();
 			}
 		}
@@ -1808,7 +1808,7 @@ loop(void)
 						weprintf("Failed to accept transfer from receiver\n");
 						cancelrxtransfer(f);
 					} else {
-						printout(": %s : Rx > Accepted\n", f->name);
+						logmsg(": %s : Rx > Accepted\n", f->name);
 						f->rxstate = TRANSFER_INPROGRESS;
 					}
 				}
@@ -1884,11 +1884,11 @@ loop(void)
 			}
 			if (c == '1') {
 				friendcreate(r);
-				printout("Request : %s > Accepted\n", req->idstr);
+				logmsg("Request : %s > Accepted\n", req->idstr);
 				datasave();
 			} else {
 				tox_del_friend(tox, r);
-				printout("Request : %s > Rejected\n", req->idstr);
+				logmsg("Request : %s > Rejected\n", req->idstr);
 			}
 cleanup:
 			unlinkat(gslots[REQUEST].fd[OUT], req->idstr, 0);
@@ -1914,7 +1914,7 @@ cleanup:
 						fiforeset(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN]);
 					} else {
 						f->tx.state = TRANSFER_INITIATED;
-						printout(": %s : Tx > Initiated\n", f->name);
+						logmsg(": %s : Tx > Initiated\n", f->name);
 					}
 					break;
 				case TRANSFER_INPROGRESS:
@@ -1930,7 +1930,7 @@ cleanup:
 						weprintf("Failed to call\n");
 						cancelcall(f, "Failed");
 					}
-					printout(": %s : Tx AV > Inviting\n", f->name);
+					logmsg(": %s : Tx AV > Inviting\n", f->name);
 					break;
 				case av_CallActive:
 					sendfriendcalldata(f);
@@ -1958,7 +1958,7 @@ shutdown(void)
 	struct friend *f, *ftmp;
 	struct request *r, *rtmp;
 
-	printout("Shutdown\n");
+	logmsg("Shutdown\n");
 
 	/* Friends */
 	for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
