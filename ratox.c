@@ -425,7 +425,6 @@ cbcallended(void *av, int32_t cnum, void *udata)
 			break;
 	if (!f)
 		return;
-
 	cancelcall(f, "Ended");
 }
 
@@ -439,7 +438,6 @@ cbcallcancelled(void *av, int32_t cnum, void *udata)
 			break;
 	if (!f)
 		return;
-
 	cancelcall(f, "Cancelled");
 }
 
@@ -453,7 +451,6 @@ cbcallrejected(void *av, int32_t cnum, void *udata)
 			break;
 	if (!f)
 		return;
-
 	cancelcall(f, "Rejected");
 }
 
@@ -507,7 +504,6 @@ cbcallending(void *av, int32_t cnum, void *udata)
 			break;
 	if (!f)
 		return;
-
 	cancelcall(f, "Ending");
 }
 
@@ -521,7 +517,6 @@ cbreqtimeout(void *av, int32_t cnum, void *udata)
 			break;
 	if (!f)
 		return;
-
 	cancelcall(f, "Request timeout");
 }
 
