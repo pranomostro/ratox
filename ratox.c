@@ -1106,7 +1106,7 @@ dataload(void)
 	if (read(fd, data, sz) != sz)
 		eprintf("read %s:", DATAFILE);
 
-	if (tox_is_data_encrypted(data) == 1) {
+	if (tox_is_save_encrypted(data) == 1) {
 		if (encryptdatafile == 0)
 			printout("Data : %s > Encrypted, but saving unencrypted\n", DATAFILE);
 		while (readpass("Data : Passphrase > ") < 0 ||
