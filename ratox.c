@@ -215,14 +215,9 @@ static void fiforeset(int, int *, struct file);
 static ssize_t fiforead(int, int *, struct file, void *, size_t);
 static void cbcallinvite(void *, int32_t, void *);
 static void cbcallstarted(void *, int32_t, void *);
-static void cbcallcancelled(void *, int32_t, void *);
-static void cbcallrejected(void *, int32_t, void *);
-static void cbcallended(void *, int32_t, void *);
-static void cbcallringing(void *, int32_t, void *);
+static void cbcallterminate(void *, int32_t, void *);
 static void preparetxcall(struct friend *);
 static void cbcallstarting(void *, int32_t, void *);
-static void cbcallending(void *, int32_t, void *);
-static void cbreqtimeout(void *, int32_t, void *);
 static void cbpeertimeout(void *, int32_t, void *);
 static void cbcalltypechange(void *, int32_t, void *);
 static void cbcalldata(ToxAv *, int32_t, int16_t *, int, void *);
@@ -416,7 +411,7 @@ cbcallstarted(void *av, int32_t cnum, void *udata)
 }
 
 static void
-cbcallended(void *av, int32_t cnum, void *udata)
+cbcallterminate(void *av, int32_t cnum, void *udata)
 {
 	struct friend *f;
 
@@ -425,39 +420,7 @@ cbcallended(void *av, int32_t cnum, void *udata)
 			break;
 	if (!f)
 		return;
-	cancelcall(f, "Ended");
-}
-
-static void
-cbcallcancelled(void *av, int32_t cnum, void *udata)
-{
-	struct friend *f;
-
-	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->av.num == cnum)
-			break;
-	if (!f)
-		return;
-	cancelcall(f, "Cancelled");
-}
-
-static void
-cbcallrejected(void *av, int32_t cnum, void *udata)
-{
-	struct friend *f;
-
-	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->av.num == cnum)
-			break;
-	if (!f)
-		return;
-	cancelcall(f, "Rejected");
-}
-
-static void
-cbcallringing(void *av, int32_t cnum, void *udata)
-{
-	return;
+	cancelcall(f, udata);
 }
 
 static void
@@ -492,32 +455,6 @@ cbcallstarting(void *av, int32_t cnum, void *udata)
 		return;
 	}
 	logmsg(": %s : Tx AV > Started\n", f->name);
-}
-
-static void
-cbcallending(void *av, int32_t cnum, void *udata)
-{
-	struct friend *f;
-
-	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->av.num == cnum)
-			break;
-	if (!f)
-		return;
-	cancelcall(f, "Ending");
-}
-
-static void
-cbreqtimeout(void *av, int32_t cnum, void *udata)
-{
-	struct friend *f;
-
-	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->av.num == cnum)
-			break;
-	if (!f)
-		return;
-	cancelcall(f, "Request timeout");
 }
 
 static void
@@ -1281,15 +1218,14 @@ toxinit(void)
 
 	toxav_register_callstate_callback(toxav, cbcallinvite, av_OnInvite, NULL);
 	toxav_register_callstate_callback(toxav, cbcallstarted, av_OnStart, NULL);
-	toxav_register_callstate_callback(toxav, cbcallended, av_OnEnd, NULL);
-	toxav_register_callstate_callback(toxav, cbcallcancelled, av_OnCancel, NULL);
-	toxav_register_callstate_callback(toxav, cbcallrejected, av_OnReject, NULL);
+	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnEnd, "Ended");
+	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnCancel, "Cancelled");
+	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnReject, "Rejected");
 
-	toxav_register_callstate_callback(toxav, cbcallringing, av_OnRinging, NULL);
 	toxav_register_callstate_callback(toxav, cbcallstarting, av_OnStarting, NULL);
-	toxav_register_callstate_callback(toxav, cbcallending, av_OnEnding, NULL);
+	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnEnding, "Ending");
 
-	toxav_register_callstate_callback(toxav, cbreqtimeout, av_OnRequestTimeout, NULL);
+	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnRequestTimeout, "Request timeout");
 	toxav_register_callstate_callback(toxav, cbpeertimeout, av_OnPeerTimeout, NULL);
 	toxav_register_callstate_callback(toxav, cbcalltypechange, av_OnMediaChange, NULL);
 
