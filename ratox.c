@@ -165,6 +165,7 @@ struct transfer {
 
 struct call {
 	int num;
+	int transmission;
 	uint8_t *frame;
 	uint8_t payload[RTP_PAYLOAD_SIZE];
 	ssize_t n;
@@ -213,7 +214,6 @@ static void printrat(void);
 static void logmsg(const char *, ...);
 static void fiforeset(int, int *, struct file);
 static ssize_t fiforead(int, int *, struct file, void *, size_t);
-static void preparetxcall(struct friend *);
 static void cbcallinvite(void *, int32_t, void *);
 static void cbcallstart(void *, int32_t, void *);
 static void cbcallterminate(void *, int32_t, void *);
@@ -345,18 +345,6 @@ again:
 }
 
 static void
-preparetxcall(struct friend *f)
-{
-	f->av.frame = malloc(sizeof(int16_t) * framesize);
-	if (!f->av.frame)
-		eprintf("malloc:");
-	f->av.n = 0;
-	f->av.incompleteframe = 0;
-	f->av.lastsent.tv_sec = 0;
-	f->av.lastsent.tv_nsec = 0;
-}
-
-static void
 cbcallinvite(void *av, int32_t cnum, void *udata)
 {
 	ToxAvCSettings avconfig;
@@ -406,7 +394,7 @@ cbcallinvite(void *av, int32_t cnum, void *udata)
 }
 
 static void
-cbcallstart(void *av, int32_t cnum, void *type)
+cbcallstart(void *av, int32_t cnum, void *udata)
 {
 	struct friend *f;
 	int r;
@@ -417,17 +405,24 @@ cbcallstart(void *av, int32_t cnum, void *type)
 	if (!f)
 		return;
 
-	if(!strncmp(type, "Tx", 2))
-		preparetxcall(f);
+	f->av.frame = malloc(sizeof(int16_t) * framesize);
+	if (!f->av.frame)
+		eprintf("malloc:");
+	f->av.n = 0;
+	f->av.incompleteframe = 0;
+	f->av.lastsent.tv_sec = 0;
+	f->av.lastsent.tv_nsec = 0;
+
 	r = toxav_prepare_transmission(toxav, f->av.num, av_jbufdc, av_VADd, 0);
 	if (r < 0) {
-		weprintf("Failed to prepare %s AV transmission\n", type);
+		weprintf("Failed to prepare Rx/Tx AV transmission\n");
 		r = toxav_hangup(toxav, f->av.num);
 		if (r < 0)
 			weprintf("Failed to hang up\n");
 		return;
 	}
-	logmsg(": %s : %s AV > Started\n", f->name, type);
+	f->av.transmission = 1;
+	logmsg(": %s : Rx/Tx AV > Started\n", f->name);
 }
 
 static void
@@ -504,6 +499,7 @@ cancelcall(struct friend *f, char *action)
 				weprintf("Failed to kill transmission\n");
 		}
 	}
+	f->av.transmission = 0;
 	f->av.num = -1;
 
 	/* Cancel Rx side of the call */
@@ -527,9 +523,6 @@ sendfriendcalldata(struct friend *f)
 	ssize_t n, payloadsize;
 	struct timespec now, diff;
 	int r;
-
-	if (!f->av.frame)
-		preparetxcall(f);
 
 	n = fiforead(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN],
 		     f->av.frame + f->av.incompleteframe * f->av.n,
@@ -1202,12 +1195,12 @@ toxinit(void)
 	tox_callback_file_data(tox, cbfiledata, NULL);
 
 	toxav_register_callstate_callback(toxav, cbcallinvite, av_OnInvite, NULL);
-	toxav_register_callstate_callback(toxav, cbcallstart, av_OnStart, "Rx");
+	toxav_register_callstate_callback(toxav, cbcallstart, av_OnStart, NULL);
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnEnd, "Ended");
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnCancel, "Cancelled");
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnReject, "Rejected");
 
-	toxav_register_callstate_callback(toxav, cbcallstart, av_OnStarting, "Tx");
+	toxav_register_callstate_callback(toxav, cbcallstart, av_OnStarting, NULL);
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnEnding, "Ending");
 
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnRequestTimeout, "Request timeout");
@@ -1355,6 +1348,7 @@ friendcreate(int32_t frnum)
 	ftruncate(f->fd[FCALL_PENDING], 0);
 	dprintf(f->fd[FCALL_PENDING], "0\n");
 
+	f->av.transmission = 0;
 	f->av.num = -1;
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
@@ -1650,7 +1644,7 @@ loop(void)
 						fdmax = f->fd[FFILE_IN];
 				}
 				if (f->av.num == -1 ||
-				    toxav_get_call_state(toxav, f->av.num) == av_CallActive) {
+				    (toxav_get_call_state(toxav, f->av.num) == av_CallActive && f->av.transmission)) {
 					FD_SET(f->fd[FCALL_IN], &rfds);
 					if (f->fd[FCALL_IN] > fdmax)
 						fdmax = f->fd[FCALL_IN];
