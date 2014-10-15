@@ -38,7 +38,7 @@ to help explain the semantics of the individual files.
 |-- 0A734CBA717CEB7883D....	# friend's ID excluding nospam + checksum
 |   |-- call_in			# 'arecord -r 48000 -c 1 -f S16_LE > call_in' to initiate a call
 |   |-- call_out		# 'aplay -r 48000 -c 1 -f S16_LE - < call_out' to answer a call
-|   |-- call_pending		# 1 if a call is pending, 0 otherwise
+|   |-- call_state		# 0 if there's no call, 1 if call is pending and 2 if call is active
 |   |-- file_in			# 'cat foo > file_in' to send a file
 |   |-- file_out		# 'cat file_out > bar' to receive a file
 |   |-- file_pending		# contains filename if transfer pending, empty otherwise
