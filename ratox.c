@@ -925,7 +925,8 @@ sendfriendfile(struct friend *f)
 		/* Attempt to transmit the pending buffer */
 		if (f->tx.pendingbuf == 1) {
 			if (tox_file_send_data(tox, f->num, f->tx.fnum, f->tx.buf, f->tx.n) == -1) {
-				/* bad luck - we will try again later */
+				clock_gettime(CLOCK_MONOTONIC, &f->tx.lastblock);
+				f->tx.cooldown = 1;
 				break;
 			}
 			f->tx.pendingbuf = 0;
