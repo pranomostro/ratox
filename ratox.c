@@ -500,7 +500,7 @@ cancelcall(struct friend *f, char *action)
 	logmsg(": %s : Rx/Tx AV > %s\n", f->name, action);
 
 	if (f->av.num != -1) {
-		if (toxav_get_call_state(toxav, f->av.num) != av_CallInviting) {
+		if (f->av.transmission) {
 			r = toxav_kill_transmission(toxav, f->av.num);
 			if (r < 0)
 				weprintf("Failed to kill transmission\n");
