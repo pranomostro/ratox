@@ -942,7 +942,8 @@ sendfriendfile(struct friend *f)
 			break;
 		}
 		if (n == -1) {
-			printf("fiforead in sendfriendfile failed. fix this. errno = %d\n", errno);
+			if (errno != EWOULDBLOCK)
+				weprintf("fiforead:");
 			break;
 		}
 		/* Store transfer size in case we can't send it right now */
