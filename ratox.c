@@ -335,8 +335,7 @@ again:
 	if (r == 0) {
 		fiforeset(dirfd, fd, f);
 		return 0;
-	}
-	if (r < 0) {
+	} else if (r < 0) {
 		if (errno == EINTR)
 			goto again;
 		if (errno == EWOULDBLOCK)
@@ -378,17 +377,8 @@ cbcallinvite(void *av, int32_t cnum, void *udata)
 		return;
 	}
 
-	switch (avconfig.call_type) {
-	case TypeVideo:
-		logmsg(": %s : Rx AV > Inviting with video\n", f->name);
-		break;
-	case TypeAudio:
-		logmsg(": %s : Rx AV > Inviting without video\n", f->name);
-		break;
-	}
-
-	logmsg(": %s : Rx AV > Audio call settings: srate = %lu, channels = %lu\n",
-		 f->name, avconfig.audio_sample_rate, avconfig.audio_channels);
+	logmsg(": %s : Audio : Rx > Inviting (%luHz/%luch)\n",
+	       f->name, avconfig.audio_sample_rate, avconfig.audio_channels);
 
 	ftruncate(f->fd[FCALL_STATE], 0);
 	lseek(f->fd[FCALL_STATE], 0, SEEK_SET);
@@ -429,7 +419,7 @@ cbcallstart(void *av, int32_t cnum, void *udata)
 	lseek(f->fd[FCALL_STATE], 0, SEEK_SET);
 	dprintf(f->fd[FCALL_STATE], "2\n");
 
-	logmsg(": %s : Rx/Tx AV > Started\n", f->name);
+	logmsg(": %s : Audio > Started\n", f->name);
 }
 
 static void
@@ -497,7 +487,7 @@ cancelcall(struct friend *f, char *action)
 {
 	int r;
 
-	logmsg(": %s : Rx/Tx AV > %s\n", f->name, action);
+	logmsg(": %s : Audio > %s\n", f->name, action);
 
 	if (f->av.num != -1) {
 		if (f->av.transmission) {
@@ -539,7 +529,7 @@ sendfriendcalldata(struct friend *f)
 		if (r < 0)
 			weprintf("Failed to hang up\n");
 		return;
-	} else if (n == -1) {
+	} else if (n < 0) {
 		return;
 	} else if (n == (framesize * sizeof(int16_t) - f->av.incompleteframe * f->av.n)) {
 		f->av.incompleteframe = 0;
@@ -924,7 +914,7 @@ sendfriendfile(struct friend *f)
 	while (diff.tv_sec == 0 && diff.tv_nsec < tox_do_interval(tox) * 1E6) {
 		/* Attempt to transmit the pending buffer */
 		if (f->tx.pendingbuf == 1) {
-			if (tox_file_send_data(tox, f->num, f->tx.fnum, f->tx.buf, f->tx.n) == -1) {
+			if (tox_file_send_data(tox, f->num, f->tx.fnum, f->tx.buf, f->tx.n) < 0) {
 				clock_gettime(CLOCK_MONOTONIC, &f->tx.lastblock);
 				f->tx.cooldown = 1;
 				break;
@@ -942,14 +932,14 @@ sendfriendfile(struct friend *f)
 			f->tx.state = TRANSFER_NONE;
 			break;
 		}
-		if (n == -1) {
+		if (n < 0) {
 			if (errno != EWOULDBLOCK)
 				weprintf("fiforead:");
 			break;
 		}
 		/* Store transfer size in case we can't send it right now */
 		f->tx.n = n;
-		if (tox_file_send_data(tox, f->num, f->tx.fnum, f->tx.buf, f->tx.n) == -1) {
+		if (tox_file_send_data(tox, f->num, f->tx.fnum, f->tx.buf, f->tx.n) < 0) {
 			clock_gettime(CLOCK_MONOTONIC, &f->tx.lastblock);
 			f->tx.cooldown = 1;
 			f->tx.pendingbuf = 1;
@@ -1022,7 +1012,7 @@ dataload(void)
 	fd = open(DATAFILE, O_RDONLY);
 	if (fd < 0) {
 		if (encryptdatafile == 1)
-			while (readpass("Data : New passphrase > ") == -1);
+			while (readpass("Data : New passphrase > ") < 0);
 		return;
 	}
 
@@ -1683,7 +1673,7 @@ loop(void)
 					if (f->fd[FFILE_IN] > fdmax)
 						fdmax = f->fd[FFILE_IN];
 				}
-				if (f->av.num == -1 ||
+				if (f->av.num < 0 ||
 				    (toxav_get_call_state(toxav, f->av.num) == av_CallActive && f->av.transmission)) {
 					FD_SET(f->fd[FCALL_IN], &rfds);
 					if (f->fd[FCALL_IN] > fdmax)
@@ -1748,7 +1738,7 @@ loop(void)
 				continue;
 			if (f->rxstate == TRANSFER_NONE)
 				continue;
-			if (f->fd[FFILE_OUT] == -1) {
+			if (f->fd[FFILE_OUT] < 0) {
 				r = openat(f->dirfd, ffiles[FFILE_OUT].name,
 					   ffiles[FFILE_OUT].flags, 0666);
 				if (r < 0) {
@@ -1772,7 +1762,7 @@ loop(void)
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			if (tox_get_friend_connection_status(tox, f->num) == 0)
 				continue;
-			if (f->fd[FCALL_OUT] == -1) {
+			if (f->fd[FCALL_OUT] < 0) {
 				r = openat(f->dirfd, ffiles[FCALL_OUT].name,
 					   ffiles[FCALL_OUT].flags, 0666);
 				if (r < 0) {
@@ -1886,7 +1876,7 @@ loop(void)
 						fiforeset(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN]);
 						break;
 					}
-					logmsg(": %s : Tx AV > Inviting\n", f->name);
+					logmsg(": %s : Audio : Tx > Inviting\n", f->name);
 					break;
 				case av_CallActive:
 					sendfriendcalldata(f);
