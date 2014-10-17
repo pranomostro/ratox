@@ -1779,6 +1779,17 @@ loop(void)
 
 			switch (toxav_get_call_state(toxav, f->av.num)) {
 			case av_CallStarting:
+				if (f->fd[FCALL_OUT] < 0) {
+					fd = fifoopen(f->dirfd, ffiles[FCALL_OUT]);
+					if (fd < 0) {
+						f->av.state &= ~INCOMING;
+						continue;
+					} else {
+						f->av.state |= INCOMING;
+						f->fd[FCALL_OUT] = fd;
+					}
+				}
+
 				r = toxav_answer(toxav, f->av.num, &toxavconfig);
 				if (r < 0) {
 					weprintf("Failed to answer call\n");
