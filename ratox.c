@@ -161,13 +161,19 @@ struct transfer {
 	int cooldown;
 };
 
+enum {
+	OUTGOING     = 1 << 0,
+	INCOMING     = 1 << 1,
+	TRANSMITTING = 1 << 2,
+	INCOMPLETE   = 1 << 3,
+};
+
 struct call {
 	int num;
-	int transmission;
+	int state;
 	uint8_t *frame;
 	uint8_t payload[RTP_PAYLOAD_SIZE];
 	ssize_t n;
-	int incompleteframe;
 	struct timespec lastsent;
 };
 
@@ -210,6 +216,7 @@ static int proxyflag;
 static struct timespec timediff(struct timespec, struct timespec);
 static void printrat(void);
 static void logmsg(const char *, ...);
+static int fifoopen(int, struct file);
 static void fiforeset(int, int *, struct file);
 static ssize_t fiforead(int, int *, struct file, void *, size_t);
 static void cbcallinvite(void *, int32_t, void *);
@@ -248,6 +255,9 @@ static void loop(void);
 static void initshutdown(int);
 static void shutdown(void);
 static void usage(void);
+
+#define FD_APPEND(fd)	FD_SET((fd), &rfds); \
+			if ((fd) > fdmax) fdmax = (fd);
 
 static struct timespec
 timediff(struct timespec t1, struct timespec t2)
@@ -302,6 +312,17 @@ logmsg(const char *fmt, ...)
 	va_end(ap);
 }
 
+int
+fifoopen(int dirfd, struct file f)
+{
+	int fd;
+
+	fd = openat(dirfd, f.name, f.flags, 0666);
+	if (fd < 0 && errno != ENXIO)
+		eprintf("openat %s:", f.name);
+	return fd;
+}
+
 static void
 fiforeset(int dirfd, int *fd, struct file f)
 {
@@ -315,10 +336,7 @@ fiforeset(int dirfd, int *fd, struct file f)
 	r = mkfifoat(dirfd, f.name, 0666);
 	if (r < 0 && errno != EEXIST)
 		eprintf("mkfifoat %s:", f.name);
-	r = openat(dirfd, f.name, f.flags);
-	if (r < 0 && errno != ENXIO)
-		eprintf("openat %s:", f.name);
-	*fd = r;
+	*fd = fifoopen(dirfd, f);
 }
 
 static ssize_t
@@ -396,8 +414,8 @@ cbcallstart(void *av, int32_t cnum, void *udata)
 	f->av.frame = malloc(sizeof(int16_t) * framesize);
 	if (!f->av.frame)
 		eprintf("malloc:");
+
 	f->av.n = 0;
-	f->av.incompleteframe = 0;
 	f->av.lastsent.tv_sec = 0;
 	f->av.lastsent.tv_nsec = 0;
 
@@ -409,7 +427,7 @@ cbcallstart(void *av, int32_t cnum, void *udata)
 			weprintf("Failed to hang up\n");
 		return;
 	}
-	f->av.transmission = 1;
+	f->av.state |= TRANSMITTING;
 
 	ftruncate(f->fd[FCALL_STATE], 0);
 	lseek(f->fd[FCALL_STATE], 0, SEEK_SET);
@@ -449,7 +467,7 @@ cbcalldata(ToxAv *av, int32_t cnum, int16_t *data, int len, void *udata)
 {
 	struct friend *f;
 	uint8_t *buf;
-	int wrote = 0;
+	int fd, wrote = 0;
 	ssize_t n;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
@@ -457,6 +475,18 @@ cbcalldata(ToxAv *av, int32_t cnum, int16_t *data, int len, void *udata)
 			break;
 	if (!f)
 		return;
+	if (!(f->av.state & INCOMING)) {
+		/* try to open call_out for writing */
+		fd = fifoopen(f->dirfd, ffiles[FCALL_OUT]);
+		if (fd < 0) {
+			close (fd);
+			return;
+		}
+		if (f->fd[FCALL_OUT] < 0) {
+			f->fd[FCALL_OUT] = fd;
+			f->av.state |= INCOMING;
+		}
+	}
 
 	buf = (uint8_t *)data;
 	len *= 2;
@@ -464,7 +494,7 @@ cbcalldata(ToxAv *av, int32_t cnum, int16_t *data, int len, void *udata)
 		n = write(f->fd[FCALL_OUT], &buf[wrote], len);
 		if (n < 0) {
 			if (errno == EPIPE) {
-				toxav_hangup(toxav, f->av.num);
+				f->av.state &= ~INCOMING;
 				break;
 			} else if (errno == EWOULDBLOCK) {
 				continue;
@@ -486,13 +516,13 @@ cancelcall(struct friend *f, char *action)
 	logmsg(": %s : Audio > %s\n", f->name, action);
 
 	if (f->av.num != -1) {
-		if (f->av.transmission) {
+		if (f->av.state & TRANSMITTING) {
 			r = toxav_kill_transmission(toxav, f->av.num);
 			if (r < 0)
 				weprintf("Failed to kill transmission\n");
 		}
 	}
-	f->av.transmission = 0;
+	f->av.state = 0;
 	f->av.num = -1;
 
 	/* Cancel Rx side of the call */
@@ -518,19 +548,18 @@ sendfriendcalldata(struct friend *f)
 	int r;
 
 	n = fiforead(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN],
-		     f->av.frame + f->av.incompleteframe * f->av.n,
-		     framesize * sizeof(int16_t) - f->av.incompleteframe * f->av.n);
+		     f->av.frame + ((f->av.state & INCOMPLETE) != 0) * f->av.n,
+		     framesize * sizeof(int16_t) - ((f->av.state & INCOMPLETE) != 0) * f->av.n);
 	if (n == 0) {
-		r = toxav_hangup(toxav, f->av.num);
-		if (r < 0)
-			weprintf("Failed to hang up\n");
+		f->av.state &= ~OUTGOING;
 		return;
 	} else if (n < 0) {
 		return;
-	} else if (n == (framesize * sizeof(int16_t) - f->av.incompleteframe * f->av.n)) {
-		f->av.incompleteframe = 0;
+	} else if (n == (framesize * sizeof(int16_t) - ((f->av.state & INCOMPLETE) != 0) * f->av.n)) {
+		f->av.state &= ~INCOMPLETE;
 		f->av.n = 0;
 	} else {
+		f->av.state |= INCOMPLETE;
 		f->av.n += n;
 		return;
 	}
@@ -1361,7 +1390,7 @@ friendcreate(int32_t frnum)
 	ftruncate(f->fd[FCALL_STATE], 0);
 	dprintf(f->fd[FCALL_STATE], "0\n");
 
-	f->av.transmission = 0;
+	f->av.state = 0;
 	f->av.num = -1;
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
@@ -1592,7 +1621,7 @@ loop(void)
 	char tstamp[64];
 	struct friend *f, *ftmp;
 	struct request *req, *rtmp;
-	time_t t0, t1, now;
+	time_t t0, t1;
 	int connected = 0;
 	int i, n, r;
 	int fd, fdmax;
@@ -1606,10 +1635,10 @@ loop(void)
 	logmsg("DHT > Connecting\n");
 	toxconnect();
 	while (running) {
-		if (tox_isconnected(tox) == 1) {
-			if (connected == 0) {
+		/* Handle connection states */
+		if (tox_isconnected(tox)) {
+			if (!connected) {
 				logmsg("DHT > Connected\n");
-				/* Cancel any pending transfers */
 				TAILQ_FOREACH(f, &friendhead, entry) {
 					canceltxtransfer(f);
 					cancelrxtransfer(f);
@@ -1617,7 +1646,7 @@ loop(void)
 				connected = 1;
 			}
 		} else {
-			if (connected == 1) {
+			if (connected) {
 				logmsg("DHT > Disconnected\n");
 				connected = 0;
 			}
@@ -1630,23 +1659,20 @@ loop(void)
 		}
 		tox_do(tox);
 
+		/* Prepare select-fd-set */
 		FD_ZERO(&rfds);
-
 		fdmax = -1;
+
 		for (i = 0; i < LEN(gslots); i++) {
-			FD_SET(gslots[i].fd[IN], &rfds);
-			if (gslots[i].fd[IN] > fdmax)
-				fdmax = gslots[i].fd[IN];
+			FD_APPEND(gslots[i].fd[IN]);
 		}
 
 		TAILQ_FOREACH(req, &reqhead, entry) {
-			FD_SET(req->fd, &rfds);
-			if(req->fd > fdmax)
-				fdmax = req->fd;
+			FD_APPEND(req->fd);
 		}
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			/* Check cooldown state of file transfers */
+			/* File transfer cooldown */
 			if (f->tx.cooldown) {
 				clock_gettime(CLOCK_MONOTONIC, &curtime);
 				diff = timediff(f->tx.lastblock, curtime);
@@ -1660,25 +1686,19 @@ loop(void)
 
 			/* Only monitor friends that are online */
 			if (tox_get_friend_connection_status(tox, f->num) == 1) {
-				FD_SET(f->fd[FTEXT_IN], &rfds);
-				if (f->fd[FTEXT_IN] > fdmax)
-					fdmax = f->fd[FTEXT_IN];
+				FD_APPEND(f->fd[FTEXT_IN]);
+
 				if (f->tx.state == TRANSFER_NONE ||
 				    (f->tx.state == TRANSFER_INPROGRESS && !f->tx.cooldown)) {
-					FD_SET(f->fd[FFILE_IN], &rfds);
-					if (f->fd[FFILE_IN] > fdmax)
-						fdmax = f->fd[FFILE_IN];
+					FD_APPEND(f->fd[FFILE_IN]);
 				}
 				if (f->av.num < 0 ||
-				    (toxav_get_call_state(toxav, f->av.num) == av_CallActive && f->av.transmission)) {
-					FD_SET(f->fd[FCALL_IN], &rfds);
-					if (f->fd[FCALL_IN] > fdmax)
-						fdmax = f->fd[FCALL_IN];
+				    (toxav_get_call_state(toxav, f->av.num) == av_CallActive &&
+				    f->av.state & TRANSMITTING)) {
+					FD_APPEND(f->fd[FCALL_IN]);
 				}
 			}
-			FD_SET(f->fd[FREMOVE], &rfds);
-			if (f->fd[FREMOVE] > fdmax)
-				fdmax = f->fd[FREMOVE];
+			FD_APPEND(f->fd[FREMOVE]);
 		}
 
 		tv.tv_sec = 0;
@@ -1690,9 +1710,7 @@ loop(void)
 			eprintf("select:");
 		}
 
-		/* Check for broken transfers, i.e. the friend went offline
-		 * in the middle of a transfer or you close file_out.
-		 */
+		/* Check for broken transfers (friend went offline, file_out was closed) */
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			if (tox_get_friend_connection_status(tox, f->num) == 0) {
 				canceltxtransfer(f);
@@ -1734,22 +1752,20 @@ loop(void)
 				continue;
 			if (f->rxstate == TRANSFER_NONE)
 				continue;
-			if (f->fd[FFILE_OUT] < 0) {
-				r = openat(f->dirfd, ffiles[FFILE_OUT].name,
-					   ffiles[FFILE_OUT].flags, 0666);
-				if (r < 0) {
-					if (errno != ENXIO)
-						eprintf("openat %s:", ffiles[FFILE_OUT].name);
+			if (f->fd[FFILE_OUT] >= 0)
+				continue;
+			r = openat(f->dirfd, ffiles[FFILE_OUT].name, ffiles[FFILE_OUT].flags);
+			if (r < 0) {
+				if (errno != ENXIO)
+					eprintf("openat %s:", ffiles[FFILE_OUT].name);
+			} else {
+				f->fd[FFILE_OUT] = r;
+				if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_ACCEPT, NULL, 0) < 0) {
+					weprintf("Failed to accept transfer from receiver\n");
+					cancelrxtransfer(f);
 				} else {
-					f->fd[FFILE_OUT] = r;
-					if (tox_file_send_control(tox, f->num, 1, 0,
-							      TOX_FILECONTROL_ACCEPT, NULL, 0) < 0) {
-						weprintf("Failed to accept transfer from receiver\n");
-						cancelrxtransfer(f);
-					} else {
-						logmsg(": %s : Rx > Accepted\n", f->name);
-						f->rxstate = TRANSFER_INPROGRESS;
-					}
+					logmsg(": %s : Rx > Accepted\n", f->name);
+					f->rxstate = TRANSFER_INPROGRESS;
 				}
 			}
 		}
@@ -1758,43 +1774,40 @@ loop(void)
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			if (tox_get_friend_connection_status(tox, f->num) == 0)
 				continue;
-			if (f->fd[FCALL_OUT] < 0) {
-				r = openat(f->dirfd, ffiles[FCALL_OUT].name,
-					   ffiles[FCALL_OUT].flags, 0666);
+			if (f->av.num < 0)
+				continue;
+
+			switch (toxav_get_call_state(toxav, f->av.num)) {
+			case av_CallStarting:
+				r = toxav_answer(toxav, f->av.num, &toxavconfig);
 				if (r < 0) {
-					if (errno != ENXIO)
-						eprintf("openat %s:", ffiles[FCALL_OUT].name);
-					continue;
+					weprintf("Failed to answer call\n");
+					r = toxav_reject(toxav, f->av.num, NULL);
+					if (r < 0)
+						weprintf("Failed to reject call\n");
+				}
+				break;
+			case av_CallActive:
+				fd = fifoopen(f->dirfd, ffiles[FCALL_OUT]);
+				if (fd < 0) {
+					f->av.state &= ~INCOMING;
+					close(fd);
 				} else {
-					f->fd[FCALL_OUT] = r;
-				}
-			}
-			if (f->av.num != -1) {
-				switch (toxav_get_call_state(toxav, f->av.num)) {
-				case av_CallStarting:
-					r = toxav_answer(toxav, f->av.num, &toxavconfig);
-					if (r < 0) {
-						weprintf("Failed to answer call\n");
-						r = toxav_reject(toxav, f->av.num, NULL);
-						if (r < 0)
-							weprintf("Failed to reject call\n");
-					}
-					break;
-				case av_CallActive:
-					fd = openat(f->dirfd, ffiles[FCALL_OUT].name, ffiles[FCALL_OUT].flags);
-					if (fd < 0) {
-						if (errno == ENXIO) {
-							r = toxav_hangup(toxav, f->av.num);
-							if (r < 0)
-								weprintf("Failed to hang up\n");
-						}
-					} else {
+					f->av.state |= INCOMING;
+					if (f->fd[FCALL_OUT] >= 0)
 						close(fd);
-					}
-					break;
-				default:
-					break;
+					else
+						f->fd[FCALL_OUT] = fd;
 				}
+
+				if (!(f->av.state & INCOMING) && !(f->av.state & OUTGOING)) {
+					r = toxav_hangup(toxav, f->av.num);
+					if (r < 0)
+						weprintf("Failed to hang up\n");
+				}
+				break;
+			default:
+				break;
 			}
 		}
 
@@ -1847,8 +1860,7 @@ loop(void)
 				switch (f->tx.state) {
 				case TRANSFER_NONE:
 					/* Prepare a new transfer */
-					now = time(NULL);
-					snprintf(tstamp, sizeof(tstamp), "%lu", (unsigned long)now);
+					snprintf(tstamp, sizeof(tstamp), "%lu", (unsigned long)time(NULL));
 					if (tox_new_file_sender(tox, f->num,
 						0, (uint8_t *)tstamp, strlen(tstamp)) < 0) {
 						weprintf("Failed to initiate new transfer\n");
@@ -1872,9 +1884,11 @@ loop(void)
 						fiforeset(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN]);
 						break;
 					}
+					f->av.state |= OUTGOING;
 					logmsg(": %s : Audio : Tx > Inviting\n", f->name);
 					break;
 				case av_CallActive:
+					f->av.state |= OUTGOING;
 					sendfriendcalldata(f);
 					break;
 				default:
@@ -1946,11 +1960,11 @@ shutdown(void)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-4|-6] [-t] [-p]\n", argv0);
-	fprintf(stderr, " -4\tIPv4 only\n");
-	fprintf(stderr, " -6\tIPv6 only\n");
-	fprintf(stderr, " -t\tEnable TCP mode (UDP by default)\n");
-	fprintf(stderr, " -p\tEnable TCP socks5 proxy\n");
+	fprintf(stderr, "usage: %s [-4|-6] [-t] [-p]\n"
+	                " -4\tIPv4 only\n"
+	                " -6\tIPv6 only\n"
+	                " -t\tEnable TCP mode (UDP by default)\n"
+	                " -p\tEnable TCP socks5 proxy\n", argv0);
 	exit(1);
 }
 
