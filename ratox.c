@@ -679,7 +679,7 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, vo
 	TAILQ_INSERT_TAIL(&reqhead, req, entry);
 
 	logmsg("Request : %s > %s\n",
-		 req->idstr, req->msg);
+	       req->idstr, req->msg);
 }
 
 static void
@@ -751,7 +751,7 @@ cbuserstate(Tox *m, int32_t frnum, uint8_t state, void *udata)
 
 static void
 cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrltype,
-	const uint8_t *data, uint16_t len, void *udata)
+	      const uint8_t *data, uint16_t len, void *udata)
 {
 	struct friend *f;
 
@@ -850,7 +850,7 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 	/* We only support a single transfer at a time */
 	if (f->rxstate == TRANSFER_INPROGRESS) {
 		logmsg(": %s : Rx > Rejected %s, already one in progress\n",
-			 f->name, filename);
+		       f->name, filename);
 		if (tox_file_send_control(tox, f->num, 1, fnum, TOX_FILECONTROL_KILL, NULL, 0) < 0)
 			weprintf("Failed to kill new Rx transfer\n");
 		return;
@@ -1694,7 +1694,7 @@ loop(void)
 				}
 				if (f->av.num < 0 ||
 				    (toxav_get_call_state(toxav, f->av.num) == av_CallActive &&
-				    f->av.state & TRANSMITTING)) {
+				     f->av.state & TRANSMITTING)) {
 					FD_APPEND(f->fd[FCALL_IN]);
 				}
 			}
@@ -1862,7 +1862,7 @@ loop(void)
 					/* Prepare a new transfer */
 					snprintf(tstamp, sizeof(tstamp), "%lu", (unsigned long)time(NULL));
 					if (tox_new_file_sender(tox, f->num,
-						0, (uint8_t *)tstamp, strlen(tstamp)) < 0) {
+								0, (uint8_t *)tstamp, strlen(tstamp)) < 0) {
 						weprintf("Failed to initiate new transfer\n");
 						fiforeset(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN]);
 					} else {
