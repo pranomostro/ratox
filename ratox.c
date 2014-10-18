@@ -1128,15 +1128,11 @@ localinit(void)
 			if (gfiles[m].type == FIFO) {
 				fiforeset(gslots[i].dirfd, &gslots[i].fd[m], gfiles[m]);
 			} else if (gfiles[m].type == STATIC || (gfiles[m].type == NONE && !gslots[i].outisfolder)) {
-				r = openat(gslots[i].dirfd, gfiles[m].name, gfiles[m].flags, 0666);
-				if (r < 0)
-					eprintf("openat %s:", gfiles[m].name);
-				gslots[i].fd[m] = r;
+				gslots[i].fd[m] = fifoopen(gslots[i].dirfd, gfiles[m]);
 			} else if (gfiles[m].type == NONE && gslots[i].outisfolder) {
 				r = mkdirat(gslots[i].dirfd, gfiles[m].name, 0777);
 				if (r < 0 && errno != EEXIST)
 					eprintf("mkdirat %s:", gfiles[m].name);
-
 				r = openat(gslots[i].dirfd, gfiles[m].name, O_RDONLY | O_DIRECTORY);
 				if (r < 0)
 					eprintf("openat %s:", gfiles[m].name);
@@ -1344,10 +1340,7 @@ friendcreate(int32_t frnum)
 		if (ffiles[i].type == FIFO) {
 			fiforeset(f->dirfd, &f->fd[i], ffiles[i]);
 		} else if (ffiles[i].type == STATIC) {
-			r = openat(f->dirfd, ffiles[i].name, ffiles[i].flags, 0666);
-			if (r < 0)
-				eprintf("openat %s:", ffiles[i].name);
-			f->fd[i] = r;
+			f->fd[i] = fifoopen(f->dirfd, ffiles[i]);
 		}
 	}
 
@@ -1718,10 +1711,9 @@ loop(void)
 			}
 			if (f->rxstate != TRANSFER_INPROGRESS)
 				continue;
-			fd = openat(f->dirfd, ffiles[FFILE_OUT].name, ffiles[FFILE_OUT].flags, 0666);
+			fd = fifoopen(f->dirfd, ffiles[FFILE_OUT]);
 			if (fd < 0) {
-				if (errno == ENXIO)
-					cancelrxtransfer(f);
+				cancelrxtransfer(f);
 			} else {
 				close(fd);
 			}
@@ -1754,19 +1746,16 @@ loop(void)
 				continue;
 			if (f->fd[FFILE_OUT] >= 0)
 				continue;
-			r = openat(f->dirfd, ffiles[FFILE_OUT].name, ffiles[FFILE_OUT].flags);
-			if (r < 0) {
-				if (errno != ENXIO)
-					eprintf("openat %s:", ffiles[FFILE_OUT].name);
+			r = fifoopen(f->dirfd, ffiles[FFILE_OUT]);
+			if (r < 0)
+				continue;
+			f->fd[FFILE_OUT] = r;
+			if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_ACCEPT, NULL, 0) < 0) {
+				weprintf("Failed to accept transfer from receiver\n");
+				cancelrxtransfer(f);
 			} else {
-				f->fd[FFILE_OUT] = r;
-				if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_ACCEPT, NULL, 0) < 0) {
-					weprintf("Failed to accept transfer from receiver\n");
-					cancelrxtransfer(f);
-				} else {
-					logmsg(": %s : Rx > Accepted\n", f->name);
-					f->rxstate = TRANSFER_INPROGRESS;
-				}
+				logmsg(": %s : Rx > Accepted\n", f->name);
+				f->rxstate = TRANSFER_INPROGRESS;
 			}
 		}
 
@@ -1777,19 +1766,21 @@ loop(void)
 			if (f->av.num < 0)
 				continue;
 
+			fd = fifoopen(f->dirfd, ffiles[FCALL_OUT]);
+			if (fd < 0) {
+				f->av.state &= ~INCOMING;
+			} else {
+				f->av.state |= INCOMING;
+				if (f->fd[FCALL_OUT] >= 0)
+					close(fd);
+				else
+					f->fd[FCALL_OUT] = fd;
+			}
+
 			switch (toxav_get_call_state(toxav, f->av.num)) {
 			case av_CallStarting:
-				if (f->fd[FCALL_OUT] < 0) {
-					fd = fifoopen(f->dirfd, ffiles[FCALL_OUT]);
-					if (fd < 0) {
-						f->av.state &= ~INCOMING;
-						continue;
-					} else {
-						f->av.state |= INCOMING;
-						f->fd[FCALL_OUT] = fd;
-					}
-				}
-
+				if (!(f->av.state & INCOMING))
+					continue;
 				r = toxav_answer(toxav, f->av.num, &toxavconfig);
 				if (r < 0) {
 					weprintf("Failed to answer call\n");
@@ -1799,18 +1790,6 @@ loop(void)
 				}
 				break;
 			case av_CallActive:
-				fd = fifoopen(f->dirfd, ffiles[FCALL_OUT]);
-				if (fd < 0) {
-					f->av.state &= ~INCOMING;
-					close(fd);
-				} else {
-					f->av.state |= INCOMING;
-					if (f->fd[FCALL_OUT] >= 0)
-						close(fd);
-					else
-						f->fd[FCALL_OUT] = fd;
-				}
-
 				if (!(f->av.state & INCOMING) && !(f->av.state & OUTGOING)) {
 					r = toxav_hangup(toxav, f->av.num);
 					if (r < 0)
