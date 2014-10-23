@@ -128,6 +128,19 @@ On the receiver side (the server):
 Now on the client run the following:
 ssh -o ProxyCommand="nc %h 1234" user@localhost
 
+Screencasting using ffmpeg and mplayer
+--------------------------------------
+
+On the sender side:
+ffmpeg -f x11grab -r 10 -s 1366x768 -i :0.0 -vcodec libx264 \
+	-pix_fmt yuv420p -preset fast -tune zerolatency -b:v 500k \
+	-f flv pipe: > file_in
+
+On the receiver side:
+mplayer -cache 1024 file_out
+
+You may have to play about with the cache size.
+
 Portability
 ===========
 
