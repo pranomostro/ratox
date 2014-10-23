@@ -111,6 +111,23 @@ NOTE: Some of these features are not intended to be developed
 in ratox itself but rather in external scripts that are built upon
 ratox.
 
+Examples
+========
+
+SSH over TOX for the practical paranoid
+---------------------------------------
+
+On the sender side (the client):
+1) cd into the friend's directory (the server)
+2) nc -lv 1234 > file_in < file_out
+
+On the receiver side (the server):
+1) cd into the friend's directory (the client)
+2) cat < file_out | nc localhost 22 > file_in
+
+Now on the client run the following:
+ssh -o ProxyCommand="nc %h 1234" user@localhost
+
 Portability
 ===========
 
