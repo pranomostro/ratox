@@ -8,6 +8,7 @@
                                    -- by sin and FRIGN
 ======================================================
 
+
 What is it?
 ===========
 
@@ -19,12 +20,14 @@ interaction through named pipes.
 There's also a set of scripts[1] developed by various people that build on
 top of the FIFO interface.
 
+
 Getting started
 ===============
 
 Get the latest version from the git-repository; build and install it.
 Run ratox in an empty directory and it will create a set of files and
 folders allowing you to control the client.
+
 
 File structure
 ==============
@@ -77,6 +80,7 @@ to help explain the semantics of the individual files.
     |-- in			# 'cat I am bored to death > in' to change your status message
     `-- out			# 'cat out' to show your status message
 
+
 Features
 ========
 
@@ -111,6 +115,7 @@ NOTE: Some of these features are not intended to be developed
 in ratox itself but rather in external scripts that are built upon
 ratox.
 
+
 Examples
 ========
 
@@ -141,11 +146,13 @@ mplayer -cache 1024 file_out
 
 You may have to play about with the cache size.
 
+
 Portability
 ===========
 
 Builds and works on *BSD and Linux.  To build on OSX you need
 to apply a patch[2].
+
 
 Contact
 =======
