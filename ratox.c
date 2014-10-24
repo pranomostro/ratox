@@ -396,7 +396,7 @@ cbcallinvite(void *av, int32_t cnum, void *udata)
 
 	ftruncate(f->fd[FCALL_STATE], 0);
 	lseek(f->fd[FCALL_STATE], 0, SEEK_SET);
-	dprintf(f->fd[FCALL_STATE], "1\n");
+	dprintf(f->fd[FCALL_STATE], "pending\n");
 }
 
 static void
@@ -431,7 +431,7 @@ cbcallstart(void *av, int32_t cnum, void *udata)
 
 	ftruncate(f->fd[FCALL_STATE], 0);
 	lseek(f->fd[FCALL_STATE], 0, SEEK_SET);
-	dprintf(f->fd[FCALL_STATE], "2\n");
+	dprintf(f->fd[FCALL_STATE], "active\n");
 
 	logmsg(": %s : Audio > Started\n", f->name);
 }
@@ -532,7 +532,7 @@ cancelcall(struct friend *f, char *action)
 	}
 	ftruncate(f->fd[FCALL_STATE], 0);
 	lseek(f->fd[FCALL_STATE], 0, SEEK_SET);
-	dprintf(f->fd[FCALL_STATE], "0\n");
+	dprintf(f->fd[FCALL_STATE], "none\n");
 
 	/* Cancel Tx side of the call */
 	free(f->av.frame);
@@ -1381,7 +1381,7 @@ friendcreate(int32_t frnum)
 
 	/* Dump call pending state */
 	ftruncate(f->fd[FCALL_STATE], 0);
-	dprintf(f->fd[FCALL_STATE], "0\n");
+	dprintf(f->fd[FCALL_STATE], "none\n");
 
 	f->av.state = 0;
 	f->av.num = -1;
