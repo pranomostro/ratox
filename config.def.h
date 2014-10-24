@@ -1,5 +1,5 @@
 /* See LICENSE file for copyright and license details. */
-#define DATAFILE ".ratox.data"
+#define DATAFILE ".ratox.tox"
 /* connection delay in seconds */
 #define CONNECTDELAY 3
 /* ringing delay in seconds */
