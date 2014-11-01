@@ -1220,7 +1220,8 @@ toxinit(void)
 		eprintf("Failed to initialize toxav\n");
 
 	toxavconfig = av_DefaultSettings;
-	framesize = (toxavconfig.audio_sample_rate * toxavconfig.audio_frame_duration / 1000);
+	framesize = (toxavconfig.audio_sample_rate * toxavconfig.audio_frame_duration *
+	            toxavconfig.audio_channels) / 1000;
 
 	tox_callback_connection_status(tox, cbconnstatus, NULL);
 	tox_callback_friend_message(tox, cbfriendmessage, NULL);
