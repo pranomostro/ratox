@@ -219,11 +219,12 @@ static void logmsg(const char *, ...);
 static int fifoopen(int, struct file);
 static void fiforeset(int, int *, struct file);
 static ssize_t fiforead(int, int *, struct file, void *, size_t);
+static uint32_t interval(Tox *, ToxAv *);
 static void cbcallinvite(void *, int32_t, void *);
 static void cbcallstart(void *, int32_t, void *);
 static void cbcallterminate(void *, int32_t, void *);
 static void cbcalltypechange(void *, int32_t, void *);
-static void cbcalldata(ToxAv *, int32_t, int16_t *, int, void *);
+static void cbcalldata(void *, int32_t, const int16_t *, uint16_t, void *);
 static void cancelcall(struct friend *, char *);
 static void sendfriendcalldata(struct friend *);
 static void cbconnstatus(Tox *, int32_t, uint8_t, void *);
@@ -258,6 +259,8 @@ static void usage(void);
 
 #define FD_APPEND(fd)	FD_SET((fd), &rfds); \
 			if ((fd) > fdmax) fdmax = (fd);
+#undef MIN
+#define MIN(x,y)  ((x) < (y) ? (x) : (y))
 
 static struct timespec
 timediff(struct timespec t1, struct timespec t2)
@@ -312,7 +315,7 @@ logmsg(const char *fmt, ...)
 	va_end(ap);
 }
 
-int
+static int
 fifoopen(int dirfd, struct file f)
 {
 	int fd;
@@ -357,6 +360,11 @@ again:
 		eprintf("read %s:", f.name);
 	}
 	return r;
+}
+
+static uint32_t
+interval(Tox *m, ToxAv *av) {
+	return MIN(tox_do_interval(m), toxav_do_interval(av));
 }
 
 static void
@@ -419,7 +427,7 @@ cbcallstart(void *av, int32_t cnum, void *udata)
 	f->av.lastsent.tv_sec = 0;
 	f->av.lastsent.tv_nsec = 0;
 
-	r = toxav_prepare_transmission(toxav, f->av.num, av_jbufdc, av_VADd, 0);
+	r = toxav_prepare_transmission(toxav, f->av.num, 0);
 	if (r < 0) {
 		weprintf("Failed to prepare Rx/Tx AV transmission\n");
 		r = toxav_hangup(toxav, f->av.num);
@@ -463,7 +471,7 @@ cbcalltypechange(void *av, int32_t cnum, void *udata)
 }
 
 static void
-cbcalldata(ToxAv *av, int32_t cnum, int16_t *data, int len, void *udata)
+cbcalldata(void *av, int32_t cnum, const int16_t *data, uint16_t len, void *udata)
 {
 	struct friend *f;
 	uint8_t *buf;
@@ -936,7 +944,7 @@ sendfriendfile(struct friend *f)
 
 	clock_gettime(CLOCK_MONOTONIC, &start);
 
-	while (diff.tv_sec == 0 && diff.tv_nsec < tox_do_interval(tox) * 1E6) {
+	while (diff.tv_sec == 0 && diff.tv_nsec < interval(tox, toxav) * 1E6) {
 		/* Attempt to transmit the pending buffer */
 		if (f->tx.pendingbuf == 1) {
 			if (tox_file_send_data(tox, f->num, f->tx.fnum, f->tx.buf, f->tx.n) < 0) {
@@ -1239,14 +1247,12 @@ toxinit(void)
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnCancel, "Cancelled");
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnReject, "Rejected");
 
-	toxav_register_callstate_callback(toxav, cbcallstart, av_OnStarting, NULL);
-	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnEnding, "Ending");
-
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnRequestTimeout, "Request timeout");
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnPeerTimeout, "Peer timeout");
-	toxav_register_callstate_callback(toxav, cbcalltypechange, av_OnMediaChange, NULL);
+	toxav_register_callstate_callback(toxav, cbcalltypechange, av_OnPeerCSChange, NULL);
+	toxav_register_callstate_callback(toxav, cbcalltypechange, av_OnSelfCSChange, NULL);
 
-	toxav_register_audio_recv_callback(toxav, cbcalldata, NULL);
+	toxav_register_audio_callback(cbcalldata, NULL);
 
 	return 0;
 }
@@ -1399,7 +1405,7 @@ frienddestroy(struct friend *f)
 
 	canceltxtransfer(f);
 	cancelrxtransfer(f);
-	if (f->av.num != -1 && toxav_get_call_state(toxav, f->av.num) != av_CallNonExistant)
+	if (f->av.num != -1 && toxav_get_call_state(toxav, f->av.num) != av_CallNonExistent)
 		cancelcall(f, "Destroying"); /* todo: check state */
 	for (i = 0; i < LEN(ffiles); i++) {
 		if (f->dirfd != -1) {
@@ -1652,6 +1658,7 @@ loop(void)
 			}
 		}
 		tox_do(tox);
+		toxav_do(toxav);
 
 		/* Prepare select-fd-set */
 		FD_ZERO(&rfds);
@@ -1671,7 +1678,7 @@ loop(void)
 				clock_gettime(CLOCK_MONOTONIC, &curtime);
 				diff = timediff(f->tx.lastblock, curtime);
 
-				if (diff.tv_sec > 0 || diff.tv_nsec > tox_do_interval(tox) * 3 * 1E6) {
+				if (diff.tv_sec > 0 || diff.tv_nsec > interval(tox, toxav) * 3 * 1E6) {
 					f->tx.lastblock.tv_sec = 0;
 					f->tx.lastblock.tv_nsec = 0;
 					f->tx.cooldown = 0;
@@ -1696,7 +1703,7 @@ loop(void)
 		}
 
 		tv.tv_sec = 0;
-		tv.tv_usec = tox_do_interval(tox) * 1000;
+		tv.tv_usec = interval(tox, toxav) * 1000;
 		n = select(fdmax + 1, &rfds, NULL, NULL, &tv);
 		if (n < 0) {
 			if (errno == EINTR)
@@ -1868,7 +1875,7 @@ loop(void)
 			}
 			if (FD_ISSET(f->fd[FCALL_IN], &rfds)) {
 				switch (toxav_get_call_state(toxav, f->av.num)) {
-				case av_CallNonExistant:
+				case av_CallNonExistent:
 					r = toxav_call(toxav, &f->av.num, f->num, &toxavconfig, RINGINGDELAY);
 					if (r < 0) {
 						weprintf("Failed to call\n");
