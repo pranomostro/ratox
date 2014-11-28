@@ -363,7 +363,8 @@ again:
 }
 
 static uint32_t
-interval(Tox *m, ToxAv *av) {
+interval(Tox *m, ToxAv *av)
+{
 	return MIN(tox_do_interval(m), toxav_do_interval(av));
 }
 
