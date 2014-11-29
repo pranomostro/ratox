@@ -1249,7 +1249,7 @@ toxinit(void)
 	toxav_register_callstate_callback(toxav, cbcalltypechange, av_OnPeerCSChange, NULL);
 	toxav_register_callstate_callback(toxav, cbcalltypechange, av_OnSelfCSChange, NULL);
 
-	toxav_register_audio_callback(cbcalldata, NULL);
+	toxav_register_audio_callback(toxav, cbcalldata, NULL);
 
 	return 0;
 }
