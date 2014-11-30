@@ -1258,9 +1258,20 @@ static int
 toxconnect(void)
 {
 	struct node *n;
+	struct node tmp;
 	uint8_t id[TOX_CLIENT_ID_SIZE];
-	size_t i;
+	size_t i, j;
 	int r;
+
+	srand(time(NULL));
+
+	/* shuffle it to minimize load on nodes */
+	for (i = LEN(nodes) - 1; i > 0; i--) {
+		j = rand() % LEN(nodes);
+		tmp = nodes[j];
+		nodes[j] = nodes[i];
+		nodes[i] = tmp;
+	}
 
 	for (i = 0; i < LEN(nodes); i++) {
 		n = &nodes[i];
