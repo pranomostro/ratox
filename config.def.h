@@ -1,7 +1,7 @@
 /* See LICENSE file for copyright and license details. */
 #define DATAFILE ".ratox.tox"
 /* connection delay in seconds */
-#define CONNECTDELAY 3
+#define CONNECTDELAY 4
 /* ringing delay in seconds */
 #define RINGINGDELAY 16
 #define MAXCALLS 8
