@@ -1922,6 +1922,8 @@ shutdown(void)
 
 	logmsg("Shutdown\n");
 
+	datasave();
+
 	/* Friends */
 	for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
 		ftmp = TAILQ_NEXT(f, entry);
@@ -1958,8 +1960,6 @@ shutdown(void)
 	unlink("id");
 	if (idfd != -1)
 		close(idfd);
-
-	datasave();
 
 	toxav_kill(toxav);
 	tox_kill(tox);
