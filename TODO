@@ -1,5 +1,2 @@
-* Expose the ID + nospam + checksum for friends
-  in the directory name.
-* Move ToxAvCSettings to the call struct.
 * Simple script to dump an up to date table of tox nodes
 for use with config.h.
