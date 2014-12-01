@@ -1959,6 +1959,8 @@ shutdown(void)
 	if (idfd != -1)
 		close(idfd);
 
+	datasave();
+
 	toxav_kill(toxav);
 	tox_kill(tox);
 }
