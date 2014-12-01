@@ -2000,7 +2000,6 @@ main(int argc, char *argv[])
 	signal(SIGHUP, initshutdown);
 	signal(SIGINT, initshutdown);
 	signal(SIGQUIT, initshutdown);
-	signal(SIGABRT, initshutdown);
 	signal(SIGTERM, initshutdown);
 	signal(SIGPIPE, SIG_IGN);
 
