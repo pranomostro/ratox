@@ -1,78 +1,111 @@
-.TH RATOX "1" "October 2014"
-
-.SH NAME
-ratox - FIFO based tox client
-
-.SH SYNOPSIS
-.B ratox
-[\fIOPTION1\fR) [\fIOPTION2\fR]...
-
-.SH DESCRIPTION
-ratox is a client implementation of the rather popular tox protocol.
+.Dd December 1, 2014
+.Dt RATOX 1
+.Os
+.Sh NAME
+.Nm ratox
+.Nd FIFO based tox client
+.Sh SYNOPSIS
+.Nm
+.Op Fl 46tp
+.Sh DESCRIPTION
+.Nm
+is a client implementation of the rather popular tox protocol.
 Unlike other clients relying on GUIs as an interface to the user, ratox is
 developed with the UNIX-philosophy in mind and allows complete
-interaction through named pipes.
-.TP
-\fB\-4\fR
-Switch to IPv4-only mode
-.TP
-\fB\-6\fR
-Switch to IPv6-only mode
-.TP
-\fB\-t\fR
-Enable TCP mode. By default, Tox operates with UDP and is recommended, as TCP mode implies certain security considerations.
-.TP
-\fB\-p\fR
+interaction through FIFOs.
+.Sh OPTIONS
+.Bl -tag -width Ds
+.It Fl 4
+Switch to IPv4-only mode.  This is the default.
+.It Fl 6
+Switch to IPv6-only mode.
+.It Fl t
+Enable TCP mode.  By default, tox operates with UDP and is recommended, as TCP mode implies certain security considerations.
+.It Fl p
 Enable TCP SOCKS5 proxy as specified in config.def.h when the package was built.
-By default when this option is enabled, ratox will use a proxy on \fI127.0.0.1\fR and port
-\fI8080\fR.
-
-.SH File structure
-In the following, \fI/\fR refers to the directory ratox has been started in.
-.BR
-
-.SH Global slots (\fIname/\fR, \fIstatus/\fR, \fIrequest/\fR, \fInospam/\fR)
-
-Global slots allow you to change your name and status message and send and
-accept friend requests.  Each slot contains an \fBin\fR, \fBout\fR and
-\fBerr\fR file or directory respectively.
-
-The \fBin\fR-file is a pipe waiting for user-input. If you want to change your
-name or status, just pipe it to it. To send a friend request, pipe the Tox-ID
-to \fBrequest/in\fR.
-
-The \fBout\fR-file contains the current state of a given parameter. In
-\fIrequest/\fR, out is a directory containing named pipes for each pending
-request. To accept or reject a friend request, pipe a \fI1\fR or \fI0\fR to a
-FIFO respectively.
-
-.SH Friend slots
-
-For each friend added, ratox will create a folder in \fI/\fR named after the
-friend's ID. It contains files and FIFOs to interact with your friends.
-
-\fBtext_in\fR and \fBfile_in\fR allow you to send messages and files just by piping them to them.
-\fBtext_out\fR and \fBfile_out\fR allow you to read your friend's messages and accept file-transmissions.
-
-Accepting a file transmission is as easy as just piping the \fBfile_out\fR to a
-file or other stream.
-
-\fBonline\fR, \fBname\fR, \fBstatus\fR and \fBfile_pending\fR are state-files
-giving you information on the friend's status.
-If you pipe a \fI1\fR to \fBremove\fR, the friend will be removed.
-
-.SH id file
-
-\fB/id\fR contains your own Tox-ID to pass on to your friends if you want them to add you.
-
-.SH "SEE ALSO"
-.br
-.B Homepage:
+By default when this option is enabled, ratox will use a proxy on \fB127.0.0.1:8080\fR.
+.El
+.Sh CONFIGURATION
+.Nm
+is configured by modifying \fIconfig.h\fR and recompiling the code.  Apart from
+the command line options there are a few more options that can be tweaked at compile
+time.
+.Pp
+Encrypting the save file can be done by setting \fBencryptdatafile\fR to \fB1\fR.
+You can do this even if your current save file is not encrypted.  The next time
+.Nm
+starts it will ask you to supply an encryption passphrase.
+.Sh FILESYSTEM STRUCTURE
+.Ss Global slots
+Each of the following global slots contain an \fBin\fR, \fBout\fR and
+\fBerr\fR file or directory respectively.  Piping data into the \fBin\fR FIFO
+modifies the state of the respective slot.  If any output is expected it will
+be found by reading \fBout\fR.  Errors are reported via \fBerr\fR.
+.Pp
+.Bl -tag -width xxxxxxxxxxxxxxxxxxxx
+.It Ar name/in
+Change the name.
+.It Ar name/out
+Read the current name.
+.It Ar nospam/in
+Change the nospam value.
+.It Ar nospam/out
+Read the current nospam.
+.It Ar state/in
+Change the user state.  Possible values are \fBnone\fR,
+\fBaway\fR and \fBbusy\fR.
+.It Ar state/out
+Read current user state.
+.It Ar status/in
+Change the status message.
+.It Ar status/out
+Read current status message.
+.It Ar request/in
+Initiate a friend request by echoing your friend's tox-id to the input FIFO.
+.It Ar request/out/<tox-id>
+Echo \fB1\fR or \fB0\fR to accept or reject the friend request respectively.
+.El
+.Ss Friend slots
+Friend slots allow you to communicate with your friends.  They handle sending
+text messages, files or starting a voice call.
+.Pp
+.Bl -tag -width xxxxxxxxxxxxxxxxxxxx
+.It Ar call_in
+Initiate a call by attaching an audio source to this FIFO.  For example
+arecord -r 48000 -c 1 -f S16_LE > \fBcall_in\fR.
+.It Ar call_out
+Answer an incoming call by piping it into an audio sink.  For example
+aplay -r 48000 -c 1 -f S16_LE < \fBcall_out\fR.
+.It Ar call_state
+Reports the call state, possible values are \fBnone\fR, \fBpending\fR
+and \fBactive\fR.
+.It Ar file_in
+Initiate a file transfer.  For example cat file > \fBfile_in\fR.
+.It Ar file_out
+Accept an incoming file transfer.  For example cat \fBfile_out\fR
+> file.
+.It Ar file_pending
+Contains filename if transfer is pending, empty otherwise.
+.It Ar name
+The friend's name.
+.It Ar online
+It is \fB1\fR if the friend is online, \fB0\fR otherwise.
+.It Ar remove
+Echo \fB1\fR to remove a friend.
+.It Ar state
+The friend's user state.  Possible values are \fBnone\fR,
+\fBaway\fR and \fBbusy\fR.
+.It Ar status
+The friend's status message.
+.It Ar text_in
+Send a text message to the friend by echoing data to this
+FIFO.
+.It Ar text_out
+Receive text messages from the friend by reading from this
+file.  For example tail -f \fBtext_out\fR.
+.El
+.Sh SEE ALSO
 http://ratox.2f30.org/
-.br
-
-.SH AUTHOR
-This manual page was written by kytv <killyourtv@i2pmail.org> for the Debian system (but may be used by others).
-.br
+.Sh AUTHOR
+This manual page was written by kytv <killyourtv@i2pmail.org> and heavily modified by sin <sin@2f309.org>.
 Permission is granted to copy, distribute and/or modify this document under the terms of the ISC License.
-
