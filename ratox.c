@@ -1968,12 +1968,13 @@ shutdown(void)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-4|-6] [-t] [-p]\n"
-	                " -4\tIPv4 only\n"
-	                " -6\tIPv6 only\n"
-	                " -t\tEnable TCP mode (UDP by default)\n"
-	                " -p\tEnable TCP socks5 proxy\n", argv0);
-	exit(1);
+	eprintf("usage: %s [-4|-6] [-E|-e] [-tp]\n"
+		" -4\tIPv4 only\n"
+		" -6\tIPv6 only\n"
+		" -E\tEnable data file encryption\n"
+		" -e\tDisable data file encryption\n"
+		" -t\tEnable TCP mode (UDP by default)\n"
+		" -p\tEnable TCP socks5 proxy\n", argv0);
 }
 
 int
@@ -1984,6 +1985,12 @@ main(int argc, char *argv[])
 		break;
 	case '6':
 		ipv6 = 1;
+		break;
+	case 'E':
+		encryptdatafile = 1;
+		break;
+	case 'e':
+		encryptdatafile = 0;
 		break;
 	case 't':
 		tcpflag = 1;

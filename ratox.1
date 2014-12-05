@@ -6,7 +6,9 @@
 .Nd FIFO based tox client
 .Sh SYNOPSIS
 .Nm
-.Op Fl 46tp
+.Op Fl 4 | Fl 6
+.Op Fl E | Fl e
+.Op Fl tp
 .Sh DESCRIPTION
 .Nm
 is a client implementation of the rather popular tox protocol.
@@ -19,6 +21,10 @@ interaction through FIFOs.
 Switch to IPv4-only mode.  This is the default.
 .It Fl 6
 Switch to IPv6-only mode.
+.It Fl E
+Enable data file encryption.
+.It Fl e
+Disable data file encryption.
 .It Fl t
 Enable TCP mode.  By default, tox operates with UDP and is recommended, as TCP mode implies certain security considerations.
 .It Fl p
