@@ -1,4 +1,4 @@
-.Dd December 1, 2014
+.Dd December 5, 2014
 .Dt RATOX 1
 .Os
 .Sh NAME
@@ -52,20 +52,20 @@ be found by reading \fBout\fR.  Errors are reported via \fBerr\fR.
 .It Ar name/in
 Change the name.
 .It Ar name/out
-Read the current name.
+Contains the current name.
 .It Ar nospam/in
 Change the nospam value.
 .It Ar nospam/out
-Read the current nospam.
+Contains the current nospam.
 .It Ar state/in
 Change the user state.  Possible values are \fBnone\fR,
 \fBaway\fR and \fBbusy\fR.
 .It Ar state/out
-Read current user state.
+Contains the current user state.
 .It Ar status/in
 Change the status message.
 .It Ar status/out
-Read current status message.
+Contains the current status message.
 .It Ar request/in
 Initiate a friend request by echoing your friend's tox-id to the input FIFO.
 .It Ar request/out/<tox-id>
@@ -91,7 +91,7 @@ Initiate a file transfer.  For example cat file > \fBfile_in\fR.
 Accept an incoming file transfer.  For example cat \fBfile_out\fR
 > file.
 .It Ar file_pending
-Contains filename if transfer is pending, empty otherwise.
+Contains the filename if transfer is pending, empty otherwise.
 .It Ar name
 The friend's name.
 .It Ar online
@@ -113,7 +113,7 @@ file.  For example tail -f \fBtext_out\fR.
 .Ss Misc files
 .Bl -tag -width xxxxxxxxxxxxxxxxxxxx
 .It Ar id
-Read your current tox-id.
+Contains your tox-id.
 .El
 .Sh SEE ALSO
 http://ratox.2f30.org/
