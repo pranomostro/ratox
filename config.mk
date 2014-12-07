@@ -1,5 +1,5 @@
 # ratox version
-VERSION = 0.1
+VERSION = 0.2
 
 # paths
 PREFIX = /usr/local
