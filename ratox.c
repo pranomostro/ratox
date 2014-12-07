@@ -241,7 +241,7 @@ static void cancelrxtransfer(struct friend *);
 static void sendfriendfile(struct friend *);
 static void sendfriendtext(struct friend *);
 static void removefriend(struct friend *);
-static int readpass(const char *);
+static int readpass(const char *, uint8_t **, uint32_t *);
 static void dataload(void);
 static void datasave(void);
 static int localinit(void);
@@ -1013,7 +1013,7 @@ removefriend(struct friend *f)
 }
 
 static int
-readpass(const char *prompt)
+readpass(const char *prompt, uint8_t **target, uint32_t *len)
 {
 	char pass[BUFSIZ], *p;
 
@@ -1024,11 +1024,11 @@ readpass(const char *prompt)
 	}
 	if (p[0] == '\0')
 		return -1;
-	passphrase = realloc(passphrase, strlen(p)); /* not null-terminated */
-	if (!passphrase)
+	*target = realloc(*target, strlen(p)); /* not null-terminated */
+	if (!*target)
 		eprintf("malloc:");
-	memcpy(passphrase, p, strlen(p));
-	pplen = strlen(p);
+	memcpy(*target, p, strlen(p));
+	*len = strlen(p);
 	return 0;
 }
 
@@ -1036,13 +1036,23 @@ static void
 dataload(void)
 {
 	off_t sz;
-	uint8_t *data;
+	uint8_t *data, *passphrase2 = NULL;
+	uint32_t pp2len = 0;
 	int fd;
 
 	fd = open(DATAFILE, O_RDONLY);
 	if (fd < 0) {
-		if (encryptdatafile == 1)
-			while (readpass("Data : New passphrase > ") < 0);
+		if (encryptdatafile == 1) {
+reprompt1:
+			while (readpass("Data : New passphrase > ", &passphrase, &pplen) < 0);
+			while (readpass("Data : Re-enter passphrase > ", &passphrase2, &pp2len) < 0);
+
+			if (pplen != pp2len || memcmp(passphrase, passphrase2, pplen)) {
+				weprintf("Data : Passphrase mismatch\n");
+				goto reprompt1;
+			}
+			free(passphrase2);
+		}
 		return;
 	}
 
@@ -1064,14 +1074,22 @@ dataload(void)
 	if (tox_is_save_encrypted(data) == 1) {
 		if (encryptdatafile == 0)
 			logmsg("Data : %s > Encrypted, but saving unencrypted\n", DATAFILE);
-		while (readpass("Data : Passphrase > ") < 0 ||
+		while (readpass("Data : Passphrase > ", &passphrase, &pplen) < 0 ||
 		       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0);
 	} else {
 		if (tox_load(tox, data, sz) < 0)
 			eprintf("Data : %s > Failed to load\n", DATAFILE);
 		if (encryptdatafile == 1) {
 			logmsg("Data : %s > Not encrypted, but saving encrypted\n", DATAFILE);
-			while (readpass("Data : New passphrase > ") < 0);
+reprompt2:
+			while (readpass("Data : New passphrase > ", &passphrase, &pplen) < 0);
+			while (readpass("Data : Re-enter passphrase > ", &passphrase2, &pp2len) < 0);
+
+			if (pplen != pp2len || memcmp(passphrase, passphrase2, pplen)) {
+				weprintf("Data : Passphrase mismatch\n");
+				goto reprompt2;
+			}
+			free(passphrase2);
 		}
 	}
 
