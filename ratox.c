@@ -1131,7 +1131,7 @@ localinit(void)
 	/* Dump current name */
 	r = tox_get_self_name(tox, name);
 	if (r == 0) {
-		weprintf("Failed to get current name\n");
+		weprintf("Name : Empty\n");
 	} else if (r > sizeof(name) - 1) {
 		r = sizeof(name) - 1;
 	}
@@ -1142,7 +1142,7 @@ localinit(void)
 	/* Dump status */
 	r = tox_get_self_status_message(tox, status, sizeof(status) - 1);
 	if (r == 0) {
-		weprintf("Failed to get current status\n");
+		weprintf("Status : Empty\n");
 	} else if (r > sizeof(status) - 1) {
 		r = sizeof(status) - 1;
 	}
@@ -1153,11 +1153,11 @@ localinit(void)
 	/* Dump user state */
 	r = tox_get_self_user_status(tox);
 	if (r < 0) {
-		weprintf("Failed to get current state\n");
+		weprintf("State : Empty\n");
 	} else if (r >= LEN(ustate)) {
 		ftruncate(gslots[STATE].fd[ERR], 0);
 		dprintf(gslots[STATE].fd[ERR], "invalid\n");
-		weprintf("Invalid user state: %d\n", r);
+		weprintf("State : %d > Invalid\n", r);
 	} else {
 		ftruncate(gslots[STATE].fd[OUT], 0);
 		dprintf(gslots[STATE].fd[OUT], "%s\n", ustate[r]);
@@ -1197,14 +1197,14 @@ toxinit(void)
 
 	tox = tox_new(&toxopt);
 	if (!tox)
-		eprintf("Failed to initialize tox core\n");
+		eprintf("Core : Tox > Initialization failed\n");
 
 	dataload();
 	datasave();
 
 	toxav = toxav_new(tox, MAXCALLS);
 	if (!toxav)
-		eprintf("Failed to initialize toxav\n");
+		eprintf("Core : ToxAV > Initialization failed\n");
 
 	toxavconfig = av_DefaultSettings;
 	framesize = (toxavconfig.audio_sample_rate * toxavconfig.audio_frame_duration *
@@ -1262,7 +1262,7 @@ toxconnect(void)
 		str2id(n->idstr, id);
 		r = tox_bootstrap_from_address(tox, ipv6 ? n->addr6 : n->addr4, n->port, id);
 		if (r == 0)
-			weprintf("Failed to bootstrap from address %s\n", ipv6 ? n->addr6 : n->addr4);
+			weprintf("Net : %s > Bootstrap failed\n", ipv6 ? n->addr6 : n->addr4);
 	}
 	return 0;
 }
@@ -1307,7 +1307,7 @@ friendcreate(int32_t frnum)
 
 	r = tox_get_name(tox, frnum, (uint8_t *)f->name);
 	if (r < 0) {
-		weprintf("Failed to get name for friend number %ld\n", (long)frnum);
+		weprintf(": %ld : Name : Failed to get\n", (long)frnum);
 		return NULL;
 	} else if (r == 0) {
 		snprintf(f->name, sizeof(f->name), "Anonymous");
@@ -1353,7 +1353,7 @@ friendcreate(int32_t frnum)
 	/* Dump status */
 	r = tox_get_status_message(tox, frnum, status, sizeof(status) - 1);
 	if (r < 0) {
-		weprintf("Failed to get user status\n");
+		weprintf(": %s : Status : Failed to get\n", f->name);
 		r = 0;
 	} else if (r > sizeof(status) - 1) {
 		r = sizeof(status) - 1;
@@ -1365,9 +1365,9 @@ friendcreate(int32_t frnum)
 	/* Dump user state */
 	r = tox_get_user_status(tox, frnum);
 	if (r < 0) {
-		weprintf("Failed to get user state\n");
+		weprintf(": %s : State : Failed to get\n", f->name);
 	} else if (r >= LEN(ustate)) {
-		weprintf("Invalid user state: %d\n", r);
+		weprintf(": %s : State : %d > Invalid\n", f->name, r);
 	} else {
 		ftruncate(f->fd[FSTATE], 0);
 		dprintf(f->fd[FSTATE], "%s\n", ustate[r]);
