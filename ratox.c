@@ -56,8 +56,8 @@ enum { NONE, FIFO, STATIC, FOLDER };
 enum { IN, OUT, ERR };
 
 static struct file gfiles[] = {
-	[IN]  = { .type = FIFO, .name = "in", .flags = O_RDONLY | O_NONBLOCK },
-	[OUT] = { .type = NONE, .name = "out", .flags = O_WRONLY | O_TRUNC | O_CREAT },
+	[IN]  = { .type = FIFO,   .name = "in",  .flags = O_RDONLY | O_NONBLOCK        },
+	[OUT] = { .type = NONE,   .name = "out", .flags = O_WRONLY | O_TRUNC | O_CREAT },
 	[ERR] = { .type = STATIC, .name = "err", .flags = O_WRONLY | O_TRUNC | O_CREAT },
 };
 
@@ -226,10 +226,10 @@ static void     usage(void);
 	FD_SET((fd), &rfds);	\
 	if ((fd) > fdmax)	\
 		fdmax = (fd);	\
-	} while(0)
+} while (0)
 
 #undef MIN
-#define MIN(x,y)  ((x) < (y) ? (x) : (y))
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
 
 static struct timespec
 timediff(struct timespec t1, struct timespec t2)
@@ -489,12 +489,10 @@ cancelcall(struct friend *f, char *action)
 
 	logmsg(": %s : Audio > %s\n", f->name, action);
 
-	if (f->av.num != -1) {
-		if (f->av.state & TRANSMITTING) {
-			r = toxav_kill_transmission(toxav, f->av.num);
-			if (r < 0)
-				weprintf("Failed to kill transmission\n");
-		}
+	if (f->av.num != -1 && f->av.state & TRANSMITTING) {
+		r = toxav_kill_transmission(toxav, f->av.num);
+		if (r < 0)
+			weprintf("Failed to kill transmission\n");
 	}
 	f->av.state = 0;
 	f->av.num = -1;
@@ -522,14 +520,14 @@ sendfriendcalldata(struct friend *f)
 	int r;
 
 	n = fiforead(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN],
-		     f->av.frame + ((f->av.state & INCOMPLETE) != 0) * f->av.n,
-		     framesize * sizeof(int16_t) - ((f->av.state & INCOMPLETE) != 0) * f->av.n);
+		     f->av.frame + (f->av.state & INCOMPLETE) * f->av.n,
+		     framesize * sizeof(int16_t) - (f->av.state & INCOMPLETE) * f->av.n);
 	if (n == 0) {
 		f->av.state &= ~OUTGOING;
 		return;
 	} else if (n < 0) {
 		return;
-	} else if (n == (framesize * sizeof(int16_t) - ((f->av.state & INCOMPLETE) != 0) * f->av.n)) {
+	} else if (n == (framesize * sizeof(int16_t) - (f->av.state & INCOMPLETE) * f->av.n)) {
 		f->av.state &= ~INCOMPLETE;
 		f->av.n = 0;
 	} else {
@@ -570,14 +568,13 @@ cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 	if (r < 0) {
 		weprintf("Failed to get name for friend number %ld\n", (long)frnum);
 		return;
+	} else if (r == 0) {
+		snprintf(name, sizeof(name), "Anonymous");
+	} else {
+		name[r] = '\0';
 	}
 
-	if (r == 0)
-		snprintf(name, sizeof(name), "Anonymous");
-	else
-		name[r] = '\0';
-
-	logmsg(": %s > %s\n", name, status == 0 ? "Offline" : "Online");
+	logmsg(": %s > %s\n", name, status ? "Online" : "Offline");
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->num == frnum) {
@@ -912,7 +909,7 @@ sendfriendfile(struct friend *f)
 
 	while (diff.tv_sec == 0 && diff.tv_nsec < interval(tox, toxav) * 1E6) {
 		/* Attempt to transmit the pending buffer */
-		if (f->tx.pendingbuf == 1) {
+		if (f->tx.pendingbuf) {
 			if (tox_file_send_data(tox, f->num, f->tx.fnum, f->tx.buf, f->tx.n) < 0) {
 				clock_gettime(CLOCK_MONOTONIC, &f->tx.lastblock);
 				f->tx.cooldown = 1;
@@ -971,9 +968,7 @@ removefriend(struct friend *f)
 {
 	char c;
 
-	if (fiforead(f->dirfd, &f->fd[FREMOVE], ffiles[FREMOVE], &c, 1) != 1)
-		return;
-	if (c != '1')
+	if (fiforead(f->dirfd, &f->fd[FREMOVE], ffiles[FREMOVE], &c, 1) != 1 || c != '1')
 		return;
 	tox_del_friend(tox, f->num);
 	datasave();
@@ -1011,7 +1006,7 @@ dataload(void)
 
 	fd = open(DATAFILE, O_RDONLY);
 	if (fd < 0) {
-		if (encryptdatafile == 1) {
+		if (encryptdatafile) {
 reprompt1:
 			while (readpass("Data : New passphrase > ", &passphrase, &pplen) < 0);
 			while (readpass("Data : Re-enter passphrase > ", &passphrase2, &pp2len) < 0);
@@ -1040,15 +1035,15 @@ reprompt1:
 	if (read(fd, data, sz) != sz)
 		eprintf("read %s:", DATAFILE);
 
-	if (tox_is_save_encrypted(data) == 1) {
-		if (encryptdatafile == 0)
+	if (tox_is_save_encrypted(data)) {
+		if (!encryptdatafile)
 			logmsg("Data : %s > Encrypted, but saving unencrypted\n", DATAFILE);
 		while (readpass("Data : Passphrase > ", &passphrase, &pplen) < 0 ||
 		       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0);
 	} else {
 		if (tox_load(tox, data, sz) < 0)
 			eprintf("Data : %s > Failed to load\n", DATAFILE);
-		if (encryptdatafile == 1) {
+		if (encryptdatafile) {
 			logmsg("Data : %s > Not encrypted, but saving encrypted\n", DATAFILE);
 reprompt2:
 			while (readpass("Data : New passphrase > ", &passphrase, &pplen) < 0);
@@ -1077,12 +1072,12 @@ datasave(void)
 	if (fd < 0)
 		eprintf("open %s:", DATAFILE);
 
-	sz = encryptdatafile == 1 ? tox_encrypted_size(tox) : tox_size(tox);
+	sz = encryptdatafile ? tox_encrypted_size(tox) : tox_size(tox);
 	data = malloc(sz);
 	if (!data)
 		eprintf("malloc:");
 
-	if (encryptdatafile == 1)
+	if (encryptdatafile)
 		tox_encrypted_save(tox, data, passphrase, pplen);
 	else
 		tox_save(tox, data);
@@ -1189,7 +1184,7 @@ toxinit(void)
 {
 	toxopt.ipv6enabled = ipv6;
 	toxopt.udp_disabled = tcpflag;
-	if (proxyflag == 1) {
+	if (proxyflag) {
 		tcpflag = 1;
 		toxopt.udp_disabled = tcpflag;
 		logmsg("Net > Forcing TCP mode\n");
@@ -1262,12 +1257,12 @@ toxconnect(void)
 
 	for (i = 0; i < LEN(nodes); i++) {
 		n = &nodes[i];
-		if (ipv6 == 1 && !n->addr6)
+		if (ipv6 && !n->addr6)
 			continue;
 		str2id(n->idstr, id);
-		r = tox_bootstrap_from_address(tox, ipv6 == 1 ? n->addr6 : n->addr4, n->port, id);
+		r = tox_bootstrap_from_address(tox, ipv6 ? n->addr6 : n->addr4, n->port, id);
 		if (r == 0)
-			weprintf("Failed to bootstrap from address %s\n", ipv6 == 1 ? n->addr6 : n->addr4);
+			weprintf("Failed to bootstrap from address %s\n", ipv6 ? n->addr6 : n->addr4);
 	}
 	return 0;
 }
@@ -1314,11 +1309,11 @@ friendcreate(int32_t frnum)
 	if (r < 0) {
 		weprintf("Failed to get name for friend number %ld\n", (long)frnum);
 		return NULL;
-	}
-	if (r == 0)
+	} else if (r == 0) {
 		snprintf(f->name, sizeof(f->name), "Anonymous");
-	else
+	} else {
 		f->name[r] = '\0';
+	}
 
 	f->num = frnum;
 	tox_get_client_id(tox, f->num, f->id);
@@ -1728,7 +1723,7 @@ loop(void)
 				continue;
 			if (f->tx.state != TRANSFER_INPROGRESS)
 				continue;
-			if (f->tx.pendingbuf == 1)
+			if (f->tx.pendingbuf)
 				sendfriendfile(f);
 			if (f->tx.state == TRANSFER_NONE)
 				FD_CLR(f->fd[FFILE_IN], &rfds);
