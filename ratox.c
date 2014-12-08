@@ -222,8 +222,12 @@ static void     initshutdown(int);
 static void     shutdown(void);
 static void     usage(void);
 
-#define FD_APPEND(fd)	FD_SET((fd), &rfds); \
-			if ((fd) > fdmax) fdmax = (fd);
+#define FD_APPEND(fd) do {	\
+	FD_SET((fd), &rfds);	\
+	if ((fd) > fdmax)	\
+		fdmax = (fd);	\
+	} while(0)
+
 #undef MIN
 #define MIN(x,y)  ((x) < (y) ? (x) : (y))
 
@@ -1652,13 +1656,11 @@ loop(void)
 		FD_ZERO(&rfds);
 		fdmax = -1;
 
-		for (i = 0; i < LEN(gslots); i++) {
+		for (i = 0; i < LEN(gslots); i++)
 			FD_APPEND(gslots[i].fd[IN]);
-		}
 
-		TAILQ_FOREACH(req, &reqhead, entry) {
+		TAILQ_FOREACH(req, &reqhead, entry)
 			FD_APPEND(req->fd);
-		}
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			/* File transfer cooldown */
@@ -1678,14 +1680,12 @@ loop(void)
 				FD_APPEND(f->fd[FTEXT_IN]);
 
 				if (f->tx.state == TRANSFER_NONE ||
-				    (f->tx.state == TRANSFER_INPROGRESS && !f->tx.cooldown)) {
+				    (f->tx.state == TRANSFER_INPROGRESS && !f->tx.cooldown))
 					FD_APPEND(f->fd[FFILE_IN]);
-				}
 				if (f->av.num < 0 ||
 				    (toxav_get_call_state(toxav, f->av.num) == av_CallActive &&
-				     f->av.state & TRANSMITTING)) {
+				     f->av.state & TRANSMITTING))
 					FD_APPEND(f->fd[FCALL_IN]);
-				}
 			}
 			FD_APPEND(f->fd[FREMOVE]);
 		}
