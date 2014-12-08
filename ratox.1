@@ -1,4 +1,4 @@
-.Dd December 5, 2014
+.Dd December 8, 2014
 .Dt RATOX 1
 .Os
 .Sh NAME
@@ -9,6 +9,7 @@
 .Op Fl 4 | Fl 6
 .Op Fl E | Fl e
 .Op Fl tp
+.Op Ar savefile
 .Sh DESCRIPTION
 .Nm
 is a client implementation of the rather popular tox protocol.
@@ -22,14 +23,16 @@ Switch to IPv4-only mode.  This is the default.
 .It Fl 6
 Switch to IPv6-only mode.
 .It Fl E
-Enable data file encryption.
+Enable save file encryption.
 .It Fl e
-Disable data file encryption.
+Disable save file encryption.
 .It Fl t
 Enable TCP mode.  By default, tox operates with UDP and is recommended, as TCP mode implies certain security considerations.
 .It Fl p
 Enable TCP SOCKS5 proxy as specified in \fIconfig.h\fR when the package was built.
 By default when this option is enabled, ratox will use a proxy on \fB127.0.0.1:8080\fR.
+.It Ar savefile
+Specify the path of the save file to load a profile from or create a new one at.
 .El
 .Sh CONFIGURATION
 .Nm
@@ -37,10 +40,16 @@ is configured by modifying \fIconfig.h\fR and recompiling the code.  Apart from
 the command line options there are a few more options that can be tweaked at compile
 time.
 .Pp
-Encrypting the save file can be done by setting \fBencryptdatafile\fR to \fB1\fR.
-You can do this even if your current save file is not encrypted.  The next time
+You can encrypt/decrypt your save file by setting \fBencryptsavefile\fR to \fB1\fR | \fB0\fR or
+specifying
+.Fl E
+|
+.Fl e
+respectively.  In the former case it will prompt you for a new passphrase, in the latter it will ask you to enter your current passphrase and will then write the save file unencrypted.
+.Pp
+Trying to load or decrypt an encrypted save file,
 .Nm
-starts it will ask you to supply an encryption passphrase.
+will ask you to supply a passphrase.
 .Sh FILESYSTEM STRUCTURE
 .Ss Global slots
 Each of the following global slots contain an \fBin\fR, \fBout\fR and

@@ -1004,9 +1004,9 @@ dataload(void)
 	int fd;
 	uint8_t *data, *passphrase2 = NULL;
 
-	fd = open(DATAFILE, O_RDONLY);
+	fd = open(savefile, O_RDONLY);
 	if (fd < 0) {
-		if (encryptdatafile) {
+		if (encryptsavefile) {
 reprompt1:
 			while (readpass("Data : New passphrase > ", &passphrase, &pplen) < 0);
 			while (readpass("Data : Re-enter passphrase > ", &passphrase2, &pp2len) < 0);
@@ -1024,7 +1024,7 @@ reprompt1:
 	lseek(fd, 0, SEEK_SET);
 
 	if (sz == 0) {
-		weprintf("Data : %s > Empty\n", DATAFILE);
+		weprintf("Data : %s > Empty\n", savefile);
 		return;
 	}
 
@@ -1033,18 +1033,18 @@ reprompt1:
 		eprintf("malloc:");
 
 	if (read(fd, data, sz) != sz)
-		eprintf("read %s:", DATAFILE);
+		eprintf("read %s:", savefile);
 
 	if (tox_is_save_encrypted(data)) {
-		if (!encryptdatafile)
-			logmsg("Data : %s > Encrypted, but saving unencrypted\n", DATAFILE);
+		if (!encryptsavefile)
+			logmsg("Data : %s > Encrypted, but saving unencrypted\n", savefile);
 		while (readpass("Data : Passphrase > ", &passphrase, &pplen) < 0 ||
 		       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0);
 	} else {
 		if (tox_load(tox, data, sz) < 0)
-			eprintf("Data : %s > Failed to load\n", DATAFILE);
-		if (encryptdatafile) {
-			logmsg("Data : %s > Not encrypted, but saving encrypted\n", DATAFILE);
+			eprintf("Data : %s > Failed to load\n", savefile);
+		if (encryptsavefile) {
+			logmsg("Data : %s > Not encrypted, but saving encrypted\n", savefile);
 reprompt2:
 			while (readpass("Data : New passphrase > ", &passphrase, &pplen) < 0);
 			while (readpass("Data : Re-enter passphrase > ", &passphrase2, &pp2len) < 0);
@@ -1068,21 +1068,21 @@ datasave(void)
 	int fd;
 	uint8_t *data;
 
-	fd = open(DATAFILE, O_WRONLY | O_TRUNC | O_CREAT , 0666);
+	fd = open(savefile, O_WRONLY | O_TRUNC | O_CREAT , 0666);
 	if (fd < 0)
-		eprintf("open %s:", DATAFILE);
+		eprintf("open %s:", savefile);
 
-	sz = encryptdatafile ? tox_encrypted_size(tox) : tox_size(tox);
+	sz = encryptsavefile ? tox_encrypted_size(tox) : tox_size(tox);
 	data = malloc(sz);
 	if (!data)
 		eprintf("malloc:");
 
-	if (encryptdatafile)
+	if (encryptsavefile)
 		tox_encrypted_save(tox, data, passphrase, pplen);
 	else
 		tox_save(tox, data);
 	if (write(fd, data, sz) != sz)
-		eprintf("write %s:", DATAFILE);
+		eprintf("write %s:", savefile);
 	fsync(fd);
 
 	free(data);
@@ -1943,11 +1943,11 @@ shutdown(void)
 static void
 usage(void)
 {
-	eprintf("usage: %s [-4|-6] [-E|-e] [-tp]\n"
+	eprintf("usage: %s [-4|-6] [-E|-e] [-tp] [savefile]\n"
 		" -4\tIPv4 only\n"
 		" -6\tIPv6 only\n"
-		" -E\tEnable data file encryption\n"
-		" -e\tDisable data file encryption\n"
+		" -E\tEnable save file encryption\n"
+		" -e\tDisable save file encryption\n"
 		" -t\tEnable TCP mode (UDP by default)\n"
 		" -p\tEnable TCP socks5 proxy\n", argv0);
 }
@@ -1962,10 +1962,10 @@ main(int argc, char *argv[])
 		ipv6 = 1;
 		break;
 	case 'E':
-		encryptdatafile = 1;
+		encryptsavefile = 1;
 		break;
 	case 'e':
-		encryptdatafile = 0;
+		encryptsavefile = 0;
 		break;
 	case 't':
 		tcpflag = 1;
@@ -1976,6 +1976,11 @@ main(int argc, char *argv[])
 	default:
 		usage();
 	} ARGEND;
+
+	if (argc > 1)
+		usage();
+	if (argc == 1)
+		savefile = *argv;
 
 	setbuf(stdout, NULL);
 
