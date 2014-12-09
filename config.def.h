@@ -1,8 +1,15 @@
 /* See LICENSE file for copyright and license details. */
-/* connection delay in seconds */
-#define CONNECTDELAY 4
-/* ringing delay in seconds */
+/*
+ * Connection delay in seconds
+ */
+#define CONNECTDELAY 3
+/*
+ * Ringing delay in seconds
+ */
 #define RINGINGDELAY 16
+/*
+ * Maximum number of simultaneous calls
+ */
 #define MAXCALLS 8
 
 static char *savefile = ".ratox.tox";
