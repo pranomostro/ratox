@@ -27,37 +27,37 @@
 #include "util.h"
 
 const char *reqerr[] = {
-	[-TOX_FAERR_TOOLONG]      = "Message is too long",
-	[-TOX_FAERR_NOMESSAGE]    = "Please add a message to your request",
-	[-TOX_FAERR_OWNKEY]       = "That appears to be your own ID",
+	[-TOX_FAERR_TOOLONG]	  = "Message is too long",
+	[-TOX_FAERR_NOMESSAGE]	  = "Please add a message to your request",
+	[-TOX_FAERR_OWNKEY]	  = "That appears to be your own ID",
 	[-TOX_FAERR_ALREADYSENT]  = "Friend request already sent",
-	[-TOX_FAERR_UNKNOWN]      = "Unknown error while sending your request",
+	[-TOX_FAERR_UNKNOWN]	  = "Unknown error while sending your request",
 	[-TOX_FAERR_BADCHECKSUM]  = "Bad checksum while verifying address",
 	[-TOX_FAERR_SETNEWNOSPAM] = "Friend already added but invalid nospam",
-	[-TOX_FAERR_NOMEM]        = "Error increasing the friend list size"
+	[-TOX_FAERR_NOMEM]	  = "Error increasing the friend list size"
 };
 
 struct node {
-	char     *addr4;
-	char     *addr6;
+	char	 *addr4;
+	char	 *addr6;
 	uint16_t port;
-	char     *idstr;
+	char	 *idstr;
 };
 
 #include "config.h"
 
 struct file {
-	int        type;
+	int	   type;
 	const char *name;
-	int        flags;
+	int	   flags;
 };
 
 enum { NONE, FIFO, STATIC, FOLDER };
 enum { IN, OUT, ERR };
 
 static struct file gfiles[] = {
-	[IN]  = { .type = FIFO,   .name = "in",  .flags = O_RDONLY | O_NONBLOCK        },
-	[OUT] = { .type = NONE,   .name = "out", .flags = O_WRONLY | O_TRUNC | O_CREAT },
+	[IN]  = { .type = FIFO,	  .name = "in",	 .flags = O_RDONLY | O_NONBLOCK	       },
+	[OUT] = { .type = NONE,	  .name = "out", .flags = O_WRONLY | O_TRUNC | O_CREAT },
 	[ERR] = { .type = STATIC, .name = "err", .flags = O_WRONLY | O_TRUNC | O_CREAT },
 };
 
@@ -65,10 +65,10 @@ static int idfd = -1;
 
 struct slot {
 	const char *name;
-	void       (*cb)(void *);
-	int        outisfolder;
-	int        dirfd;
-	int        fd[LEN(gfiles)];
+	void	   (*cb)(void *);
+	int	   outisfolder;
+	int	   dirfd;
+	int	   fd[LEN(gfiles)];
 };
 
 static void setname(void *);
@@ -80,36 +80,36 @@ static void setnospam(void *);
 enum { NAME, STATUS, STATE, REQUEST, NOSPAM };
 
 static struct slot gslots[] = {
-	[NAME]    = { .name = "name",    .cb = setname,       .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
+	[NAME]	  = { .name = "name",	 .cb = setname,	      .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
 	[STATUS]  = { .name = "status",	 .cb = setstatus,     .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
-	[STATE]   = { .name = "state",   .cb = setuserstate,  .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
+	[STATE]	  = { .name = "state",	 .cb = setuserstate,  .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
 	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outisfolder = 1, .dirfd = -1, .fd = {-1, -1, -1} },
-	[NOSPAM]  = { .name = "nospam",  .cb = setnospam,     .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
+	[NOSPAM]  = { .name = "nospam",	 .cb = setnospam,     .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
 };
 
 enum { FTEXT_IN, FFILE_IN, FCALL_IN, FTEXT_OUT, FFILE_OUT, FCALL_OUT,
        FREMOVE, FONLINE, FNAME, FSTATUS, FSTATE, FFILE_STATE, FCALL_STATE };
 
 static struct file ffiles[] = {
-	[FTEXT_IN]    = { .type = FIFO,   .name = "text_in",      .flags = O_RDONLY | O_NONBLOCK         },
-	[FFILE_IN]    = { .type = FIFO,   .name = "file_in",      .flags = O_RDONLY | O_NONBLOCK         },
-	[FCALL_IN]    = { .type = FIFO,   .name = "call_in",      .flags = O_RDONLY | O_NONBLOCK         },
-	[FTEXT_OUT]   = { .type = STATIC, .name = "text_out",     .flags = O_WRONLY | O_APPEND | O_CREAT },
-	[FFILE_OUT]   = { .type = FIFO,   .name = "file_out",     .flags = O_WRONLY | O_NONBLOCK         },
-	[FCALL_OUT]   = { .type = FIFO,   .name = "call_out",     .flags = O_WRONLY | O_NONBLOCK         },
-	[FREMOVE]     = { .type = FIFO,   .name = "remove",       .flags = O_RDONLY | O_NONBLOCK         },
-	[FONLINE]     = { .type = STATIC, .name = "online",       .flags = O_WRONLY | O_TRUNC  | O_CREAT },
-	[FNAME]       = { .type = STATIC, .name = "name",         .flags = O_WRONLY | O_TRUNC  | O_CREAT },
-	[FSTATUS]     = { .type = STATIC, .name = "status",       .flags = O_WRONLY | O_TRUNC  | O_CREAT },
-	[FSTATE]      = { .type = STATIC, .name = "state",        .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[FTEXT_IN]    = { .type = FIFO,	  .name = "text_in",	  .flags = O_RDONLY | O_NONBLOCK	 },
+	[FFILE_IN]    = { .type = FIFO,	  .name = "file_in",	  .flags = O_RDONLY | O_NONBLOCK	 },
+	[FCALL_IN]    = { .type = FIFO,	  .name = "call_in",	  .flags = O_RDONLY | O_NONBLOCK	 },
+	[FTEXT_OUT]   = { .type = STATIC, .name = "text_out",	  .flags = O_WRONLY | O_APPEND | O_CREAT },
+	[FFILE_OUT]   = { .type = FIFO,	  .name = "file_out",	  .flags = O_WRONLY | O_NONBLOCK	 },
+	[FCALL_OUT]   = { .type = FIFO,	  .name = "call_out",	  .flags = O_WRONLY | O_NONBLOCK	 },
+	[FREMOVE]     = { .type = FIFO,	  .name = "remove",	  .flags = O_RDONLY | O_NONBLOCK	 },
+	[FONLINE]     = { .type = STATIC, .name = "online",	  .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[FNAME]	      = { .type = STATIC, .name = "name",	  .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[FSTATUS]     = { .type = STATIC, .name = "status",	  .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[FSTATE]      = { .type = STATIC, .name = "state",	  .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 	[FFILE_STATE] = { .type = STATIC, .name = "file_pending", .flags = O_WRONLY | O_TRUNC  | O_CREAT },
-	[FCALL_STATE] = { .type = STATIC, .name = "call_state",   .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[FCALL_STATE] = { .type = STATIC, .name = "call_state",	  .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 };
 
 static char *ustate[] = {
-	[TOX_USERSTATUS_NONE]    = "none",
-	[TOX_USERSTATUS_AWAY]    = "away",
-	[TOX_USERSTATUS_BUSY]    = "busy",
+	[TOX_USERSTATUS_NONE]	 = "none",
+	[TOX_USERSTATUS_AWAY]	 = "away",
+	[TOX_USERSTATUS_BUSY]	 = "busy",
 	[TOX_USERSTATUS_INVALID] = "invalid"
 };
 
@@ -118,12 +118,12 @@ enum { TRANSFER_NONE, TRANSFER_INITIATED, TRANSFER_PENDING, TRANSFER_INPROGRESS,
 struct transfer {
 	uint8_t fnum;
 	uint8_t *buf;
-	int     chunksz;
+	int	chunksz;
 	ssize_t n;
-	int     pendingbuf;
-	int     state;
+	int	pendingbuf;
+	int	state;
 	struct timespec lastblock;
-	int     cooldown;
+	int	cooldown;
 };
 
 enum {
@@ -134,8 +134,8 @@ enum {
 };
 
 struct call {
-	int     num;
-	int     state;
+	int	num;
+	int	state;
 	uint8_t *frame;
 	uint8_t payload[RTP_PAYLOAD_SIZE];
 	ssize_t n;
@@ -143,84 +143,84 @@ struct call {
 };
 
 struct friend {
-	char    name[TOX_MAX_NAME_LENGTH + 1];
+	char	name[TOX_MAX_NAME_LENGTH + 1];
 	int32_t num;
 	uint8_t id[TOX_CLIENT_ID_SIZE];
-	char    idstr[2 * TOX_CLIENT_ID_SIZE + 1];
-	int     dirfd;
-	int     fd[LEN(ffiles)];
-	struct  transfer tx;
-	int     rxstate;
-	struct  call av;
+	char	idstr[2 * TOX_CLIENT_ID_SIZE + 1];
+	int	dirfd;
+	int	fd[LEN(ffiles)];
+	struct	transfer tx;
+	int	rxstate;
+	struct	call av;
 	TAILQ_ENTRY(friend) entry;
 };
 
 struct request {
 	uint8_t id[TOX_CLIENT_ID_SIZE];
-	char    idstr[2 * TOX_CLIENT_ID_SIZE + 1];
-	char    *msg;
-	int     fd;
+	char	idstr[2 * TOX_CLIENT_ID_SIZE + 1];
+	char	*msg;
+	int	fd;
 	TAILQ_ENTRY(request) entry;
 };
 
 static TAILQ_HEAD(friendhead, friend) friendhead = TAILQ_HEAD_INITIALIZER(friendhead);
 static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
 
-static Tox            *tox;
-static ToxAv          *toxav;
+static Tox	      *tox;
+static ToxAv	      *toxav;
 static ToxAvCSettings toxavconfig;
-static int            framesize;
+static int	      framesize;
 static Tox_Options    toxopt;
-static uint8_t        *passphrase;
-static uint32_t       pplen;
+static uint8_t	      *passphrase;
+static uint32_t	      pplen;
 static volatile sig_atomic_t running = 1;
-static int            ipv6;
-static int            tcpflag;
-static int            proxyflag;
+static int	      ipv6;
+static int	      tcpflag;
+static int	      proxyflag;
 
-static struct   timespec timediff(struct timespec, struct timespec);
-static void     printrat(void);
-static void     logmsg(const char *, ...);
-static int      fifoopen(int, struct file);
-static void     fiforeset(int, int *, struct file);
-static ssize_t  fiforead(int, int *, struct file, void *, size_t);
+static struct	timespec timediff(struct timespec, struct timespec);
+static void	printrat(void);
+static void	logmsg(const char *, ...);
+static int	fifoopen(int, struct file);
+static void	fiforeset(int, int *, struct file);
+static ssize_t	fiforead(int, int *, struct file, void *, size_t);
 static uint32_t interval(Tox *, ToxAv *);
-static void     cbcallinvite(void *, int32_t, void *);
-static void     cbcallstart(void *, int32_t, void *);
-static void     cbcallterminate(void *, int32_t, void *);
-static void     cbcalltypechange(void *, int32_t, void *);
-static void     cbcalldata(void *, int32_t, const int16_t *, uint16_t, void *);
-static void     cancelcall(struct friend *, char *);
-static void     sendfriendcalldata(struct friend *);
-static void     cbconnstatus(Tox *, int32_t, uint8_t, void *);
-static void     cbfriendmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
-static void     cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
-static void     cbnamechange(Tox *, int32_t, const uint8_t *, uint16_t, void *);
-static void     cbstatusmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
-static void     cbuserstate(Tox *, int32_t, uint8_t, void *);
-static void     cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
-static void     cbfilesendreq(Tox *, int32_t, uint8_t, uint64_t, const uint8_t *, uint16_t, void *);
-static void     cbfiledata(Tox *, int32_t, uint8_t, const uint8_t *, uint16_t, void *);
-static void     canceltxtransfer(struct friend *);
-static void     cancelrxtransfer(struct friend *);
-static void     sendfriendfile(struct friend *);
-static void     sendfriendtext(struct friend *);
-static void     removefriend(struct friend *);
-static int      readpass(const char *, uint8_t **, uint32_t *);
-static void     dataload(void);
-static void     datasave(void);
-static int      localinit(void);
-static int      toxinit(void);
-static int      toxconnect(void);
-static void     id2str(uint8_t *, char *);
-static void     str2id(char *, uint8_t *);
+static void	cbcallinvite(void *, int32_t, void *);
+static void	cbcallstart(void *, int32_t, void *);
+static void	cbcallterminate(void *, int32_t, void *);
+static void	cbcalltypechange(void *, int32_t, void *);
+static void	cbcalldata(void *, int32_t, const int16_t *, uint16_t, void *);
+static void	cancelcall(struct friend *, char *);
+static void	sendfriendcalldata(struct friend *);
+static void	cbconnstatus(Tox *, int32_t, uint8_t, void *);
+static void	cbfriendmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
+static void	cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
+static void	cbnamechange(Tox *, int32_t, const uint8_t *, uint16_t, void *);
+static void	cbstatusmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
+static void	cbuserstate(Tox *, int32_t, uint8_t, void *);
+static void	cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
+static void	cbfilesendreq(Tox *, int32_t, uint8_t, uint64_t, const uint8_t *, uint16_t, void *);
+static void	cbfiledata(Tox *, int32_t, uint8_t, const uint8_t *, uint16_t, void *);
+static void	canceltxtransfer(struct friend *);
+static void	cancelrxtransfer(struct friend *);
+static void	sendfriendfile(struct friend *);
+static void	sendfriendtext(struct friend *);
+static void	removefriend(struct friend *);
+static int	readpass(const char *, uint8_t **, uint32_t *);
+static void	dataload(void);
+static void	datasave(void);
+static int	localinit(void);
+static int	toxinit(void);
+static int	toxconnect(void);
+static void	id2str(uint8_t *, char *);
+static void	str2id(char *, uint8_t *);
 static struct friend *friendcreate(int32_t);
-static void     friendload(void);
-static void     frienddestroy(struct friend *);
-static void     loop(void);
-static void     initshutdown(int);
-static void     shutdown(void);
-static void     usage(void);
+static void	friendload(void);
+static void	frienddestroy(struct friend *);
+static void	loop(void);
+static void	initshutdown(int);
+static void	shutdown(void);
+static void	usage(void);
 
 #define FD_APPEND(fd) do {	\
 	FD_SET((fd), &rfds);	\
@@ -1208,7 +1208,7 @@ toxinit(void)
 
 	toxavconfig = av_DefaultSettings;
 	framesize = (toxavconfig.audio_sample_rate * toxavconfig.audio_frame_duration *
-	            toxavconfig.audio_channels) / 1000;
+		     toxavconfig.audio_channels) / 1000;
 
 	tox_callback_connection_status(tox, cbconnstatus, NULL);
 	tox_callback_friend_message(tox, cbfriendmessage, NULL);
@@ -1573,7 +1573,7 @@ setnospam(void *data)
 	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
 
 	n = fiforead(gslots[NOSPAM].dirfd, &gslots[NOSPAM].fd[IN], gfiles[IN],
-	             nospam, sizeof(nospam) - 1);
+		     nospam, sizeof(nospam) - 1);
 	if (n <= 0)
 		return;
 	if (nospam[n - 1] == '\n')
@@ -1711,7 +1711,7 @@ loop(void)
 		}
 
 		/* If we hit the receiver too hard, we will run out of
-		 * local buffer slots.  In that case tox_file_send_data()
+		 * local buffer slots.	In that case tox_file_send_data()
 		 * will return -1 and we will have to queue the buffer to
 		 * send it later.  If this is the last buffer read from
 		 * the FIFO, then select() won't make the fd readable again
