@@ -112,7 +112,7 @@ Changing nospam: Yes
 toxi URI: No
 
 NOTE: Some of these features are not intended to be developed
-in ratox itself but rather in external scripts that are built upon
+in ratox itself but rather in external scripts[1] that are built upon
 ratox.
 
 
