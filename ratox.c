@@ -27,14 +27,14 @@
 #include "util.h"
 
 const char *reqerr[] = {
-	[-TOX_FAERR_TOOLONG]	  = "Message is too long",
-	[-TOX_FAERR_NOMESSAGE]	  = "Please add a message to your request",
-	[-TOX_FAERR_OWNKEY]	  = "That appears to be your own ID",
+	[-TOX_FAERR_TOOLONG]      = "Message is too long",
+	[-TOX_FAERR_NOMESSAGE]    = "Please add a message to your request",
+	[-TOX_FAERR_OWNKEY]       = "That appears to be your own ID",
 	[-TOX_FAERR_ALREADYSENT]  = "Friend request already sent",
-	[-TOX_FAERR_UNKNOWN]	  = "Unknown error while sending your request",
+	[-TOX_FAERR_UNKNOWN]      = "Unknown error while sending your request",
 	[-TOX_FAERR_BADCHECKSUM]  = "Bad checksum while verifying address",
 	[-TOX_FAERR_SETNEWNOSPAM] = "Friend already added but invalid nospam",
-	[-TOX_FAERR_NOMEM]	  = "Error increasing the friend list size"
+	[-TOX_FAERR_NOMEM]        = "Error increasing the friend list size"
 };
 
 struct node {
@@ -80,9 +80,9 @@ static void setnospam(void *);
 enum { NAME, STATUS, STATE, REQUEST, NOSPAM };
 
 static struct slot gslots[] = {
-	[NAME]	  = { .name = "name",	 .cb = setname,	      .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
+	[NAME]    = { .name = "name",	 .cb = setname,	      .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
 	[STATUS]  = { .name = "status",	 .cb = setstatus,     .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
-	[STATE]	  = { .name = "state",	 .cb = setuserstate,  .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
+	[STATE]   = { .name = "state",	 .cb = setuserstate,  .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
 	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outisfolder = 1, .dirfd = -1, .fd = {-1, -1, -1} },
 	[NOSPAM]  = { .name = "nospam",	 .cb = setnospam,     .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
 };
@@ -107,9 +107,9 @@ static struct file ffiles[] = {
 };
 
 static char *ustate[] = {
-	[TOX_USERSTATUS_NONE]	 = "none",
-	[TOX_USERSTATUS_AWAY]	 = "away",
-	[TOX_USERSTATUS_BUSY]	 = "busy",
+	[TOX_USERSTATUS_NONE]    = "none",
+	[TOX_USERSTATUS_AWAY]    = "away",
+	[TOX_USERSTATUS_BUSY]    = "busy",
 	[TOX_USERSTATUS_INVALID] = "invalid"
 };
 
