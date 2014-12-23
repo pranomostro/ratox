@@ -134,12 +134,12 @@ enum {
 };
 
 struct call {
-	int     num;
-	int     state;
+	int      num;
+	int      state;
 	uint8_t *frame;
-	uint8_t payload[RTP_PAYLOAD_SIZE];
-	ssize_t n;
-	struct  timespec lastsent;
+	uint8_t  payload[RTP_PAYLOAD_SIZE];
+	ssize_t  n;
+	struct   timespec lastsent;
 };
 
 struct friend {
@@ -167,16 +167,20 @@ static TAILQ_HEAD(friendhead, friend) friendhead = TAILQ_HEAD_INITIALIZER(friend
 static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
 
 static Tox *tox;
+static Tox_Options toxopt;
+
 static ToxAv *toxav;
 static ToxAvCSettings toxavconfig;
-static int framesize;
-static Tox_Options toxopt;
-static uint8_t *passphrase;
-static uint32_t pplen;
-static volatile sig_atomic_t running = 1;
+static int    framesize;
+
 static int ipv6;
 static int tcpflag;
 static int proxyflag;
+
+static uint8_t *passphrase;
+static uint32_t pplen;
+
+static volatile sig_atomic_t running = 1;
 
 static struct timespec timediff(struct timespec, struct timespec);
 static void printrat(void);
@@ -272,9 +276,9 @@ printrat(void)
 static void
 logmsg(const char *fmt, ...)
 {
-	time_t t;
+	time_t  t;
 	va_list ap;
-	char buft[64];
+	char    buft[64];
 
 	va_start(ap, fmt);
 	t = time(NULL);
@@ -340,7 +344,7 @@ interval(Tox *m, ToxAv *av)
 static void
 cbcallinvite(void *av, int32_t cnum, void *udata)
 {
-	struct friend *f;
+	struct  friend *f;
 	ToxAvCSettings avconfig;
 	int32_t fnum, r;
 
@@ -380,7 +384,7 @@ static void
 cbcallstart(void *av, int32_t cnum, void *udata)
 {
 	struct friend *f;
-	int r;
+	int    r;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
 		if (f->av.num == cnum)
@@ -417,7 +421,7 @@ static void
 cbcallterminate(void *av, int32_t cnum, void *udata)
 {
 	struct friend *f;
-	int r;
+	int    r;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
 		if (f->av.num == cnum)
@@ -442,9 +446,9 @@ cbcalltypechange(void *av, int32_t cnum, void *udata)
 static void
 cbcalldata(void *av, int32_t cnum, const int16_t *data, uint16_t len, void *udata)
 {
-	struct friend *f;
-	ssize_t n, wrote;
-	int fd;
+	struct   friend *f;
+	ssize_t  n, wrote;
+	int      fd;
 	uint8_t *buf;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
@@ -515,9 +519,9 @@ cancelcall(struct friend *f, char *action)
 static void
 sendfriendcalldata(struct friend *f)
 {
-	struct timespec now, diff;
+	struct  timespec now, diff;
 	ssize_t n, payloadsize;
-	int r;
+	int     r;
 
 	n = fiforead(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN],
 		     f->av.frame + (f->av.state & INCOMPLETE) * f->av.n,
@@ -561,8 +565,8 @@ cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 {
 	struct friend *f;
 	struct request *req, *rtmp;
-	int r;
-	char name[TOX_MAX_NAME_LENGTH + 1];
+	int    r;
+	char   name[TOX_MAX_NAME_LENGTH + 1];
 
 	r = tox_get_name(tox, frnum, (uint8_t *)name);
 	if (r < 0) {
@@ -602,10 +606,10 @@ cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 static void
 cbfriendmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *udata)
 {
-	struct friend *f;
-	time_t t;
+	struct  friend *f;
+	time_t  t;
 	uint8_t msg[len + 1];
-	char buft[64];
+	char    buft[64];
 
 	memcpy(msg, data, len);
 	msg[len] = '\0';
@@ -656,7 +660,7 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, vo
 static void
 cbnamechange(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *user)
 {
-	struct friend *f;
+	struct  friend *f;
 	uint8_t name[len + 1];
 
 	memcpy(name, data, len);
@@ -806,7 +810,7 @@ static void
 cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 	      const uint8_t *fname, uint16_t flen, void *udata)
 {
-	struct friend *f;
+	struct  friend *f;
 	uint8_t filename[flen + 1];
 
 	TAILQ_FOREACH(f, &friendhead, entry)
@@ -837,8 +841,8 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 static void
 cbfiledata(Tox *m, int32_t frnum, uint8_t fnum, const uint8_t *data, uint16_t len, void *udata)
 {
-	struct friend *f;
-	ssize_t n;
+	struct   friend *f;
+	ssize_t  n;
 	uint16_t wrote = 0;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
@@ -902,7 +906,7 @@ cancelrxtransfer(struct friend *f)
 static void
 sendfriendfile(struct friend *f)
 {
-	struct timespec start, now, diff = {0, 0};
+	struct  timespec start, now, diff = {0, 0};
 	ssize_t n;
 
 	clock_gettime(CLOCK_MONOTONIC, &start);
@@ -950,7 +954,7 @@ static void
 sendfriendtext(struct friend *f)
 {
 	ssize_t n;
-	int r;
+	int     r;
 	uint8_t buf[TOX_MAX_MESSAGE_LENGTH];
 
 	n = fiforead(f->dirfd, &f->fd[FTEXT_IN], ffiles[FTEXT_IN], buf, sizeof(buf));
@@ -999,9 +1003,9 @@ readpass(const char *prompt, uint8_t **target, uint32_t *len)
 static void
 dataload(void)
 {
-	off_t sz;
+	off_t    sz;
 	uint32_t pp2len = 0;
-	int fd;
+	int      fd;
 	uint8_t *data, *passphrase2 = NULL;
 
 	fd = open(savefile, O_RDONLY);
@@ -1064,8 +1068,8 @@ reprompt2:
 static void
 datasave(void)
 {
-	off_t sz;
-	int fd;
+	off_t    sz;
+	int      fd;
 	uint8_t *data;
 
 	fd = open(savefile, O_WRONLY | O_TRUNC | O_CREAT , 0666);
@@ -1092,9 +1096,9 @@ datasave(void)
 static int
 localinit(void)
 {
-	DIR *d;
-	size_t i, m;
-	int r;
+	DIR    *d;
+	size_t  i, m;
+	int     r;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
 	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
 	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
@@ -1239,10 +1243,10 @@ toxinit(void)
 static int
 toxconnect(void)
 {
-	struct node *n;
-	struct node tmp;
-	size_t i, j;
-	int r;
+	struct  node *n;
+	struct  node tmp;
+	size_t  i, j;
+	int     r;
 	uint8_t id[TOX_CLIENT_ID_SIZE];
 
 	srand(time(NULL));
@@ -1271,7 +1275,7 @@ toxconnect(void)
 static void
 id2str(uint8_t *id, char *idstr)
 {
-	int i;
+	int  i;
 	char hex[] = "0123456789ABCDEF";
 
 	for (i = 0; i < TOX_CLIENT_ID_SIZE; i++) {
@@ -1286,7 +1290,7 @@ static void
 str2id(char *idstr, uint8_t *id)
 {
 	size_t i, len = strlen(idstr) / 2;
-	char *p = idstr;
+	char  *p = idstr;
 
 	for (i = 0; i < len; ++i, p += 2)
 		sscanf(p, "%2hhx", &id[i]);
@@ -1295,10 +1299,10 @@ str2id(char *idstr, uint8_t *id)
 static struct friend *
 friendcreate(int32_t frnum)
 {
-	struct friend *f;
-	DIR *d;
-	size_t i;
-	int r;
+	struct  friend *f;
+	DIR    *d;
+	size_t  i;
+	int     r;
 	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
 
 	f = calloc(1, sizeof(*f));
@@ -1432,8 +1436,8 @@ static void
 setname(void *data)
 {
 	ssize_t n;
-	int r;
-	char name[TOX_MAX_NAME_LENGTH + 1];
+	int     r;
+	char    name[TOX_MAX_NAME_LENGTH + 1];
 
 	n = fiforead(gslots[NAME].dirfd, &gslots[NAME].fd[IN],
 		     gfiles[IN], name, sizeof(name) - 1);
@@ -1458,7 +1462,7 @@ static void
 setstatus(void *data)
 {
 	ssize_t n;
-	int r;
+	int     r;
 	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
 
 	n = fiforead(gslots[STATUS].dirfd, &gslots[STATUS].fd[IN], gfiles[IN],
@@ -1483,9 +1487,9 @@ setstatus(void *data)
 static void
 setuserstate(void *data)
 {
-	size_t i;
+	size_t  i;
 	ssize_t n;
-	char buf[PIPE_BUF];
+	char    buf[PIPE_BUF];
 
 	n = fiforead(gslots[STATE].dirfd, &gslots[STATE].fd[IN], gfiles[IN],
 		     buf, sizeof(buf) - 1);
@@ -1518,9 +1522,9 @@ static void
 sendfriendreq(void *data)
 {
 	ssize_t n;
-	int r;
-	char buf[PIPE_BUF], *p;
-	char *msg = "ratox is awesome!";
+	int     r;
+	char    buf[PIPE_BUF], *p;
+	char   *msg = "ratox is awesome!";
 	uint8_t id[TOX_FRIEND_ADDRESS_SIZE];
 
 	n = fiforead(gslots[REQUEST].dirfd, &gslots[REQUEST].fd[IN], gfiles[IN],
@@ -1567,10 +1571,10 @@ out:
 static void
 setnospam(void *data)
 {
-	ssize_t n, i;
+	ssize_t  n, i;
 	uint32_t nsval;
-	uint8_t nospam[2 * sizeof(uint32_t) + 1];
-	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
+	uint8_t  nospam[2 * sizeof(uint32_t) + 1];
+	uint8_t  address[TOX_FRIEND_ADDRESS_SIZE];
 
 	n = fiforead(gslots[NOSPAM].dirfd, &gslots[NOSPAM].fd[IN], gfiles[IN],
 		     nospam, sizeof(nospam) - 1);
@@ -1615,8 +1619,8 @@ loop(void)
 	struct timeval tv;
 	fd_set rfds;
 	time_t t0, t1;
-	int connected = 0, i, n, r, fd, fdmax;
-	char tstamp[64], c;
+	int    connected = 0, i, n, r, fd, fdmax;
+	char   tstamp[64], c;
 
 	t0 = time(NULL);
 	logmsg("DHT > Connecting\n");
@@ -1893,7 +1897,7 @@ shutdown(void)
 {
 	struct friend *f, *ftmp;
 	struct request *r, *rtmp;
-	int i, m;
+	int    i, m;
 
 	logmsg("Shutdown\n");
 
