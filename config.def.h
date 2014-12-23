@@ -9,11 +9,14 @@
 /* Maximum number of simultaneous calls */
 #define MAXCALLS 8
 
-static char *savefile = ".ratox.tox";
-static int encryptsavefile = 0;
+static char *savefile        = ".ratox.tox";
+static int   encryptsavefile = 0;
 
-static char proxyaddr[] = "localhost";
-static uint16_t proxyport = 8080;
+static int      ipv6        = 0;
+static int      tcp         = 0;
+static int      proxy       = 0;
+static char     proxyaddr[] = "localhost";
+static uint16_t proxyport   = 8080;
 
 static struct node nodes[] = {
 	{

@@ -173,10 +173,6 @@ static ToxAv *toxav;
 static ToxAvCSettings toxavconfig;
 static int    framesize;
 
-static int ipv6;
-static int tcpflag;
-static int proxyflag;
-
 static uint8_t *passphrase;
 static uint32_t pplen;
 
@@ -1187,10 +1183,10 @@ static int
 toxinit(void)
 {
 	toxopt.ipv6enabled = ipv6;
-	toxopt.udp_disabled = tcpflag;
-	if (proxyflag) {
-		tcpflag = 1;
-		toxopt.udp_disabled = tcpflag;
+	toxopt.udp_disabled = tcp;
+	if (proxy) {
+		tcp = 1;
+		toxopt.udp_disabled = tcp;
 		logmsg("Net > Forcing TCP mode\n");
 		snprintf(toxopt.proxy_address, sizeof(toxopt.proxy_address),
 			 "%s", proxyaddr);
@@ -1961,6 +1957,7 @@ main(int argc, char *argv[])
 {
 	ARGBEGIN {
 	case '4':
+		ipv6 = 0;
 		break;
 	case '6':
 		ipv6 = 1;
@@ -1972,10 +1969,10 @@ main(int argc, char *argv[])
 		encryptsavefile = 0;
 		break;
 	case 't':
-		tcpflag = 1;
+		tcp = 1;
 		break;
 	case 'p':
-		proxyflag = 1;
+		proxy = 1;
 		break;
 	default:
 		usage();
