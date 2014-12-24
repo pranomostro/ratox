@@ -8,121 +8,115 @@
 .Nm
 .Op Fl 4 | Fl 6
 .Op Fl E | Fl e
-.Op Fl tp
+.Op Fl T | Fl t
+.Op Fl P | Fl p
 .Op Ar savefile
 .Sh DESCRIPTION
 .Nm
-is a client implementation of the rather popular tox protocol.
-Unlike other clients relying on GUIs as an interface to the user, ratox is
-developed with the UNIX-philosophy in mind and allows complete
-interaction through FIFOs.
+is a client implementation of the tox protocol providing only FIFOs, files
+and folders as interfaces.
 .Sh OPTIONS
 .Bl -tag -width Ds
-.It Fl 4
-Switch to IPv4-only mode.  This is the default.
-.It Fl 6
-Switch to IPv6-only mode.
-.It Fl E
-Enable save file encryption.
-.It Fl e
-Disable save file encryption.
-.It Fl t
-Enable TCP mode.  By default, tox operates with UDP and is recommended, as TCP mode implies certain security considerations.
-.It Fl p
-Enable TCP SOCKS5 proxy as specified in \fIconfig.h\fR when the package was built.
-By default when this option is enabled, ratox will use a proxy on \fB127.0.0.1:8080\fR.
+.It Fl 4 6
+Use IPv4/IPv6 only.
+.It Fl E e
+Enable/Disable save file encryption.
+.It Fl T t
+Enable/Disable TCP mode. Avoiding UDP in tox implies certain security
+considerations.
+.It Fl P p
+Enable/Disable TCP SOCKS5 proxy as specified in \fIconfig.h\fR.
 .It Ar savefile
-Specify the path of the save file to load a profile from or create a new one at.
+Path of the file to load a profile from or create a new one in.
 .El
 .Sh CONFIGURATION
 .Nm
-is configured by modifying \fIconfig.h\fR and recompiling the code.  Apart from
-the command line options there are a few more options that can be tweaked at compile
-time.
+is configured with \fIconfig.h\fR at compile-time. Apart from command line
+options and other parameters it contains the list of DHT-nodes.
 .Pp
-You can encrypt/decrypt your save file by setting \fBencryptsavefile\fR to \fB1\fR | \fB0\fR or
-specifying
-.Fl E
-|
-.Fl e
-respectively.  In the former case it will prompt you for a new passphrase, in the latter it will ask you to enter your current passphrase and will then write the save file unencrypted.
-.Pp
-Trying to load or decrypt an encrypted save file,
+If there is a mismatch between save file status and encryption setting,
 .Nm
-will ask you to supply a passphrase.
-.Sh FILESYSTEM STRUCTURE
+writes the save file according to the latter.
+.Sh INTERFACE
+A \fIslot\fR is a set of FIFOs, files and folders interfacing a single
+parameter.  The set of slots makes up the \fIinterface\fR.
 .Ss Global slots
-Each of the following global slots contain an \fBin\fR, \fBout\fR and
-\fBerr\fR file or directory respectively.  Piping data into the \fBin\fR FIFO
-modifies the state of the respective slot.  If any output is expected it will
-be found by reading \fBout\fR.  Errors are reported via \fBerr\fR.
+Global slots are folders containing an \fBin\fR FIFO, \fBout\fR and
+\fBerr\fR file or directory respectively.
+The slot parameter is set by piping data to \fBin\fR and accessed
+with \fBout\fR. Any errors are reported in \fBerr\fR.
 .Pp
-.Bl -tag -width xxxxxxxxxxxxxxxxxxxx
-.It Ar name/in
-Change the name.
-.It Ar name/out
-Contains the current name.
-.It Ar nospam/in
-Change the nospam value.
-.It Ar nospam/out
-Contains the current nospam.
-.It Ar state/in
-Change the user state.  Possible values are \fBnone\fR,
-\fBaway\fR and \fBbusy\fR.
-.It Ar state/out
-Contains the current user state.
-.It Ar status/in
-Change the status message.
-.It Ar status/out
-Contains the current status message.
-.It Ar request/in
-Initiate a friend request by echoing your friend's tox-id to the input FIFO.
-.It Ar request/out/<tox-id>
-Echo \fB1\fR or \fB0\fR to accept or reject the friend request respectively.
+.Bl -tag -width xxxxxxxxxxxxx
+.It Ar name/
+Name slot.
+.It Ar nospam/
+Nospam slot (8 digit hexadecimal).
+.It Ar state/
+State slot (none | away | busy).
+.It Ar status/
+Status message slot.
+.It Ar request/
+Request slot. Send a friend request by piping the Tox ID to \fBin\fR.  Incoming
+requests are listed as FIFOs in \fBout/\fR. Echo \fB1\fR | \fB0\fR to
+accept | reject them.
 .El
 .Ss Friend slots
-Friend slots allow you to communicate with your friends.  They handle sending
-text messages, files or starting a voice call.
+Each friend is represented with a folder in the base-directory named after
+their Tox ID without its nospam-value. Each folder contains slots to
+interface with the friend.
 .Pp
-.Bl -tag -width xxxxxxxxxxxxxxxxxxxx
+.Bl -tag -width xxxxxxxxxxxxx
 .It Ar call_in
-Initiate a call by attaching an audio source to this FIFO.  For example
-arecord -r 48000 -c 1 -f S16_LE > \fBcall_in\fR.
+Initiate a call by piping data to this FIFO.
 .It Ar call_out
-Answer an incoming call by piping it into an audio sink.  For example
-aplay -r 48000 -c 1 -f S16_LE < \fBcall_out\fR.
+Answer an incoming call by opening it for reading.
 .It Ar call_state
-Reports the call state, possible values are \fBnone\fR, \fBpending\fR
-and \fBactive\fR.
+Reports the call state (\fBnone\fR | \fBpending\fR | \fBactive\fR).
+.El
+
+The sample format is \fBmono signed 16-bit little
+endian at 48kHz\fR.
+The call is \fBterminated\fR if
+.Nm
+receives both an EPIPE trying to read from call_in
+and ENXIO trying to open call_out for writing.
+.Pp
+.Bl -tag -width xxxxxxxxxxxxx
 .It Ar file_in
-Initiate a file transfer.  For example cat file > \fBfile_in\fR.
+Initiate a file transfer by piping data to this FIFO.
 .It Ar file_out
-Accept an incoming file transfer.  For example cat \fBfile_out\fR
-> file.
+Accept an incoming file transfer by opening it for reading.
 .It Ar file_pending
-Contains the filename if transfer is pending, empty otherwise.
+Contains the incoming filename if transfer is pending, empty otherwise.
+.El
+
+Given
+.Nm
+can't know how much data a given pipe is going to provide, it
+will send until the pipe is drained or EPIPE received.
+That's why it's possible to stream arbitrary data, including
+audio and video transmissions, even to other clients.
+.Pp
+.Bl -tag -width xxxxxxxxxxxxx
 .It Ar name
-The friend's name.
+Contains the friend's name.
 .It Ar online
-It is \fB1\fR if the friend is online, \fB0\fR otherwise.
+Contains the friend's online status (\fB1\fR | \fB0\fR).
 .It Ar remove
-Echo \fB1\fR to remove a friend.
+Echo \fB1\fR to remove the friend.
 .It Ar state
-The friend's user state.  Possible values are \fBnone\fR,
-\fBaway\fR and \fBbusy\fR.
+Contains the friend's state (\fBnone\fR | \fBaway\fR | \fBbusy\fR)
 .It Ar status
-The friend's status message.
+Contains the friend's status message.
 .It Ar text_in
-Send a text message to the friend by echoing data to this
-FIFO.
+Send a text message by piping data to this FIFO.
 .It Ar text_out
-Receive text messages from the friend by reading from this
-file.  For example tail -f \fBtext_out\fR.
+Contains text messages from the friend.
 .El
 .Ss Misc files
 .Bl -tag -width xxxxxxxxxxxxxxxxxxxx
 .It Ar id
-Contains your tox-id.
+Contains your Tox ID.
 .El
 .Sh AUTHORS
 .Nm
