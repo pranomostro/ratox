@@ -1968,11 +1968,17 @@ main(int argc, char *argv[])
 	case 'e':
 		encryptsavefile = 0;
 		break;
-	case 't':
+	case 'T':
 		tcp = 1;
 		break;
-	case 'p':
+	case 't':
+		tcp = 0;
+		break;
+	case 'P':
 		proxy = 1;
+		break;
+	case 'p':
+		proxy = 0;
 		break;
 	default:
 		usage();
