@@ -46,7 +46,7 @@ Global slots are folders containing an \fBin\fR FIFO, \fBout\fR and
 The slot parameter is set by piping data to \fBin\fR and accessed
 with \fBout\fR. Any errors are reported in \fBerr\fR.
 .Pp
-.Bl -tag -width xxxxxxxxxxxxx
+.Bl -tag -width 13n
 .It Ar name/
 Name slot.
 .It Ar nospam/
@@ -65,7 +65,7 @@ Each friend is represented with a folder in the base-directory named after
 their Tox ID without its nospam-value. Each folder contains slots to
 interface with the friend.
 .Pp
-.Bl -tag -width xxxxxxxxxxxxx
+.Bl -tag -width 13n
 .It Ar call_in
 Initiate a call by piping data to this FIFO.
 .It Ar call_out
@@ -81,7 +81,7 @@ The call is \fBterminated\fR if
 receives both an EPIPE trying to read from call_in
 and ENXIO trying to open call_out for writing.
 .Pp
-.Bl -tag -width xxxxxxxxxxxxx
+.Bl -tag -width 13n
 .It Ar file_in
 Initiate a file transfer by piping data to this FIFO.
 .It Ar file_out
@@ -97,7 +97,7 @@ will send until the pipe is drained or EPIPE received.
 That's why it's possible to stream arbitrary data, including
 audio and video transmissions, even to other clients.
 .Pp
-.Bl -tag -width xxxxxxxxxxxxx
+.Bl -tag -width 13n
 .It Ar name
 Contains the friend's name.
 .It Ar online
@@ -114,7 +114,7 @@ Send a text message by piping data to this FIFO.
 Contains text messages from the friend.
 .El
 .Ss Misc files
-.Bl -tag -width xxxxxxxxxxxxxxxxxxxx
+.Bl -tag -width 13n
 .It Ar id
 Contains your Tox ID.
 .El
