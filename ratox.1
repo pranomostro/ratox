@@ -45,7 +45,6 @@ Global slots are folders containing an \fBin\fR FIFO, \fBout\fR and
 \fBerr\fR file or directory respectively.
 The slot parameter is set by piping data to \fBin\fR and accessed
 with \fBout\fR. Any errors are reported in \fBerr\fR.
-.Pp
 .Bl -tag -width 13n
 .It Ar name/
 Name slot.
@@ -64,7 +63,6 @@ accept | reject them.
 Each friend is represented with a folder in the base-directory named after
 their Tox ID without its nospam-value. Each folder contains slots to
 interface with the friend.
-.Pp
 .Bl -tag -width 13n
 .It Ar call_in
 Initiate a call by piping data to this FIFO.
@@ -73,14 +71,12 @@ Answer an incoming call by opening it for reading.
 .It Ar call_state
 Reports the call state (\fBnone\fR | \fBpending\fR | \fBactive\fR).
 .El
-
 The sample format is \fBmono signed 16-bit little
 endian at 48kHz\fR.
 The call is \fBterminated\fR if
 .Nm
 receives both an EPIPE trying to read from call_in
 and ENXIO trying to open call_out for writing.
-.Pp
 .Bl -tag -width 13n
 .It Ar file_in
 Initiate a file transfer by piping data to this FIFO.
@@ -89,14 +85,12 @@ Accept an incoming file transfer by opening it for reading.
 .It Ar file_pending
 Contains the incoming filename if transfer is pending, empty otherwise.
 .El
-
 Given
 .Nm
 can't know how much data a given pipe is going to provide, it
 will send until the pipe is drained or EPIPE received.
 That's why it's possible to stream arbitrary data, including
 audio and video transmissions, even to other clients.
-.Pp
 .Bl -tag -width 13n
 .It Ar name
 Contains the friend's name.
