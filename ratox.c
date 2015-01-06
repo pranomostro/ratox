@@ -1191,7 +1191,7 @@ toxinit(void)
 		snprintf(toxopt.proxy_address, sizeof(toxopt.proxy_address),
 			 "%s", proxyaddr);
 		toxopt.proxy_port = proxyport;
-		toxopt.proxy_type = 1;
+		toxopt.proxy_type = proxytype;
 		logmsg("Net > Using proxy %s:%hu\n", proxyaddr, proxyport);
 	}
 
@@ -1943,13 +1943,7 @@ shutdown(void)
 static void
 usage(void)
 {
-	eprintf("usage: %s [-4|-6] [-E|-e] [-tp] [savefile]\n"
-		" -4\tIPv4 only\n"
-		" -6\tIPv6 only\n"
-		" -E\tEnable save file encryption\n"
-		" -e\tDisable save file encryption\n"
-		" -t\tEnable TCP mode (UDP by default)\n"
-		" -p\tEnable TCP socks5 proxy\n", argv0);
+	eprintf("usage: %s [-4|-6] [-E|-e] [-T|-t] [-P|-p] [savefile]\n", argv0);
 }
 
 int
