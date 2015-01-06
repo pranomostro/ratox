@@ -1191,7 +1191,7 @@ toxinit(void)
 		snprintf(toxopt.proxy_address, sizeof(toxopt.proxy_address),
 			 "%s", proxyaddr);
 		toxopt.proxy_port = proxyport;
-		toxopt.proxy_enabled = 1;
+		toxopt.proxy_type = 1;
 		logmsg("Net > Using proxy %s:%hu\n", proxyaddr, proxyport);
 	}
 
