@@ -1,0 +1,9 @@
+#!/bin/sh
+
+echo 'static struct node nodes[] = {' >nodes.h
+
+curl https://nodes.tox.chat/json |
+jq --tab '[.nodes[] | {".addr4": .ipv4, ".addr6": .ipv6, ".port": .port, ".idstr": .public_key}]' |
+sed 's/"-"/NULL/; s/"\(\.[0-9a-z]\+\)":/\1 =/; 1d; $d' >>nodes.h
+
+echo '};' >>nodes.h
