@@ -1,0 +1,29 @@
+callgraph:
+-main()
+	-printrat()
+	-toxinit()
+		-dataload()
+		-datasave()
+	-localinit()
+	-friendload()
+		-friendcreate()
+	-loop()
+		-toxconnect()
+			-str2id()
+		-canceltxtransfer()
+		-cancelrxtransfer()
+		-interval()
+		-fifoopen()
+		-fiforead()
+		-friendcreate()
+		-sendfriendtext()
+		-fiforeset()
+		-sendfriendfile()
+		-sendfriendcalldata()
+		-removefriend()
+
+-the savedata is now put into the Tox_Options struct. It is loaded automatically during
+	tox_new().
+-there does not seem to be a function that checks if the file is encrypted,
+	so just assume that if the user says so in the config
+-Tox_Options is a pointer to a struct, not the struct itself.
