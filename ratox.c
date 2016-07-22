@@ -143,8 +143,8 @@ struct call {
 struct friend {
 	char    name[TOX_MAX_NAME_LENGTH + 1];
 	int32_t num;
-	uint8_t id[TOX_CLIENT_ID_SIZE];
-	char    idstr[2 * TOX_CLIENT_ID_SIZE + 1];
+	uint8_t id[TOX_ADDRESS_SIZE];
+	char    idstr[2 * TOX_ADDRESS_SIZE + 1];
 	int     dirfd;
 	int     fd[LEN(ffiles)];
 	struct  transfer tx;

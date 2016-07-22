@@ -21,6 +21,7 @@ callgraph:
 		-sendfriendfile()
 		-sendfriendcalldata()
 		-removefriend()
+	shutdown()
 
 -the savedata is now put into the Tox_Options struct. It is loaded automatically during
 	tox_new().
