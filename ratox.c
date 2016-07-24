@@ -26,6 +26,10 @@
 #include "readpassphrase.h"
 #include "util.h"
 
+typedef struct Tox_Options Tox_Options;
+typedef struct ToxAv ToxAv;
+typedef struct ToxAvCSettings ToxAvCSettings;
+
 const char *reqerr[] = {
 	[TOX_ERR_FRIEND_SEND_MESSAGE_TOO_LONG] = "Message is too long",
 	[TOX_ERR_FRIEND_SEND_MESSAGE_EMPTY]    = "Please add a message to your request",
@@ -154,8 +158,8 @@ struct friend {
 };
 
 struct request {
-	uint8_t id[TOX_CLIENT_ID_SIZE];
-	char    idstr[2 * TOX_CLIENT_ID_SIZE + 1];
+	uint8_t id[TOX_ADDRESS_SIZE];
+	char    idstr[2 * TOX_ADDRESS_SIZE + 1];
 	char   *msg;
 	int     fd;
 	TAILQ_ENTRY(request) entry;

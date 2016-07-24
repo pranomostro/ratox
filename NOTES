@@ -1,3 +1,12 @@
+datastructures:
+-reqerr: error codes from tox and corresponding error messages
+-gfiles: files inside each of "name", "status" and so on (the gslots)
+-gslots: different control directories for user-specific information
+-ffiles: files in the directory for each conversation
+-ustate: states of the user and corresponding strings
+-transfer: something related to file transfer, I guess
+-call: pretty self-explanatory, the struct for a call to a single user
+
 callgraph:
 -main()
 	-printrat()
@@ -28,3 +37,10 @@ callgraph:
 -there does not seem to be a function that checks if the file is encrypted,
 	so just assume that if the user says so in the config
 -Tox_Options is a pointer to a struct, not the struct itself.
+-RTP_PAYLOAD_SIZE is defined nowhere. wtf. https://github.com/3XX0/rtvs/blob/master/rtp.h
+says
+	RTP_PAYLOAD_SIZE = 16371
+maybe it was defined in toxav.h/tox.h before?
+
+Possible fixes: use the one from rtvs, TOX_MAX_CUSTOM_PACKET_SIZE (not 16371, though).
+See also: RFC 3550, RTP.
