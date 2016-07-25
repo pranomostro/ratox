@@ -28,7 +28,6 @@
 
 typedef struct Tox_Options Tox_Options;
 typedef struct ToxAv ToxAv;
-typedef struct ToxAvCSettings ToxAvCSettings;
 
 const char *reqerr[] = {
 	[TOX_ERR_FRIEND_SEND_MESSAGE_TOO_LONG] = "Message is too long",
@@ -591,7 +590,7 @@ cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 	for (req = TAILQ_FIRST(&reqhead); req; req = rtmp) {
 		rtmp = TAILQ_NEXT(req, entry);
 
-		if (memcmp(f->id, req->id, TOX_CLIENT_ID_SIZE))
+		if (memcmp(f->id, req->id, TOX_ADDRESS_SIZE))
 			continue;
 		unlinkat(gslots[REQUEST].fd[OUT], req->idstr, 0);
 		close(req->fd);
@@ -634,7 +633,7 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, vo
 		eprintf("calloc:");
 	req->fd = -1;
 
-	memcpy(req->id, id, TOX_CLIENT_ID_SIZE);
+	memcpy(req->id, id, TOX_ADDRESS_SIZE);
 	id2str(req->id, req->idstr);
 
 	if (len > 0) {
@@ -1245,7 +1244,7 @@ toxconnect(void)
 	struct  node tmp;
 	size_t  i, j;
 	int     r;
-	uint8_t id[TOX_CLIENT_ID_SIZE];
+	uint8_t id[TOX_ADDRESS_SIZE];
 
 	srand(time(NULL));
 
@@ -1276,7 +1275,7 @@ id2str(uint8_t *id, char *idstr)
 	int  i;
 	char hex[] = "0123456789ABCDEF";
 
-	for (i = 0; i < TOX_CLIENT_ID_SIZE; i++) {
+	for (i = 0; i < TOX_ADDRESS_SIZE; i++) {
 		*idstr++ = hex[(id[i] >> 4) & 0xf];
 		*idstr++ = hex[id[i] & 0xf];
 	}
