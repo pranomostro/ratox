@@ -1,1 +1,5 @@
 errs
+config.h
+*.o
+*.a
+ratox
