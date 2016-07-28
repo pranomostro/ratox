@@ -1,4 +1,5 @@
-Changelog from the API ratox uses to the current API.
+A real changelog does not exist, however, the changelog is pretty clearly visible in the commits
+of PyTox from Jun 9-?.
 
 datastructures:
 -reqerr: error codes from tox and corresponding error messages
