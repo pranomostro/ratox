@@ -335,7 +335,7 @@ again:
 static uint32_t
 interval(Tox *m, ToxAv *av)
 {
-	return MIN(tox_do_interval(m), toxav_do_interval(av));
+	return MIN(tox_iteration_interval(m), toxav_iteration_interval(av));
 }
 
 static void
@@ -344,11 +344,12 @@ cbcallinvite(void *av, int32_t cnum, void *udata)
 	struct  friend *f;
 	ToxAvCSettings avconfig;
 	int32_t fnum, r;
+	TOXAV_ERR_CALL_CONTROL err;
 
 	fnum = toxav_get_peer_id(toxav, cnum, 0);
 	if (fnum < 0) {
 		weprintf("Failed to determine peer-id from call-id\n");
-		r = toxav_reject(toxav, cnum, NULL);
+		r = toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, &err);
 		if (r < 0)
 			weprintf("Failed to reject call\n");
 		return;
@@ -360,10 +361,9 @@ cbcallinvite(void *av, int32_t cnum, void *udata)
 		return;
 
 	f->av.num = cnum;
-	r = toxav_get_peer_csettings(toxav, cnum, 0, &avconfig);
 	if (r < 0) {
 		weprintf("Failed to determine peer call type\n");
-		r = toxav_reject(toxav, f->av.num, NULL);
+		r = toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, &err);
 		if (r < 0)
 			weprintf("Failed to reject call\n");
 		return;
@@ -399,8 +399,9 @@ cbcallstart(void *av, int32_t cnum, void *udata)
 
 	r = toxav_prepare_transmission(toxav, f->av.num, 0);
 	if (r < 0) {
+		TOXAV_ERR_CALL_CONTROL err;
 		weprintf("Failed to prepare Rx/Tx AV transmission\n");
-		r = toxav_hangup(toxav, f->av.num);
+		toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, &err);
 		if (r < 0)
 			weprintf("Failed to hang up\n");
 		return;
@@ -419,6 +420,7 @@ cbcallterminate(void *av, int32_t cnum, void *udata)
 {
 	struct friend *f;
 	int    r;
+	TOXAV_ERR_CALL_CONTROL err;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
 		if (f->av.num == cnum)
@@ -427,7 +429,7 @@ cbcallterminate(void *av, int32_t cnum, void *udata)
 		return;
 
 	if (!strcmp(udata, "Peer timeout")) {
-		r = toxav_stop_call(toxav, cnum);
+		r = toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, &err);
 		if (r < 0)
 			weprintf("Failed to stop call\n");
 	}
@@ -564,8 +566,9 @@ cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 	struct request *req, *rtmp;
 	int    r;
 	char   name[TOX_MAX_NAME_LENGTH + 1];
+	TOX_ERR_FRIEND_QUERY err;
 
-	r = tox_get_name(tox, frnum, (uint8_t *)name);
+	tox_friend_get_name(tox, frnum, (uint8_t *)name, &err);
 	if (r < 0) {
 		weprintf("Failed to get name for friend number %ld\n", (long)frnum);
 		return;
@@ -786,7 +789,7 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 			f->tx.cooldown = 0;
 		} else {
 			logmsg(": %s : Rx > Complete\n", f->name);
-			if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_FINISHED, NULL, 0) < 0)
+			if (tox_file_control(tox, f->num, 1, 0, TOX_FILECONTROL_FINISHED, NULL, 0) < 0)
 				weprintf("Failed to signal file completion to the sender\n");
 			if (f->fd[FFILE_OUT] != -1) {
 				close(f->fd[FFILE_OUT]);
@@ -823,7 +826,7 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 	if (f->rxstate == TRANSFER_INPROGRESS) {
 		logmsg(": %s : Rx > Rejected %s, already one in progress\n",
 		       f->name, filename);
-		if (tox_file_send_control(tox, f->num, 1, fnum, TOX_FILECONTROL_KILL, NULL, 0) < 0)
+		if (tox_file_control(tox, f->num, 1, fnum, TOX_FILECONTROL_KILL, NULL, 0) < 0)
 			weprintf("Failed to kill new Rx transfer\n");
 		return;
 	}
@@ -872,7 +875,7 @@ canceltxtransfer(struct friend *f)
 	if (f->tx.state == TRANSFER_NONE)
 		return;
 	logmsg(": %s : Tx > Cancelling\n", f->name);
-	if (tox_file_send_control(tox, f->num, 0, 0, TOX_FILECONTROL_KILL, NULL, 0) < 0)
+	if (tox_file_control(tox, f->num, 0, 0, TOX_FILECONTROL_KILL, NULL, 0) < 0)
 		weprintf("Failed to kill Tx transfer\n");
 	f->tx.state = TRANSFER_NONE;
 	free(f->tx.buf);
@@ -889,7 +892,7 @@ cancelrxtransfer(struct friend *f)
 	if (f->rxstate == TRANSFER_NONE)
 		return;
 	logmsg(": %s : Rx > Cancelling\n", f->name);
-	if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_KILL, NULL, 0) < 0)
+	if (tox_file_control(tox, f->num, 1, 0, TOX_FILECONTROL_KILL, NULL, 0) < 0)
 		weprintf("Failed to kill Rx transfer\n");
 	if (f->fd[FFILE_OUT] != -1) {
 		close(f->fd[FFILE_OUT]);
@@ -923,7 +926,7 @@ sendfriendfile(struct friend *f)
 			     f->tx.chunksz);
 		if (n == 0) {
 			/* Signal transfer completion to other end */
-			if (tox_file_send_control(tox, f->num, 0, f->tx.fnum,
+			if (tox_file_control(tox, f->num, 0, f->tx.fnum,
 						  TOX_FILECONTROL_FINISHED, NULL, 0) < 0)
 				weprintf("Failed to signal transfer completion to the receiver\n");
 			f->tx.state = TRANSFER_NONE;
@@ -953,13 +956,14 @@ sendfriendtext(struct friend *f)
 	ssize_t n;
 	int     r;
 	uint8_t buf[TOX_MAX_MESSAGE_LENGTH];
+	TOX_ERR_FRIEND_SEND_MESSAGE err;
 
 	n = fiforead(f->dirfd, &f->fd[FTEXT_IN], ffiles[FTEXT_IN], buf, sizeof(buf));
 	if (n <= 0)
 		return;
 	if (buf[n - 1] == '\n')
 		n--;
-	r = tox_send_message(tox, f->num, buf, n);
+	r = tox_friend_send_message(tox, f->num, TOX_MESSAGE_TYPE_NORMAL, buf, n, &err);
 	if (r < 0)
 		weprintf("Failed to send message\n");
 }
@@ -968,10 +972,11 @@ static void
 removefriend(struct friend *f)
 {
 	char c;
+	TOX_ERR_FRIEND_DELETE err;
 
 	if (fiforead(f->dirfd, &f->fd[FREMOVE], ffiles[FREMOVE], &c, 1) != 1 || c != '1')
 		return;
-	tox_del_friend(tox, f->num);
+	tox_friend_delete(tox, f->num, &err);
 	datasave();
 	logmsg(": %s > Removed\n", f->name);
 	frienddestroy(f);
@@ -1036,14 +1041,14 @@ reprompt1:
 	if (read(fd, data, sz) != sz)
 		eprintf("read %s:", savefile);
 
-	if (tox_is_save_encrypted(data)) {
+	if (tox_is_data_encrypted(data)) {
 		if (!encryptsavefile)
 			logmsg("Data : %s > Encrypted, but saving unencrypted\n", savefile);
-		while (readpass("Data : Passphrase > ", &passphrase, &pplen) < 0 ||
-		       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0);
+		//while (readpass("Data : Passphrase > ", &passphrase, &pplen) < 0 ||
+		//       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0); //tox data isn't loaded like this anymore
 	} else {
-		if (tox_load(tox, data, sz) < 0)
-			eprintf("Data : %s > Failed to load\n", savefile);
+		//if (tox_load(tox, data, sz) < 0)
+		//	eprintf("Data : %s > Failed to load\n", savefile); //tox data isn't loaded like this anymore
 		if (encryptsavefile) {
 			logmsg("Data : %s > Not encrypted, but saving encrypted\n", savefile);
 reprompt2:
@@ -1073,15 +1078,13 @@ datasave(void)
 	if (fd < 0)
 		eprintf("open %s:", savefile);
 
-	sz = encryptsavefile ? tox_encrypted_size(tox) : tox_size(tox);
+	sz =  tox_get_savedata_size(tox);
 	data = malloc(sz);
 	if (!data)
 		eprintf("malloc:");
 
-	if (encryptsavefile)
-		tox_encrypted_save(tox, data, passphrase, pplen);
-	else
-		tox_save(tox, data);
+	tox_get_savedata(tox, data);
+
 	if (write(fd, data, sz) != sz)
 		eprintf("write %s:", savefile);
 	fsync(fd);
@@ -1130,7 +1133,7 @@ localinit(void)
 	}
 
 	/* Dump current name */
-	r = tox_get_self_name(tox, name);
+	tox_self_get_name(tox, name);
 	if (r == 0) {
 		weprintf("Name : Empty\n");
 	} else if (r > sizeof(name) - 1) {
@@ -1141,7 +1144,7 @@ localinit(void)
 	dprintf(gslots[NAME].fd[OUT], "%s\n", name);
 
 	/* Dump status */
-	r = tox_get_self_status_message(tox, status, sizeof(status) - 1);
+	r = tox_self_get_status_message(tox, status);
 	if (r == 0) {
 		weprintf("Status : Empty\n");
 	} else if (r > sizeof(status) - 1) {
@@ -1152,7 +1155,7 @@ localinit(void)
 	dprintf(gslots[STATUS].fd[OUT], "%s\n", status);
 
 	/* Dump user state */
-	r = tox_get_self_user_status(tox);
+	r = tox_self_get_status(tox);
 	if (r < 0) {
 		weprintf("State : Empty\n");
 	} else if (r >= LEN(ustate)) {
@@ -1168,14 +1171,14 @@ localinit(void)
 	idfd = open("id", O_WRONLY | O_CREAT, 0666);
 	if (idfd < 0)
 		eprintf("open %s:", "id");
-	tox_get_address(tox, address);
+	tox_self_get_address(tox, address);
 	for (i = 0; i < TOX_FRIEND_ADDRESS_SIZE; i++)
 		dprintf(idfd, "%02X", address[i]);
 	dprintf(idfd, "\n");
 
 	/* Dump Nospam */
 	ftruncate(gslots[NOSPAM].fd[OUT], 0);
-	dprintf(gslots[NOSPAM].fd[OUT], "%08X\n", tox_get_nospam(tox));
+	dprintf(gslots[NOSPAM].fd[OUT], "%08X\n", tox_self_get_nospam(tox));
 
 	return 0;
 }
@@ -1211,14 +1214,14 @@ toxinit(void)
 	framesize = (toxavconfig.audio_sample_rate * toxavconfig.audio_frame_duration *
 		     toxavconfig.audio_channels) / 1000;
 
-	tox_callback_connection_status(tox, cbconnstatus, NULL);
+	tox_callback_friend_connection_status(tox, cbconnstatus, NULL);
 	tox_callback_friend_message(tox, cbfriendmessage, NULL);
 	tox_callback_friend_request(tox, cbfriendrequest, NULL);
-	tox_callback_name_change(tox, cbnamechange, NULL);
-	tox_callback_status_message(tox, cbstatusmessage, NULL);
-	tox_callback_user_status(tox, cbuserstate, NULL);
-	tox_callback_file_control(tox, cbfilecontrol, NULL);
-	tox_callback_file_send_request(tox, cbfilesendreq, NULL);
+	tox_callback_friend_name(tox, cbnamechange, NULL);
+	tox_callback_friend_status_message(tox, cbstatusmessage, NULL);
+	tox_callback_friend_status(tox, cbuserstate, NULL);
+	tox_callback_file_recv_control(tox, cbfilecontrol, NULL);
+	tox_callback_file_chunk_request(tox, cbfilesendreq, NULL);
 	tox_callback_file_data(tox, cbfiledata, NULL);
 
 	toxav_register_callstate_callback(toxav, cbcallinvite, av_OnInvite, NULL);
@@ -1245,6 +1248,7 @@ toxconnect(void)
 	size_t  i, j;
 	int     r;
 	uint8_t id[TOX_ADDRESS_SIZE];
+	TOX_ERR_BOOTSTRAP err;
 
 	srand(time(NULL));
 
@@ -1261,7 +1265,7 @@ toxconnect(void)
 		if (ipv6 && !n->addr6)
 			continue;
 		str2id(n->idstr, id);
-		r = tox_bootstrap_from_address(tox, ipv6 ? n->addr6 : n->addr4, n->port, id);
+		r = tox_bootstrap(tox, ipv6 ? n->addr6 : n->addr4, n->port, id, &err);
 		if (r == 0)
 			weprintf("Net : %s > Bootstrap failed\n", ipv6 ? n->addr6 : n->addr4);
 	}
@@ -1301,12 +1305,13 @@ friendcreate(int32_t frnum)
 	size_t  i;
 	int     r;
 	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
+	TOX_ERR_FRIEND_QUERY err;
 
 	f = calloc(1, sizeof(*f));
 	if (!f)
 		eprintf("calloc:");
 
-	r = tox_get_name(tox, frnum, (uint8_t *)f->name);
+	r = tox_friend_get_name(tox, frnum, (uint8_t *)f->name, &err);
 	if (r < 0) {
 		weprintf(": %ld : Name : Failed to get\n", (long)frnum);
 		return NULL;
@@ -1317,7 +1322,7 @@ friendcreate(int32_t frnum)
 	}
 
 	f->num = frnum;
-	tox_get_client_id(tox, f->num, f->id);
+	tox_friend_get_public_key(tox, frnum, f->id, 0);
 	id2str(f->id, f->idstr);
 
 	r = mkdir(f->idstr, 0777);
@@ -1349,10 +1354,10 @@ friendcreate(int32_t frnum)
 	/* Dump online state */
 	ftruncate(f->fd[FONLINE], 0);
 	dprintf(f->fd[FONLINE], "%d\n",
-		tox_get_friend_connection_status(tox, frnum));
+			tox_friend_get_connection_status(tox, frnum, 0));
 
 	/* Dump status */
-	r = tox_get_status_message(tox, frnum, status, sizeof(status) - 1);
+	r = tox_friend_get_status_message(tox, frnum, status, &err);
 	if (r < 0) {
 		weprintf(": %s : Status : Failed to get\n", f->name);
 		r = 0;
@@ -1364,7 +1369,7 @@ friendcreate(int32_t frnum)
 	dprintf(f->fd[FSTATUS], "%s\n", status);
 
 	/* Dump user state */
-	r = tox_get_user_status(tox, frnum);
+	r = tox_friend_get_status(tox, frnum, &err);
 	if (r < 0) {
 		weprintf(": %s : State : Failed to get\n", f->name);
 	} else if (r >= LEN(ustate)) {
@@ -1414,14 +1419,14 @@ friendload(void)
 {
 	uint32_t sz;
 	uint32_t i;
-	int32_t *frnums;
+	uint32_t *frnums;
 
-	sz = tox_count_friendlist(tox);
+	sz = tox_self_get_friend_list_size(tox);
 	frnums = malloc(sz * sizeof(*frnums));
 	if (!frnums)
 		eprintf("malloc:");
 
-	tox_get_friendlist(tox, frnums, sz);
+	tox_self_get_friend_list(tox, frnums);
 
 	for (i = 0; i < sz; i++)
 		friendcreate(frnums[i]);
@@ -1435,6 +1440,7 @@ setname(void *data)
 	ssize_t n;
 	int     r;
 	char    name[TOX_MAX_NAME_LENGTH + 1];
+	TOX_ERR_SET_INFO err;
 
 	n = fiforead(gslots[NAME].dirfd, &gslots[NAME].fd[IN],
 		     gfiles[IN], name, sizeof(name) - 1);
@@ -1443,9 +1449,9 @@ setname(void *data)
 	if (name[n - 1] == '\n')
 		n--;
 	name[n] = '\0';
-	r = tox_set_name(tox, (uint8_t *)name, n);
+	r = tox_self_set_name(tox, (uint8_t *)name, n, &err);
 	if (r < 0) {
-		weprintf("Failed to set name to \"%s\"\n", name);
+		weprintf("Failed to set name to \"%s\". Error number: %u", name, err);
 		return;
 	}
 	datasave();
@@ -1461,6 +1467,7 @@ setstatus(void *data)
 	ssize_t n;
 	int     r;
 	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
+	TOX_ERR_SET_INFO err;
 
 	n = fiforead(gslots[STATUS].dirfd, &gslots[STATUS].fd[IN], gfiles[IN],
 		     status, sizeof(status) - 1);
@@ -1469,7 +1476,7 @@ setstatus(void *data)
 	if (status[n - 1] == '\n')
 		n--;
 	status[n] = '\0';
-	r = tox_set_status_message(tox, status, n);
+	r = tox_self_set_status_message(tox, status, n, &err);
 	if (r < 0) {
 		weprintf("Failed to set status message to \"%s\"\n");
 		return;
@@ -1497,7 +1504,7 @@ setuserstate(void *data)
 	buf[n] = '\0';
 	for (i = 0; i < LEN(ustate); i++) {
 		if (i != TOX_USERSTATUS_INVALID && strcmp(buf, ustate[i]) == 0) {
-			tox_set_user_status(tox, i);
+			tox_self_set_status(tox, i);
 			break;
 		}
 	}
@@ -1552,7 +1559,9 @@ out:
 	}
 	str2id(buf, id);
 
-	r = tox_add_friend(tox, id, (uint8_t *)msg, strlen(msg));
+	TOX_ERR_FRIEND_ADD err;
+
+	r = tox_friend_add(tox, id, (uint8_t *)msg, strlen(msg), &err);
 	ftruncate(gslots[REQUEST].fd[ERR], 0);
 	lseek(gslots[REQUEST].fd[ERR], 0, SEEK_SET);
 
@@ -1589,14 +1598,14 @@ setnospam(void *data)
 	}
 
 	nsval = strtoul((char *)nospam, NULL, 16);
-	tox_set_nospam(tox, nsval);
+	tox_self_set_nospam(tox, nsval);
 	datasave();
 	logmsg("Nospam > %08X\n", nsval);
 	ftruncate(gslots[NOSPAM].fd[OUT], 0);
 	lseek(gslots[NOSPAM].fd[OUT], 0, SEEK_SET);
 	dprintf(gslots[NOSPAM].fd[OUT], "%08X\n", nsval);
 
-	tox_get_address(tox, address);
+	tox_self_get_address(tox, address);
 	ftruncate(idfd, 0);
 	lseek(idfd, 0, SEEK_SET);
 	for (i = 0; i < TOX_FRIEND_ADDRESS_SIZE; i++)
@@ -1624,7 +1633,7 @@ loop(void)
 	toxconnect();
 	while (running) {
 		/* Handle connection states */
-		if (tox_isconnected(tox)) {
+		if (tox_self_get_connection_status(tox)) {
 			if (!connected) {
 				logmsg("DHT > Connected\n");
 				TAILQ_FOREACH(f, &friendhead, entry) {
@@ -1645,8 +1654,8 @@ loop(void)
 				toxconnect();
 			}
 		}
-		tox_do(tox);
-		toxav_do(toxav);
+		tox_iterate(tox);
+		toxav_iterate(toxav);
 
 		/* Prepare select-fd-set */
 		FD_ZERO(&rfds);
@@ -1672,7 +1681,7 @@ loop(void)
 			}
 
 			/* Only monitor friends that are online */
-			if (tox_get_friend_connection_status(tox, f->num) == 1) {
+			if (tox_friend_get_connection_status(tox, f->num, 0) == 1) {
 				FD_APPEND(f->fd[FTEXT_IN]);
 
 				if (f->tx.state == TRANSFER_NONE ||
@@ -1697,7 +1706,7 @@ loop(void)
 
 		/* Check for broken transfers (friend went offline, file_out was closed) */
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_get_friend_connection_status(tox, f->num) == 0) {
+			if (tox_friend_get_connection_status(tox, f->num, 0) == 0) {
 				canceltxtransfer(f);
 				cancelrxtransfer(f);
 			}
@@ -1720,7 +1729,7 @@ loop(void)
 		 * sent.
 		 */
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_get_friend_connection_status(tox, f->num) == 0)
+			if (tox_friend_get_connection_status(tox, f->num, 0) == 0)
 				continue;
 			if (f->tx.state != TRANSFER_INPROGRESS)
 				continue;
@@ -1732,7 +1741,7 @@ loop(void)
 
 		/* Accept pending transfers if any */
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_get_friend_connection_status(tox, f->num) == 0)
+			if (tox_friend_get_connection_status(tox, f->num, 0) == 0)
 				continue;
 			if (f->rxstate == TRANSFER_NONE)
 				continue;
@@ -1753,7 +1762,7 @@ loop(void)
 
 		/* Answer pending calls */
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_get_friend_connection_status(tox, f->num) == 0)
+			if (tox_friend_get_connection_status(tox, f->num, 0) == 0)
 				continue;
 			if (f->av.num < 0)
 				continue;
@@ -1769,6 +1778,7 @@ loop(void)
 					f->fd[FCALL_OUT] = fd;
 			}
 
+			TOXAV_ERR_CALL_CONTROL err;
 			switch (toxav_get_call_state(toxav, f->av.num)) {
 			case av_CallStarting:
 				if (!(f->av.state & INCOMING))
@@ -1776,14 +1786,14 @@ loop(void)
 				r = toxav_answer(toxav, f->av.num, &toxavconfig);
 				if (r < 0) {
 					weprintf("Failed to answer call\n");
-					r = toxav_reject(toxav, f->av.num, NULL);
+					r = toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, &err);
 					if (r < 0)
 						weprintf("Failed to reject call\n");
 				}
 				break;
 			case av_CallActive:
 				if (!(f->av.state & INCOMING) && !(f->av.state & OUTGOING)) {
-					r = toxav_hangup(toxav, f->av.num);
+					r = toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, &err);
 					if (r < 0)
 						weprintf("Failed to hang up\n");
 				}
@@ -1824,7 +1834,7 @@ loop(void)
 				logmsg("Request : %s > Accepted\n", req->idstr);
 				datasave();
 			} else {
-				tox_del_friend(tox, r);
+				tox_friend_delete(tox, r, 0);
 				logmsg("Request : %s > Rejected\n", req->idstr);
 			}
 			unlinkat(gslots[REQUEST].fd[OUT], req->idstr, 0);
