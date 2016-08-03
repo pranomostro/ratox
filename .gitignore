@@ -8,3 +8,4 @@ ratox
 GPATH
 GRTAGS
 GTAGS
+*.tox
