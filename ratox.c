@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -185,21 +186,21 @@ static void fiforeset(int, int *, struct file);
 static ssize_t fiforead(int, int *, struct file, void *, size_t);
 static uint32_t interval(Tox *, ToxAV *);
 static void cbcallinvite(void *, int32_t, void *);
-static void cbcallstart(void *, int32_t, void *);
+static void cbcallstart(ToxAV *, uint32_t, bool, bool, void *);
 static void cbcallterminate(void *, int32_t, void *);
 static void cbcalltypechange(void *, int32_t, void *);
 static void cbcalldata(void *, int32_t, const int16_t *, uint16_t, void *);
 static void cancelcall(struct friend *, char *);
 static void sendfriendcalldata(struct friend *);
-static void cbconnstatus(Tox *, int32_t, uint8_t, void *);
-static void cbfriendmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
-static void cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
-static void cbnamechange(Tox *, int32_t, const uint8_t *, uint16_t, void *);
-static void cbstatusmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
-static void cbuserstate(Tox *, int32_t, uint8_t, void *);
-static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
-static void cbfilesendreq(Tox *, int32_t, uint8_t, uint64_t, const uint8_t *, uint16_t, void *);
-static void cbfiledata(Tox *, int32_t, uint8_t, const uint8_t *, uint16_t, void *);
+static void cbconnstatus(Tox *, uint32_t, TOX_CONNECTION, void *);
+static void cbfriendmessage(Tox *, uint32_t, TOX_MESSAGE_TYPE, const uint8_t *, uint64_t, void *);
+static void cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, size_t, void *);
+static void cbnamechange(Tox *, uint32_t, const uint8_t *, size_t, void *);
+static void cbstatusmessage(Tox *, uint32_t, const uint8_t *, size_t, void *);
+static void cbuserstate(Tox *, uint32_t, TOX_USER_STATUS, void *);
+static void cbfilecontrol(Tox *, uint32_t, uint32_t, TOX_FILE_CONTROL, void *);
+static void cbfilesendreq(Tox *, uint32_t, uint32_t, uint64_t, size_t, void *);
+static void cbfiledata(Tox *, uint32_t, uint8_t, const uint8_t *, size_t, void *);
 static void canceltxtransfer(struct friend *);
 static void cancelrxtransfer(struct friend *);
 static void sendfriendfile(struct friend *);
@@ -213,7 +214,7 @@ static int toxinit(void);
 static int toxconnect(void);
 static void id2str(uint8_t *, char *);
 static void str2id(char *, uint8_t *);
-static struct friend *friendcreate(int32_t);
+static struct friend *friendcreate(uint32_t);
 static void friendload(void);
 static void frienddestroy(struct friend *);
 static void loop(void);
@@ -365,7 +366,7 @@ cbcallinvite(void *av, int32_t cnum, void *udata)
 }
 
 static void
-cbcallstart(void *av, int32_t cnum, void *udata)
+cbcallstart(ToxAV *av, uint32_t cnum, bool audio, bool video, void *udata)
 {
 	struct friend *f;
 	int    r;
@@ -543,7 +544,7 @@ sendfriendcalldata(struct friend *f)
 }
 
 static void
-cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
+cbconnstatus(Tox *m, uint32_t frnum, TOX_CONNECTION status, void *udata)
 {
 	struct friend *f;
 	struct request *req, *rtmp;
@@ -588,7 +589,7 @@ cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 }
 
 static void
-cbfriendmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *udata)
+cbfriendmessage(Tox *m, uint32_t frnum, TOX_MESSAGE_TYPE type, const uint8_t *data, uint64_t len, void *udata)
 {
 	struct  friend *f;
 	time_t  t;
@@ -610,7 +611,7 @@ cbfriendmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *
 }
 
 static void
-cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, void *udata)
+cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, size_t len, void *udata)
 {
 	struct file reqfifo;
 	struct request *req;
@@ -642,7 +643,7 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, vo
 }
 
 static void
-cbnamechange(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *user)
+cbnamechange(Tox *m, uint32_t frnum, const uint8_t *data, size_t len, void *user)
 {
 	struct  friend *f;
 	uint8_t name[len + 1];
@@ -666,7 +667,7 @@ cbnamechange(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *use
 }
 
 static void
-cbstatusmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *udata)
+cbstatusmessage(Tox *m, uint32_t frnum, const uint8_t *data, size_t len, void *udata)
 {
 	struct friend *f;
 	uint8_t status[len + 1];
@@ -687,7 +688,7 @@ cbstatusmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *
 }
 
 static void
-cbuserstate(Tox *m, int32_t frnum, uint8_t state, void *udata)
+cbuserstate(Tox *m, uint32_t frnum, TOX_USER_STATUS state, void *udata)
 {
 	struct friend *f;
 
@@ -709,8 +710,7 @@ cbuserstate(Tox *m, int32_t frnum, uint8_t state, void *udata)
 }
 
 static void
-cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrltype,
-	      const uint8_t *data, uint16_t len, void *udata)
+cbfilecontrol(Tox *m, uint32_t frnum, uint32_t fnum, TOX_FILE_CONTROL ctrltype, void *data)
 {
 	struct friend *f;
 
@@ -722,41 +722,32 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 
 	switch (ctrltype) {
 	case TOX_FILE_CONTROL_RESUME:
-		if (rec_sen == 1) {
-			if (f->tx.state == TRANSFER_PAUSED) {
-				logmsg(": %s : Tx > Resumed\n", f->name);
-				f->tx.state = TRANSFER_INPROGRESS;
-			} else {
-				f->tx.fnum = fnum;
-				f->tx.n = 0;
-				f->tx.pendingbuf = 0;
-				f->tx.state = TRANSFER_INPROGRESS;
-				logmsg(": %s : Tx > In Progress\n", f->name);
-			}
+		if (f->tx.state == TRANSFER_PAUSED) {
+			logmsg(": %s : Tx > Resumed\n", f->name);
+			f->tx.state = TRANSFER_INPROGRESS;
+		} else {
+			f->tx.fnum = fnum;
+			f->tx.n = 0;
+			f->tx.pendingbuf = 0;
+			f->tx.state = TRANSFER_INPROGRESS;
+			logmsg(": %s : Tx > In Progress\n", f->name);
 		}
 		break;
 	case TOX_FILE_CONTROL_PAUSE:
-		if (rec_sen == 1) {
-			if (f->tx.state == TRANSFER_INPROGRESS) {
-				logmsg(": %s : Tx > Paused\n", f->name);
-				f->tx.state = TRANSFER_PAUSED;
-			}
+		if (f->tx.state == TRANSFER_INPROGRESS) {
+			logmsg(": %s : Tx > Paused\n", f->name);
+			f->tx.state = TRANSFER_PAUSED;
 		}
 		break;
 	case TOX_FILE_CONTROL_CANCEL:
-		if (rec_sen == 1) {
-			logmsg(": %s : Tx > Rejected\n", f->name);
-			f->tx.state = TRANSFER_NONE;
-			free(f->tx.buf);
-			f->tx.buf = NULL;
-			f->tx.lastblock.tv_sec = 0;
-			f->tx.lastblock.tv_nsec = 0;
-			f->tx.cooldown = 0;
-			fiforeset(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN]);
-		} else {
-			logmsg(": %s : Rx > Cancelled by Sender\n", f->name);
-			cancelrxtransfer(f);
-		}
+		logmsg(": %s : Tx > Rejected\n", f->name);
+		f->tx.state = TRANSFER_NONE;
+		free(f->tx.buf);
+		f->tx.buf = NULL;
+		f->tx.lastblock.tv_sec = 0;
+		f->tx.lastblock.tv_nsec = 0;
+		f->tx.cooldown = 0;
+		fiforeset(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN]);
 		break;
 	default:
 		weprintf("Unhandled file control type: %d\n", ctrltype);
@@ -765,8 +756,8 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 }
 
 static void
-cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
-	      const uint8_t *fname, uint16_t flen, void *udata)
+cbfilesendreq(Tox *m, uint32_t frnum, uint32_t fnum, uint64_t fsz,
+			  size_t flen, void *udata)
 {
 	struct  friend *f;
 	uint8_t filename[flen + 1];
@@ -776,9 +767,6 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 			break;
 	if (!f)
 		return;
-
-	memcpy(filename, fname, flen);
-	filename[flen] = '\0';
 
 	/* We only support a single transfer at a time */
 	if (f->rxstate == TRANSFER_INPROGRESS) {
@@ -797,7 +785,7 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 }
 
 static void
-cbfiledata(Tox *m, int32_t frnum, uint8_t fnum, const uint8_t *data, uint16_t len, void *udata)
+cbfiledata(Tox *m, uint32_t frnum, uint8_t fnum, const uint8_t *data, size_t len, void *udata)
 {
 	struct   friend *f;
 	ssize_t  n;
@@ -1240,7 +1228,7 @@ str2id(char *idstr, uint8_t *id)
 }
 
 static struct friend *
-friendcreate(int32_t frnum)
+friendcreate(uint32_t frnum)
 {
 	struct  friend *f;
 	DIR    *d;
