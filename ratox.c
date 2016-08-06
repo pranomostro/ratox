@@ -954,7 +954,7 @@ dataload(void)
 	off_t    sz;
 	uint32_t pp2len = 0;
 	int      fd;
-	uint8_t *data, *passphrase2 = NULL;
+	uint8_t *data, *passphrase2 = NULL, *clear_data;
 
 	fd = open(savefile, O_RDONLY);
 	if (fd < 0) {
@@ -980,7 +980,7 @@ reprompt1:
 		return;
 	}
 
-	data = malloc(sz);
+	data = malloc(sz + 1);
 	if (!data)
 		eprintf("malloc:");
 
@@ -988,10 +988,37 @@ reprompt1:
 		eprintf("read %s:", savefile);
 
 	if (tox_is_data_encrypted(data)) {
+		TOX_ERR_DECRYPTION err;
+		off_t clear_size = sz - TOX_PASS_ENCRYPTION_EXTRA_LENGTH;
 		if (!encryptsavefile)
 			logmsg("Data : %s > Encrypted, but saving unencrypted\n", savefile);
-		//while (readpass("Data : Passphrase > ", &passphrase, &pplen) < 0 ||
-		//       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0); //tox data isn't loaded like this anymore
+		clear_data = malloc(clear_size);
+		if (!clear_data)
+			eprintf("malloc:");
+		while (readpass("Data : Passphrase > ", &passphrase, &pplen) < 0 ||
+			   tox_pass_decrypt(data, sz, passphrase, pplen, clear_data, &err) == 0){
+			switch (err) {
+				case TOX_ERR_DECRYPTION_INVALID_LENGTH:
+				case TOX_ERR_DECRYPTION_NULL:
+				case TOX_ERR_DECRYPTION_BAD_FORMAT:
+				case TOX_ERR_DECRYPTION_KEY_DERIVATION_FAILED:
+					logmsg("Decryption error: %u\n", err);
+					free(data);
+					free(clear_data);
+					close(fd);
+					return;
+				case TOX_ERR_DECRYPTION_FAILED:
+					logmsg("Incorrect password.\n");
+					break;
+				case TOX_ERR_DECRYPTION_OK:
+				default:
+					break;
+			}
+		}
+		toxopt.savedata_type = TOX_SAVEDATA_TYPE_TOX_SAVE;
+		toxopt.savedata_data = clear_data;
+		toxopt.savedata_length = clear_size;
+		free(data); //data is no longer needed
 	} else {
 		toxopt.savedata_type = TOX_SAVEDATA_TYPE_TOX_SAVE;
 		toxopt.savedata_data = data;
@@ -1016,26 +1043,31 @@ reprompt2:
 static void
 datasave(void)
 {
-	off_t    sz;
+	size_t    sz = tox_get_savedata_size(tox);
 	int      fd;
-	uint8_t *data;
+	uint8_t  data[sz], encrypted_data[sz + TOX_PASS_ENCRYPTION_EXTRA_LENGTH];
+	TOX_ERR_ENCRYPTION err;
 
 	fd = open(savefile, O_WRONLY | O_TRUNC | O_CREAT , 0666);
 	if (fd < 0)
 		eprintf("open %s:", savefile);
 
-	sz =  tox_get_savedata_size(tox);
-	data = malloc(sz);
-	if (!data)
-		eprintf("malloc:");
-
 	tox_get_savedata(tox, data);
 
-	if (write(fd, data, sz) != sz)
+	if (encryptsavefile) {
+		if (tox_pass_encrypt(data, sz, passphrase, pplen, encrypted_data, &err) == 0) {
+			logmsg("Encryption error: %u\n", err);
+			logmsg("WARNING: SAVE WILL NOT BE ENCRYPTED.\n");
+			encryptsavefile = 0;
+		} else {
+			sz += TOX_PASS_ENCRYPTION_EXTRA_LENGTH; //make the size bigger so all data will be written
+		}
+	}
+
+	if (write(fd, encryptsavefile ? encrypted_data : data, sz) != sz)
 		eprintf("write %s:", savefile);
 	fsync(fd);
 
-	free(data);
 	close(fd);
 }
 
@@ -1144,15 +1176,15 @@ toxinit(void)
 	dataload();
 
 	tox = tox_new(&toxopt, &err);
-	if (!tox)
-		eprintf("Core : Tox > Initialization failed\n");
+	if (tox == NULL)
+		eprintf("Core : Tox > Initialization failed\nERROR: %u\n", err);
 
 	datasave();
 
 	TOXAV_ERR_NEW avErr;
 	toxav = toxav_new(tox, &avErr);
-	if (!toxav)
-		eprintf("Core : ToxAV > Initialization failed\n");
+	if (toxav == NULL)
+		eprintf("Core : ToxAV > Initialization failed\nERROR: %u\n", avErr);
 
 	free((void *)toxopt.savedata_data);
 
