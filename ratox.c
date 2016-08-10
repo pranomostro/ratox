@@ -109,7 +109,7 @@ static struct file ffiles[] = {
 };
 
 static char *ustate[] = {
-	[TOX_USER_STATUS_NONE]    = "none",
+	[TOX_USER_STATUS_NONE]    = "online",
 	[TOX_USER_STATUS_AWAY]    = "away",
 	[TOX_USER_STATUS_BUSY]    = "busy"
 };
@@ -145,7 +145,7 @@ struct call {
 
 struct friend {
 	char    name[TOX_MAX_NAME_LENGTH + 1];
-	int32_t num;
+	uint32_t num;
 	uint8_t id[TOX_ADDRESS_SIZE];
 	char    idstr[2 * TOX_ADDRESS_SIZE + 1];
 	int     dirfd;
@@ -1274,14 +1274,13 @@ friendcreate(uint32_t frnum)
 		eprintf("calloc:");
 
 	r = tox_friend_get_name(tox, frnum, (uint8_t *)f->name, &err);
-	if (r < 0) {
-		weprintf(": %ld : Name : Failed to get\n", (long)frnum);
+	if (!r) {
+		weprintf(": %ld : Name : Failed to get\nERROR: %u\n", (long)frnum, err);
 		return NULL;
-	} else if (r == 0) {
-		snprintf(f->name, sizeof(f->name), "Anonymous");
-	} else {
-		f->name[r] = '\0';
 	}
+
+	r = tox_friend_get_name_size(tox, frnum, 0);
+	f->name[r] = '\0';
 
 	f->num = frnum;
 	tox_friend_get_public_key(tox, frnum, f->id, 0);
@@ -1320,12 +1319,9 @@ friendcreate(uint32_t frnum)
 
 	/* Dump status */
 	r = tox_friend_get_status_message(tox, frnum, status, &err);
-	if (r < 0) {
+	if (!r)
 		weprintf(": %s : Status : Failed to get\n", f->name);
-		r = 0;
-	} else if (r > sizeof(status) - 1) {
-		r = sizeof(status) - 1;
-	}
+	r  = tox_friend_get_status_message_size(tox, frnum, 0);
 	status[r] = '\0';
 	ftruncate(f->fd[FSTATUS], 0);
 	dprintf(f->fd[FSTATUS], "%s\n", status);
@@ -1374,6 +1370,7 @@ frienddestroy(struct friend *f)
 	}
 	rmdir(f->idstr);
 	TAILQ_REMOVE(&friendhead, f, entry);
+	free(f);
 }
 
 static void
@@ -1642,7 +1639,7 @@ loop(void)
 			}
 
 			/* Only monitor friends that are online */
-			if (tox_friend_get_connection_status(tox, f->num, 0) == 1) {
+			if (tox_friend_get_connection_status(tox, f->num, 0) > 0) {
 				FD_APPEND(f->fd[FTEXT_IN]);
 
 				if (f->tx.state == TRANSFER_NONE ||
