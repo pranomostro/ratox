@@ -1471,7 +1471,7 @@ setstatus(void *data)
 	status[n] = '\0';
 	r = tox_set_status_message(tox, status, n);
 	if (r < 0) {
-		weprintf("Failed to set status message to \"%s\"\n");
+		weprintf("Failed to set status message to \"%s\"\n", status);
 		return;
 	}
 	datasave();
