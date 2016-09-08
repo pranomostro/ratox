@@ -1,12 +1,14 @@
-	            __
-	           /\ \__
-	 _ __   __ \ \ ,_\   ___   __  _
-	/\`'__/'__`\\ \ \/  / __`\/\ \/'\
-	\ \ \/\ \L\.\\ \ \_/\ \L\ \/>  </
-	 \ \_\ \__/.\_\ \__\ \____//\_/\_\
-	  \/_/\/__/\/_/\/__/\/___/ \//\/_/
+```
+            __
+           /\ \__
+ _ __   __ \ \ ,_\   ___   __  _
+/\`'__/'__`\\ \ \/  / __`\/\ \/'\
+\ \ \/\ \L\.\\ \ \_/\ \L\ \/>  </
+ \ \_\ \__/.\_\ \__\ \____//\_/\_\
+  \/_/\/__/\/_/\/__/\/___/ \//\/_/
                                    -- by sin and FRIGN
 ======================================================
+```
 
 What is it?
 ===========
@@ -34,6 +36,7 @@ File structure
 A typical filesystem structure is shown below along with some comments
 to help explain the semantics of the individual files.
 
+```
 .
 |-- .ratox.data			# ratox save file
 |
@@ -78,11 +81,11 @@ to help explain the semantics of the individual files.
     |-- err			# status message related errors
     |-- in			# 'cat I am bored to death > in' to change your status message
     `-- out			# 'cat out' to show your status message
-
+```
 
 Features
 ========
-
+```
 1 v 1 messaging: Yes
 File transfer: Yes
 Group chat: No
@@ -113,7 +116,7 @@ toxi URI: No
 NOTE: Some of these features are not intended to be developed
 in ratox itself but rather in external scripts[1] that are built upon
 ratox.
-
+```
 
 Examples
 ========
