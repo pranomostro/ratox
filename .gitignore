@@ -3,3 +3,8 @@ config.h
 *.o
 *.a
 ratox
+*.swp
+*~
+GPATH
+GRTAGS
+GTAGS
