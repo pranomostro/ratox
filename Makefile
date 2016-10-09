@@ -33,7 +33,7 @@ config.h:
 
 .c.o:
 	@echo CC $<
-	@$(CC) -c -o $@ $< $(CFLAGS)
+	@$(CC) -c -o $@ $< $(CFLAGS) $(CPPFLAGS)
 
 util.a: $(LIB)
 	@echo AR $@

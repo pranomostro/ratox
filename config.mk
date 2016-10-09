@@ -7,6 +7,6 @@ MANPREFIX = $(PREFIX)/share/man
 
 CC = cc
 LD = $(CC)
-CPPFLAGS = -DVERSION=\"${VERSION}\"
-CFLAGS   = -g -I/usr/local/include -Wall -Wextra -Wunused $(CPPFLAGS)
-LDFLAGS  = -g -L/usr/local/lib -ltoxcore -ltoxav -ltoxencryptsave
+CPPFLAGS += -DVERSION=\"${VERSION}\"
+CFLAGS   += -g -I/usr/local/include -Wall -Wextra -Wunused
+LDFLAGS  += -g -L/usr/local/lib -ltoxcore -ltoxav -ltoxencryptsave
