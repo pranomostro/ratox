@@ -1,10 +1,8 @@
--proxy settings: use PROXY_TYPE_* for proxytype
 -if ratox sent a friend request, is the requested person already added as a friend?
 -use tox_self_get_friend_list_size() and tox_self_get_friend_list() in friendload()
 -file sending seems to have gotten easier, since toxcore makes a callback when it
 	wants more data to be sent (and thus read from the fifo)
 -file sending: keep the last chunk 'cause it may be needed for seekback (ugh!)
--it's generally rather ToxAV than ToxAv
 -there is no more ToxAVCSettings, calling is configured for each call
 -do we even need cbcallinvite()? -> No, the API is simplified now, there is only one
 	callback, when a call is started by the friend. Yeah!

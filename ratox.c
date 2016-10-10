@@ -980,7 +980,7 @@ reprompt1:
 		return;
 	}
 
-	data = malloc(sz + 1);
+	data = malloc(sz);
 	if (!data)
 		eprintf("malloc:");
 
@@ -1018,7 +1018,7 @@ reprompt1:
 		toxopt.savedata_type = TOX_SAVEDATA_TYPE_TOX_SAVE;
 		toxopt.savedata_data = clear_data;
 		toxopt.savedata_length = clear_size;
-		free(data); //data is no longer needed
+		free(data);
 	} else {
 		toxopt.savedata_type = TOX_SAVEDATA_TYPE_TOX_SAVE;
 		toxopt.savedata_data = data;
@@ -1055,7 +1055,7 @@ datasave(void)
 	tox_get_savedata(tox, data);
 
 	if (encryptsavefile) {
-		if (tox_pass_encrypt(data, sz, passphrase, pplen, encrypted_data, &err) == 0) {
+		if (! tox_pass_encrypt(data, sz, passphrase, pplen, encrypted_data, &err)) {
 			logmsg("Encryption error: %u\n", err);
 			logmsg("WARNING: SAVE WILL NOT BE ENCRYPTED.\n");
 			encryptsavefile = 0;
@@ -1159,12 +1159,11 @@ localinit(void)
 static int
 toxinit(void)
 {
-	TOX_ERR_NEW err;
 	toxopt.ipv6_enabled = ipv6;
 	toxopt.udp_enabled = !tcp;
-	if (proxy) {
-		tcp = 1;
-		toxopt.udp_enabled = !tcp;
+	if (proxy != TOX_PROXY_TYPE_NONE) {
+		tcp = 0;
+		toxopt.udp_enabled = tcp;
 		logmsg("Net > Forcing TCP mode\n");
 		snprintf(toxopt.proxy_host, sizeof(toxopt.proxy_host),
 			 "%s", proxyaddr);
@@ -1175,14 +1174,13 @@ toxinit(void)
 
 	dataload();
 
-	tox = tox_new(&toxopt, &err);
+	tox = tox_new(&toxopt, NULL);
 	if (tox == NULL)
 		eprintf("Core : Tox > Initialization failed\nERROR: %u\n", err);
 
 	datasave();
 
-	TOXAV_ERR_NEW avErr;
-	toxav = toxav_new(tox, &avErr);
+	toxav = toxav_new(tox, NULL);
 	if (toxav == NULL)
 		eprintf("Core : ToxAV > Initialization failed\nERROR: %u\n", avErr);
 
