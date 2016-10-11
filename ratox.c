@@ -1186,6 +1186,16 @@ toxinit(void)
 
 	free((void *)toxopt.savedata_data);
 
+	#if TOX_VERSION_PATCH >= 1 || TOX_VERSION_MINOR > 0 || TOX_VERSION_MAJOR > 0
+	tox_callback_friend_connection_status(tox, cbconnstatus);
+	tox_callback_friend_message(tox, cbfriendmessage);
+	tox_callback_friend_request(tox, cbfriendrequest);
+	tox_callback_friend_name(tox, cbnamechange);
+	tox_callback_friend_status_message(tox, cbstatusmessage);
+	tox_callback_friend_status(tox, cbuserstate);
+	tox_callback_file_recv_control(tox, cbfilecontrol);
+	tox_callback_file_chunk_request(tox, cbfilesendreq);
+	#else
 	tox_callback_friend_connection_status(tox, cbconnstatus, NULL);
 	tox_callback_friend_message(tox, cbfriendmessage, NULL);
 	tox_callback_friend_request(tox, cbfriendrequest, NULL);
@@ -1194,6 +1204,7 @@ toxinit(void)
 	tox_callback_friend_status(tox, cbuserstate, NULL);
 	tox_callback_file_recv_control(tox, cbfilecontrol, NULL);
 	tox_callback_file_chunk_request(tox, cbfilesendreq, NULL);
+	#endif
 
 	toxav_callback_call(toxav, cbcallstart, NULL);
 
@@ -1610,7 +1621,11 @@ loop(void)
 				toxconnect();
 			}
 		}
+		#if TOX_VERSION_PATCH >= 1 || TOX_VERSION_MINOR > 0 || TOX_VERSION_MAJOR > 0
+		tox_iterate(tox, NULL);
+		#else
 		tox_iterate(tox);
+		#endif
 		toxav_iterate(toxav);
 
 		/* Prepare select-fd-set */
