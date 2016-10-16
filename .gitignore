@@ -1,2 +1,14 @@
+# source files
 *.o
 *.a
+ratox
+config.h
+
+# editor files
+GPATH
+GRTAGS
+GTAGS
+*.swp
+
+# misc
+*.tox
