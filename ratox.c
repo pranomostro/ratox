@@ -732,7 +732,7 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 		return;
 
 	switch (ctrltype) {
-	case TOX_FILECONTROL_ACCEPT:
+	case TOX_FILE_CONTROL_RESUME:
 		if (rec_sen == 1) {
 			if (f->tx.state == TRANSFER_PAUSED) {
 				logmsg(": %s : Tx > Resumed\n", f->name);
@@ -750,7 +750,7 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 			}
 		}
 		break;
-	case TOX_FILECONTROL_PAUSE:
+	case TOX_FILE_CONTROL_PAUSE:
 		if (rec_sen == 1) {
 			if (f->tx.state == TRANSFER_INPROGRESS) {
 				logmsg(": %s : Tx > Paused\n", f->name);
@@ -758,7 +758,7 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 			}
 		}
 		break;
-	case TOX_FILECONTROL_KILL:
+	case TOX_FILE_CONTROL_CANCEL:
 		if (rec_sen == 1) {
 			logmsg(": %s : Tx > Rejected\n", f->name);
 			f->tx.state = TRANSFER_NONE;
@@ -771,28 +771,6 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 		} else {
 			logmsg(": %s : Rx > Cancelled by Sender\n", f->name);
 			cancelrxtransfer(f);
-		}
-		break;
-	case TOX_FILECONTROL_FINISHED:
-		if (rec_sen == 1) {
-			logmsg(": %s : Tx > Complete\n", f->name);
-			f->tx.state = TRANSFER_NONE;
-			free(f->tx.buf);
-			f->tx.buf = NULL;
-			f->tx.lastblock.tv_sec = 0;
-			f->tx.lastblock.tv_nsec = 0;
-			f->tx.cooldown = 0;
-		} else {
-			logmsg(": %s : Rx > Complete\n", f->name);
-			if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_FINISHED, NULL, 0) < 0)
-				weprintf("Failed to signal file completion to the sender\n");
-			if (f->fd[FFILE_OUT] != -1) {
-				close(f->fd[FFILE_OUT]);
-				f->fd[FFILE_OUT] = -1;
-			}
-			ftruncate(f->fd[FFILE_STATE], 0);
-			lseek(f->fd[FFILE_STATE], 0, SEEK_SET);
-			f->rxstate = TRANSFER_NONE;
 		}
 		break;
 	default:
@@ -821,7 +799,7 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 	if (f->rxstate == TRANSFER_INPROGRESS) {
 		logmsg(": %s : Rx > Rejected %s, already one in progress\n",
 		       f->name, filename);
-		if (tox_file_send_control(tox, f->num, 1, fnum, TOX_FILECONTROL_KILL, NULL, 0) < 0)
+		if (tox_file_send_control(tox, f->num, 1, fnum, TOX_FILE_CONTROL_CANCEL, NULL, 0) < 0)
 			weprintf("Failed to kill new Rx transfer\n");
 		return;
 	}
@@ -862,6 +840,20 @@ cbfiledata(Tox *m, int32_t frnum, uint8_t fnum, const uint8_t *data, uint16_t le
 		wrote += n;
 		len -= n;
 	}
+
+	/* signaling a complete transfert is done by sending 0 bytes to the peer */
+	if (len == 0) {
+		logmsg(": %s : Rx > Complete\n", f->name);
+		if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILE_CONTROL_FINISHED, NULL, 0) < 0)
+			weprintf("Failed to signal file completion to the sender\n");
+		if (f->fd[FFILE_OUT] != -1) {
+			close(f->fd[FFILE_OUT]);
+			f->fd[FFILE_OUT] = -1;
+		}
+		ftruncate(f->fd[FFILE_STATE], 0);
+		lseek(f->fd[FFILE_STATE], 0, SEEK_SET);
+		f->rxstate = TRANSFER_NONE;
+	}
 }
 
 static void
@@ -870,7 +862,7 @@ canceltxtransfer(struct friend *f)
 	if (f->tx.state == TRANSFER_NONE)
 		return;
 	logmsg(": %s : Tx > Cancelling\n", f->name);
-	if (tox_file_send_control(tox, f->num, 0, 0, TOX_FILECONTROL_KILL, NULL, 0) < 0)
+	if (tox_file_send_control(tox, f->num, 0, 0, TOX_FILE_CONTROL_CANCEL, NULL, 0) < 0)
 		weprintf("Failed to kill Tx transfer\n");
 	f->tx.state = TRANSFER_NONE;
 	free(f->tx.buf);
@@ -887,7 +879,7 @@ cancelrxtransfer(struct friend *f)
 	if (f->rxstate == TRANSFER_NONE)
 		return;
 	logmsg(": %s : Rx > Cancelling\n", f->name);
-	if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_KILL, NULL, 0) < 0)
+	if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILE_CONTROL_CANCEL, NULL, 0) < 0)
 		weprintf("Failed to kill Rx transfer\n");
 	if (f->fd[FFILE_OUT] != -1) {
 		close(f->fd[FFILE_OUT]);
@@ -922,9 +914,15 @@ sendfriendfile(struct friend *f)
 		if (n == 0) {
 			/* Signal transfer completion to other end */
 			if (tox_file_send_control(tox, f->num, 0, f->tx.fnum,
-						  TOX_FILECONTROL_FINISHED, NULL, 0) < 0)
+						  TOX_FILE_CONTROL_FINISHED, NULL, 0) < 0)
 				weprintf("Failed to signal transfer completion to the receiver\n");
+			logmsg(": %s : Tx > Complete\n", f->name);
 			f->tx.state = TRANSFER_NONE;
+			free(f->tx.buf);
+			f->tx.buf = NULL;
+			f->tx.lastblock.tv_sec = 0;
+			f->tx.lastblock.tv_nsec = 0;
+			f->tx.cooldown = 0;
 			break;
 		}
 		if (n < 0) {
@@ -1747,7 +1745,7 @@ loop(void)
 			if (r < 0)
 				continue;
 			f->fd[FFILE_OUT] = r;
-			if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILECONTROL_ACCEPT, NULL, 0) < 0) {
+			if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILE_CONTROL_RESUME, NULL, 0) < 0) {
 				weprintf("Failed to accept transfer from receiver\n");
 				cancelrxtransfer(f);
 			} else {
