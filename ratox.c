@@ -27,14 +27,14 @@
 #include "util.h"
 
 const char *reqerr[] = {
-	[-TOX_FAERR_TOOLONG]      = "Message is too long",
-	[-TOX_FAERR_NOMESSAGE]    = "Please add a message to your request",
-	[-TOX_FAERR_OWNKEY]       = "That appears to be your own ID",
-	[-TOX_FAERR_ALREADYSENT]  = "Friend request already sent",
-	[-TOX_FAERR_UNKNOWN]      = "Unknown error while sending your request",
-	[-TOX_FAERR_BADCHECKSUM]  = "Bad checksum while verifying address",
-	[-TOX_FAERR_SETNEWNOSPAM] = "Friend already added but invalid nospam",
-	[-TOX_FAERR_NOMEM]        = "Error increasing the friend list size"
+	[TOX_ERR_FRIEND_ADD_NULL]           = "One required argument is missing",
+	[TOX_ERR_FRIEND_ADD_TOO_LONG]       = "Message is too long",
+	[TOX_ERR_FRIEND_ADD_NO_MESSAGE]     = "Please add a message to your request",
+	[TOX_ERR_FRIEND_ADD_OWN_KEY]        = "That appears to be your own ID",
+	[TOX_ERR_FRIEND_ADD_ALREADY_SENT]   = "Friend request already sent",
+	[TOX_ERR_FRIEND_ADD_BAD_CHECKSUM]   = "Bad checksum while verifying address",
+	[TOX_ERR_FRIEND_ADD_SET_NEW_NOSPAM] = "Friend already added but invalid nospam",
+	[TOX_ERR_FRIEND_ADD_MALLOC]         = "Error increasing the friend list size"
 };
 
 struct node {
