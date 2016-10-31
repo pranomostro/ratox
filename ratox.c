@@ -1006,6 +1006,8 @@ dataload(void)
 
 	fd = open(savefile, O_RDONLY);
 	if (fd < 0) {
+		toxopt.savedata_length = 0;
+		toxopt.savedata_data = NULL;
 		if (encryptsavefile) {
 reprompt1:
 			while (readpass("Data : New passphrase > ", &passphrase, &pplen) < 0);
@@ -1035,13 +1037,18 @@ reprompt1:
 	if (read(fd, data, sz) != sz)
 		eprintf("read %s:", savefile);
 
-	if (tox_is_save_encrypted(data)) {
+	toxopt.savedata_length = sz;
+	toxopt.savedata_data = malloc(sz);
+	if (toxopt.savedata_data)
+		eprintf("malloc:");
+
+	if (tox_is_data_encrypted(data)) {
 		if (!encryptsavefile)
 			logmsg("Data : %s > Encrypted, but saving unencrypted\n", savefile);
 		while (readpass("Data : Passphrase > ", &passphrase, &pplen) < 0 ||
-		       tox_encrypted_load(tox, data, sz, passphrase, pplen) < 0);
+		       !tox_pass_decrypt(data, sz, passphrase, pplen, toxopt.savedata_data));
 	} else {
-		if (tox_load(tox, data, sz) < 0)
+		if (memcpy(toxopt.savedata_data, data, sz) < sz)
 			eprintf("Data : %s > Failed to load\n", savefile);
 		if (encryptsavefile) {
 			logmsg("Data : %s > Not encrypted, but saving encrypted\n", savefile);
