@@ -107,10 +107,9 @@ static struct file ffiles[] = {
 };
 
 static char *ustate[] = {
-	[TOX_USERSTATUS_NONE]    = "none",
-	[TOX_USERSTATUS_AWAY]    = "away",
-	[TOX_USERSTATUS_BUSY]    = "busy",
-	[TOX_USERSTATUS_INVALID] = "invalid"
+	[TOX_USER_STATUS_NONE]    = "none",
+	[TOX_USER_STATUS_AWAY]    = "away",
+	[TOX_USER_STATUS_BUSY]    = "busy"
 };
 
 enum { TRANSFER_NONE, TRANSFER_INITIATED, TRANSFER_PENDING, TRANSFER_INPROGRESS, TRANSFER_PAUSED };
@@ -1502,7 +1501,7 @@ setuserstate(void *data)
 		n--;
 	buf[n] = '\0';
 	for (i = 0; i < LEN(ustate); i++) {
-		if (i != TOX_USERSTATUS_INVALID && strcmp(buf, ustate[i]) == 0) {
+		if (strcmp(buf, ustate[i]) == 0) {
 			tox_set_user_status(tox, i);
 			break;
 		}
