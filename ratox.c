@@ -1103,7 +1103,7 @@ localinit(void)
 	int     r;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
 	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
-	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
+	uint8_t status[TOX_MAX_STATUS_MESSAGE_LENGTH + 1];
 
 	for (i = 0; i < LEN(gslots); i++) {
 		r = mkdir(gslots[i].name, 0777);
@@ -1305,7 +1305,7 @@ friendcreate(int32_t frnum)
 	DIR    *d;
 	size_t  i;
 	int     r;
-	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
+	uint8_t status[TOX_MAX_STATUS_MESSAGE_LENGTH + 1];
 
 	f = calloc(1, sizeof(*f));
 	if (!f)
@@ -1465,7 +1465,7 @@ setstatus(void *data)
 {
 	ssize_t n;
 	int     r;
-	uint8_t status[TOX_MAX_STATUSMESSAGE_LENGTH + 1];
+	uint8_t status[TOX_MAX_STATUS_MESSAGE_LENGTH + 1];
 
 	n = fiforead(gslots[STATUS].dirfd, &gslots[STATUS].fd[IN], gfiles[IN],
 		     status, sizeof(status) - 1);
