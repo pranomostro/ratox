@@ -136,7 +136,6 @@ struct call {
 	int      num;
 	int      state;
 	uint8_t *frame;
-	uint8_t  payload[RTP_PAYLOAD_SIZE];
 	ssize_t  n;
 	struct   timespec lastsent;
 };
@@ -514,9 +513,9 @@ cancelcall(struct friend *f, char *action)
 static void
 sendfriendcalldata(struct friend *f)
 {
-	struct  timespec now, diff;
-	ssize_t n, payloadsize;
-	int     r;
+	struct   timespec now, diff;
+	ssize_t  n, pcm;
+	uint16_t *buf;
 
 	n = fiforead(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN],
 		     f->av.frame + (f->av.state & INCOMPLETE) * f->av.n,
@@ -535,13 +534,10 @@ sendfriendcalldata(struct friend *f)
 		return;
 	}
 
-	payloadsize = toxav_prepare_audio_frame(toxav, f->av.num,
-						f->av.payload, sizeof(f->av.payload),
-						(int16_t *)f->av.frame, framesize);
-	if (payloadsize < 0) {
-		weprintf("Failed to encode payload\n");
-		return;
-	}
+	pcm = AUDIOFRAME * AUDIOSAMPLERATE / 1000;
+	buf = malloc(pcm * AUDIOCHANNEL * 2);
+	if (!buf)
+		eprintf("malloc:");
 
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	diff = timediff(f->av.lastsent, now);
@@ -550,8 +546,7 @@ sendfriendcalldata(struct friend *f)
 		nanosleep(&diff, NULL);
 	}
 	clock_gettime(CLOCK_MONOTONIC, &f->av.lastsent);
-	r = toxav_send_audio(toxav, f->av.num, f->av.payload, payloadsize);
-	if (r < 0)
+	if (!toxav_audio_send_frame(av, f->av.num, buf, pcm, AUDIOCHANNEL, AUDIOCHANNEL, NULL))
 		weprintf("Failed to send audio frame\n");
 }
 
