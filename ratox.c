@@ -367,7 +367,7 @@ cbcallinvite(void *av, int32_t cnum, void *udata)
 	}
 
 	logmsg(": %s : Audio : Rx > Inviting (%luHz/%luch)\n",
-	       f->name, avconfig.audio_sample_rate, avconfig.audio_channels);
+	       f->name, AUDIOSAMPLERATE, AUDIOCHANNELS);
 
 	ftruncate(f->fd[FCALL_STATE], 0);
 	lseek(f->fd[FCALL_STATE], 0, SEEK_SET);
@@ -535,7 +535,7 @@ sendfriendcalldata(struct friend *f)
 	}
 
 	pcm = AUDIOFRAME * AUDIOSAMPLERATE / 1000;
-	buf = malloc(pcm * AUDIOCHANNEL * 2);
+	buf = malloc(pcm * AUDIOCHANNELS * 2);
 	if (!buf)
 		eprintf("malloc:");
 
@@ -546,7 +546,7 @@ sendfriendcalldata(struct friend *f)
 		nanosleep(&diff, NULL);
 	}
 	clock_gettime(CLOCK_MONOTONIC, &f->av.lastsent);
-	if (!toxav_audio_send_frame(av, f->av.num, buf, pcm, AUDIOCHANNEL, AUDIOCHANNEL, NULL))
+	if (!toxav_audio_send_frame(av, f->av.num, buf, pcm, AUDIOCHANNELS, AUDIOCHANNELS, NULL))
 		weprintf("Failed to send audio frame\n");
 }
 
@@ -1206,8 +1206,8 @@ toxinit(void)
 		eprintf("Core : ToxAV > Initialization failed\n");
 
 	toxavconfig = av_DefaultSettings;
-	framesize = (toxavconfig.audio_sample_rate * toxavconfig.audio_frame_duration *
-		     toxavconfig.audio_channels) / 1000;
+	pcm = AUDIOFRAME * AUDIOSAMPLERATE / 1000;
+	framesize = (AUDIOSAMPLERATE * AUDIOFRAME * AUDIOCHANNELS) / 1000;
 
 	tox_callback_connection_status(tox, cbconnstatus, NULL);
 	tox_callback_friend_message(tox, cbfriendmessage, NULL);
