@@ -1095,7 +1095,7 @@ localinit(void)
 	size_t  i, m;
 	int     r;
 	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
-	uint8_t address[TOX_FRIEND_ADDRESS_SIZE];
+	uint8_t address[TOX_ADDRESS_SIZE];
 	uint8_t status[TOX_MAX_STATUS_MESSAGE_LENGTH + 1];
 
 	for (i = 0; i < LEN(gslots); i++) {
@@ -1167,7 +1167,7 @@ localinit(void)
 	if (idfd < 0)
 		eprintf("open %s:", "id");
 	tox_get_address(tox, address);
-	for (i = 0; i < TOX_FRIEND_ADDRESS_SIZE; i++)
+	for (i = 0; i < TOX_ADDRESS_SIZE; i++)
 		dprintf(idfd, "%02X", address[i]);
 	dprintf(idfd, "\n");
 
@@ -1520,7 +1520,7 @@ sendfriendreq(void *data)
 	int     r;
 	char    buf[PIPE_BUF], *p;
 	char   *msg = "ratox is awesome!";
-	uint8_t id[TOX_FRIEND_ADDRESS_SIZE];
+	uint8_t id[TOX_ADDRESS_SIZE];
 
 	n = fiforead(gslots[REQUEST].dirfd, &gslots[REQUEST].fd[IN], gfiles[IN],
 		     buf, sizeof(buf) - 1);
@@ -1569,7 +1569,7 @@ setnospam(void *data)
 	ssize_t  n, i;
 	uint32_t nsval;
 	uint8_t  nospam[2 * sizeof(uint32_t) + 1];
-	uint8_t  address[TOX_FRIEND_ADDRESS_SIZE];
+	uint8_t  address[TOX_ADDRESS_SIZE];
 
 	n = fiforead(gslots[NOSPAM].dirfd, &gslots[NOSPAM].fd[IN], gfiles[IN],
 		     nospam, sizeof(nospam) - 1);
@@ -1597,7 +1597,7 @@ setnospam(void *data)
 	tox_get_address(tox, address);
 	ftruncate(idfd, 0);
 	lseek(idfd, 0, SEEK_SET);
-	for (i = 0; i < TOX_FRIEND_ADDRESS_SIZE; i++)
+	for (i = 0; i < TOX_ADDRESS_SIZE; i++)
 		dprintf(idfd, "%02X", address[i]);
 	dprintf(idfd, "\n");
 end:
