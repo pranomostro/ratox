@@ -165,9 +165,9 @@ static TAILQ_HEAD(friendhead, friend) friendhead = TAILQ_HEAD_INITIALIZER(friend
 static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
 
 static Tox *tox;
-static Tox_Options toxopt;
+static struct Tox_Options toxopt;
 
-static ToxAv *toxav;
+static ToxAV *toxav;
 static ToxAvCSettings toxavconfig;
 static int    framesize;
 
@@ -182,7 +182,7 @@ static void logmsg(const char *, ...);
 static int fifoopen(int, struct file);
 static void fiforeset(int, int *, struct file);
 static ssize_t fiforead(int, int *, struct file, void *, size_t);
-static uint32_t interval(Tox *, ToxAv *);
+static uint32_t interval(Tox *, struct ToxAV*);
 static void cbcallinvite(void *, int32_t, void *);
 static void cbcallstart(void *, int32_t, void *);
 static void cbcallterminate(void *, int32_t, void *);
@@ -330,7 +330,7 @@ again:
 }
 
 static uint32_t
-interval(Tox *m, ToxAv *av)
+interval(Tox *m, struct ToxAV*av)
 {
 	return MIN(tox_do_interval(m), toxav_do_interval(av));
 }
