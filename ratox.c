@@ -332,7 +332,7 @@ again:
 static uint32_t
 interval(Tox *m, struct ToxAV*av)
 {
-	return MIN(tox_do_interval(m), toxav_do_interval(av));
+	return MIN(tox_iteration_interval(m), toxav_iteration_interval(av));
 }
 
 static void
