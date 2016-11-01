@@ -1206,7 +1206,6 @@ toxinit(void)
 		eprintf("Core : ToxAV > Initialization failed\n");
 
 	toxavconfig = av_DefaultSettings;
-	pcm = AUDIOFRAME * AUDIOSAMPLERATE / 1000;
 	framesize = (AUDIOSAMPLERATE * AUDIOFRAME * AUDIOCHANNELS) / 1000;
 
 	tox_callback_connection_status(tox, cbconnstatus, NULL);
