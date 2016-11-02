@@ -329,7 +329,7 @@ again:
 }
 
 static uint32_t
-interval(Tox *m, struct ToxAV*av)
+interval(Tox *m, struct ToxAV *av)
 {
 	return MIN(tox_iteration_interval(m), toxav_iteration_interval(av));
 }
@@ -543,7 +543,7 @@ sendfriendcalldata(struct friend *f)
 		nanosleep(&diff, NULL);
 	}
 	clock_gettime(CLOCK_MONOTONIC, &f->av.lastsent);
-	if (!toxav_audio_send_frame(av, f->av.num, buf, pcm, AUDIOCHANNELS, AUDIOCHANNELS, NULL))
+	if (!toxav_audio_send_frame(toxav, f->av.num, buf, pcm, AUDIOCHANNELS, AUDIOCHANNELS, NULL))
 		weprintf("Failed to send audio frame\n");
 }
 
@@ -1198,7 +1198,7 @@ toxinit(void)
 	dataload();
 	datasave();
 
-	toxav = toxav_new(tox, MAXCALLS);
+	toxav = toxav_new(tox, NULL);
 	if (!toxav)
 		eprintf("Core : ToxAV > Initialization failed\n");
 
