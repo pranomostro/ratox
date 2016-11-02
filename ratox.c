@@ -168,7 +168,6 @@ static Tox *tox;
 static struct Tox_Options toxopt;
 
 static ToxAV *toxav;
-static ToxAvCSettings toxavconfig;
 static int    framesize;
 
 static uint8_t *passphrase;
@@ -339,7 +338,6 @@ static void
 cbcallinvite(void *av, int32_t cnum, void *udata)
 {
 	struct  friend *f;
-	ToxAvCSettings avconfig;
 	int32_t fnum, r;
 
 	fnum = toxav_get_peer_id(toxav, cnum, 0);
@@ -357,7 +355,6 @@ cbcallinvite(void *av, int32_t cnum, void *udata)
 		return;
 
 	f->av.num = cnum;
-	r = toxav_get_peer_csettings(toxav, cnum, 0, &avconfig);
 	if (r < 0) {
 		weprintf("Failed to determine peer call type\n");
 		r = toxav_reject(toxav, f->av.num, NULL);
@@ -541,8 +538,8 @@ sendfriendcalldata(struct friend *f)
 
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	diff = timediff(f->av.lastsent, now);
-	if (diff.tv_sec == 0 && diff.tv_nsec < toxavconfig.audio_frame_duration * 1E6) {
-		diff.tv_nsec = toxavconfig.audio_frame_duration * 1E6 - diff.tv_nsec;
+	if (diff.tv_sec == 0 && diff.tv_nsec < AUDIOFRAME * 1E6) {
+		diff.tv_nsec = AUDIOFRAME * 1E6 - diff.tv_nsec;
 		nanosleep(&diff, NULL);
 	}
 	clock_gettime(CLOCK_MONOTONIC, &f->av.lastsent);
@@ -1205,7 +1202,6 @@ toxinit(void)
 	if (!toxav)
 		eprintf("Core : ToxAV > Initialization failed\n");
 
-	toxavconfig = av_DefaultSettings;
 	framesize = (AUDIOSAMPLERATE * AUDIOFRAME * AUDIOCHANNELS) / 1000;
 
 	tox_callback_connection_status(tox, cbconnstatus, NULL);
@@ -1770,18 +1766,15 @@ loop(void)
 			case av_CallStarting:
 				if (!(f->av.state & INCOMING))
 					continue;
-				r = toxav_answer(toxav, f->av.num, &toxavconfig);
-				if (r < 0) {
+				if (!toxav_answer(toxav, f->av.num, AUDIOBITRATE, VIDEOBITRATE, NULL)) {
 					weprintf("Failed to answer call\n");
-					r = toxav_reject(toxav, f->av.num, NULL);
-					if (r < 0)
+					if (!toxav_reject(toxav, f->av.num, NULL))
 						weprintf("Failed to reject call\n");
 				}
 				break;
 			case av_CallActive:
 				if (!(f->av.state & INCOMING) && !(f->av.state & OUTGOING)) {
-					r = toxav_hangup(toxav, f->av.num);
-					if (r < 0)
+					if (!toxav_hangup(toxav, f->av.num))
 						weprintf("Failed to hang up\n");
 				}
 				break;
@@ -1857,8 +1850,7 @@ loop(void)
 			if (FD_ISSET(f->fd[FCALL_IN], &rfds)) {
 				switch (toxav_get_call_state(toxav, f->av.num)) {
 				case av_CallNonExistent:
-					r = toxav_call(toxav, &f->av.num, f->num, &toxavconfig, RINGINGDELAY);
-					if (r < 0) {
+					if (!toxav_call(toxav, f->num, AUDIOBITRATE, VIDEOBITRATE, NULL)) {
 						weprintf("Failed to call\n");
 						fiforeset(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN]);
 						break;

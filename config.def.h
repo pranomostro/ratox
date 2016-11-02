@@ -11,9 +11,14 @@
 
 /* Audio settings definition */
 #define AUDIOCHANNELS     1
-#define AUDIOBITRATE      32
+#define AUDIOBITRATE      32000
 #define AUDIOFRAME        20
 #define AUDIOSAMPLERATE   48000
+
+/* Video settings definition */
+#define VIDEOWIDTH        1280
+#define VIDEOHEIGHT       720
+#define VIDEOBITRATE      2500
 
 static char *savefile        = ".ratox.tox";
 static int   encryptsavefile = 0;
