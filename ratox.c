@@ -515,7 +515,7 @@ sendfriendcalldata(struct friend *f)
 {
 	struct   timespec now, diff;
 	ssize_t  n, pcm;
-	uint16_t *buf;
+	int16_t *buf;
 
 	n = fiforead(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN],
 		     f->av.frame + (f->av.state & INCOMPLETE) * f->av.n,
