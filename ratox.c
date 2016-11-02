@@ -1178,13 +1178,13 @@ localinit(void)
 static int
 toxinit(void)
 {
-	toxopt.ipv6enabled = ipv6;
-	toxopt.udp_disabled = tcp;
+	toxopt.ipv6_enabled = ipv6;
+	toxopt.udp_enabled = !tcp;
 	if (proxy) {
 		tcp = 1;
-		toxopt.udp_disabled = tcp;
+		toxopt.udp_enabled = !tcp;
 		logmsg("Net > Forcing TCP mode\n");
-		snprintf(toxopt.proxy_address, sizeof(toxopt.proxy_address),
+		snprintf(toxopt.proxy_host, sizeof(toxopt.proxy_host),
 			 "%s", proxyaddr);
 		toxopt.proxy_port = proxyport;
 		toxopt.proxy_type = proxytype;
