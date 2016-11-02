@@ -1035,7 +1035,7 @@ reprompt1:
 		if (!encryptsavefile)
 			logmsg("Data : %s > Encrypted, but saving unencrypted\n", savefile);
 		while (readpass("Data : Passphrase > ", &passphrase, &pplen) < 0 ||
-		       !tox_pass_decrypt(data, sz, passphrase, pplen, toxopt.savedata_data));
+		       !tox_pass_decrypt(data, sz, passphrase, pplen, toxopt.savedata_data, NULL));
 	} else {
 		if (memcpy(toxopt.savedata_data, data, sz) < sz)
 			eprintf("Data : %s > Failed to load\n", savefile);
