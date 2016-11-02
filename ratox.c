@@ -1642,8 +1642,8 @@ loop(void)
 				toxconnect();
 			}
 		}
-		tox_do(tox);
-		toxav_do(toxav);
+		tox_iterate(tox);
+		toxav_iterate(toxav);
 
 		/* Prepare select-fd-set */
 		FD_ZERO(&rfds);
