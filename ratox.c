@@ -165,9 +165,8 @@ static TAILQ_HEAD(friendhead, friend) friendhead = TAILQ_HEAD_INITIALIZER(friend
 static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
 
 static Tox *tox;
-static struct Tox_Options toxopt;
-
 static ToxAV *toxav;
+
 static int    framesize;
 
 static uint8_t *passphrase;
@@ -204,7 +203,7 @@ static void sendfriendfile(struct friend *);
 static void sendfriendtext(struct friend *);
 static void removefriend(struct friend *);
 static int readpass(const char *, uint8_t **, uint32_t *);
-static void dataload(void);
+static void dataload(struct Tox_Options *);
 static void datasave(void);
 static int localinit(void);
 static int toxinit(void);
@@ -986,17 +985,15 @@ readpass(const char *prompt, uint8_t **target, uint32_t *len)
 }
 
 static void
-dataload(void)
+dataload(struct Tox_Options *toxopt)
 {
 	off_t    sz;
 	uint32_t pp2len = 0;
 	int      fd;
-	uint8_t *data, *passphrase2 = NULL;
+	uint8_t *data, *passphrase2, *decrypted = NULL;
 
 	fd = open(savefile, O_RDONLY);
 	if (fd < 0) {
-		toxopt.savedata_length = 0;
-		toxopt.savedata_data = NULL;
 		if (encryptsavefile) {
 reprompt1:
 			while (readpass("Data : New passphrase > ", &passphrase, &pplen) < 0);
@@ -1026,18 +1023,21 @@ reprompt1:
 	if (read(fd, data, sz) != sz)
 		eprintf("read %s:", savefile);
 
-	toxopt.savedata_length = sz;
-	toxopt.savedata_data = malloc(sz);
-	if (toxopt.savedata_data)
-		eprintf("malloc:");
-
 	if (tox_is_data_encrypted(data)) {
+		toxopt->savedata_length = sz-TOX_PASS_ENCRYPTION_EXTRA_LENGTH;
+		decrypted = malloc(toxopt->savedata_length);
+		if(!decrypted)
+			eprintf("malloc:");
 		if (!encryptsavefile)
 			logmsg("Data : %s > Encrypted, but saving unencrypted\n", savefile);
 		while (readpass("Data : Passphrase > ", &passphrase, &pplen) < 0 ||
-		       !tox_pass_decrypt(data, sz, passphrase, pplen, toxopt.savedata_data, NULL));
+		       !tox_pass_decrypt(data, sz, passphrase, pplen, decrypted, NULL));
 	} else {
-		if (memcpy(toxopt.savedata_data, data, sz) < sz)
+		toxopt->savedata_length = sz;
+		decrypted = malloc(sz);
+		if(!decrypted)
+			eprintf("malloc:");
+		if (memcpy(decrypted, data, sz) < sz)
 			eprintf("Data : %s > Failed to load\n", savefile);
 		if (encryptsavefile) {
 			logmsg("Data : %s > Not encrypted, but saving encrypted\n", savefile);
@@ -1052,6 +1052,8 @@ reprompt2:
 			free(passphrase2);
 		}
 	}
+
+	toxopt->savedata_data = decrypted;
 
 	free(data);
 	close(fd);
@@ -1178,24 +1180,28 @@ localinit(void)
 static int
 toxinit(void)
 {
+	struct Tox_Options toxopt;
+
+	tox_options_default(&toxopt);
+
 	toxopt.ipv6_enabled = ipv6;
 	toxopt.udp_enabled = !tcp;
 	if (proxy) {
 		tcp = 1;
 		toxopt.udp_enabled = !tcp;
 		logmsg("Net > Forcing TCP mode\n");
-		snprintf(toxopt.proxy_host, sizeof(toxopt.proxy_host),
-			 "%s", proxyaddr);
+		toxopt.proxy_host = proxyaddr;
 		toxopt.proxy_port = proxyport;
 		toxopt.proxy_type = proxytype;
 		logmsg("Net > Using proxy %s:%hu\n", proxyaddr, proxyport);
 	}
 
+	dataload(&toxopt);
+
 	tox = tox_new(&toxopt, NULL);
 	if (!tox)
 		eprintf("Core : Tox > Initialization failed\n");
 
-	dataload();
 	datasave();
 
 	toxav = toxav_new(tox, NULL);
@@ -1226,6 +1232,9 @@ toxinit(void)
 	toxav_register_callstate_callback(toxav, cbcalltypechange, av_OnSelfCSChange, NULL);
 
 	toxav_register_audio_callback(toxav, cbcalldata, NULL);
+
+	if(toxopt.savedata_data)
+		free(toxopt.savedata_data);
 
 	return 0;
 }
