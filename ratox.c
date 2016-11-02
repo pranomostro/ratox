@@ -554,13 +554,14 @@ cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 	int    r;
 	char   name[TOX_MAX_NAME_LENGTH + 1];
 
-	r = tox_self_get_name(tox, frnum, (uint8_t *)name);
+	r = tox_friend_get_name_size(tox, frnum, NULL);
 	if (r < 0) {
 		weprintf("Failed to get name for friend number %ld\n", (long)frnum);
 		return;
 	} else if (r == 0) {
 		snprintf(name, sizeof(name), "Anonymous");
 	} else {
+		tox_friend_get_name(tox, frnum, (uint8_t *)name, NULL);
 		name[r] = '\0';
 	}
 
@@ -1133,29 +1134,31 @@ localinit(void)
 	}
 
 	/* Dump current name */
-	r = tox_self_get_name(tox, name);
+	r = tox_self_get_name_size(tox);
 	if (r == 0) {
 		weprintf("Name : Empty\n");
 	} else if (r > sizeof(name) - 1) {
 		r = sizeof(name) - 1;
 	}
+	tox_self_get_name(tox, name);
 	name[r] = '\0';
 	ftruncate(gslots[NAME].fd[OUT], 0);
 	dprintf(gslots[NAME].fd[OUT], "%s\n", name);
 
 	/* Dump status */
-	r = tox_self_get_status_message(tox, status, sizeof(status) - 1);
+	r = tox_self_get_status_message_size(tox);
 	if (r == 0) {
 		weprintf("Status : Empty\n");
 	} else if (r > sizeof(status) - 1) {
 		r = sizeof(status) - 1;
 	}
+	tox_self_get_status_message(tox, status);
 	status[r] = '\0';
 	ftruncate(gslots[STATUS].fd[OUT], 0);
 	dprintf(gslots[STATUS].fd[OUT], "%s\n", status);
 
 	/* Dump user state */
-	r = tox_self_get_user_status(tox);
+	r = tox_self_get_status(tox);
 	if (r < 0) {
 		weprintf("State : Empty\n");
 	} else if (r >= LEN(ustate)) {
@@ -1314,18 +1317,19 @@ friendcreate(int32_t frnum)
 	if (!f)
 		eprintf("calloc:");
 
-	r = tox_self_get_name(tox, frnum, (uint8_t *)f->name);
+	r = tox_friend_get_name_size(tox, frnum, NULL);
 	if (r < 0) {
 		weprintf(": %ld : Name : Failed to get\n", (long)frnum);
 		return NULL;
 	} else if (r == 0) {
 		snprintf(f->name, sizeof(f->name), "Anonymous");
 	} else {
+		tox_friend_get_name(tox, frnum, (uint8_t *)f->name, NULL);
 		f->name[r] = '\0';
 	}
 
 	f->num = frnum;
-	tox_self_get_client_id(tox, f->num, f->id);
+	tox_friend_get_public_key(tox, f->num, f->id, NULL);
 	id2str(f->id, f->idstr);
 
 	r = mkdir(f->idstr, 0777);
@@ -1357,10 +1361,10 @@ friendcreate(int32_t frnum)
 	/* Dump online state */
 	ftruncate(f->fd[FONLINE], 0);
 	dprintf(f->fd[FONLINE], "%d\n",
-		tox_self_get_friend_connection_status(tox, frnum));
+		tox_friend_get_connection_status(tox, frnum, NULL));
 
 	/* Dump status */
-	r = tox_self_get_status_message(tox, frnum, status, sizeof(status) - 1);
+	r = tox_friend_get_status_message(tox, frnum, status, NULL);
 	if (r < 0) {
 		weprintf(": %s : Status : Failed to get\n", f->name);
 		r = 0;
@@ -1372,7 +1376,7 @@ friendcreate(int32_t frnum)
 	dprintf(f->fd[FSTATUS], "%s\n", status);
 
 	/* Dump user state */
-	r = tox_self_get_user_status(tox, frnum);
+	r = tox_friend_get_status(tox, frnum, NULL);
 	if (r < 0) {
 		weprintf(": %s : State : Failed to get\n", f->name);
 	} else if (r >= LEN(ustate)) {
@@ -1422,14 +1426,14 @@ friendload(void)
 {
 	uint32_t sz;
 	uint32_t i;
-	int32_t *frnums;
+	uint32_t *frnums;
 
-	sz = tox_count_friendlist(tox);
+	sz = tox_self_get_friend_list_size(tox);
 	frnums = malloc(sz * sizeof(*frnums));
 	if (!frnums)
 		eprintf("malloc:");
 
-	tox_self_get_friendlist(tox, frnums, sz);
+	tox_self_get_friend_list(tox, frnums);
 
 	for (i = 0; i < sz; i++)
 		friendcreate(frnums[i]);
@@ -1477,7 +1481,7 @@ setstatus(void *data)
 	if (status[n - 1] == '\n')
 		n--;
 	status[n] = '\0';
-	r = tox_self_set_status_message(tox, status, n);
+	r = tox_self_set_status_message(tox, status, n, NULL);
 	if (r < 0) {
 		weprintf("Failed to set status message to \"%s\"\n", status);
 		return;
@@ -1680,7 +1684,7 @@ loop(void)
 			}
 
 			/* Only monitor friends that are online */
-			if (tox_self_get_friend_connection_status(tox, f->num) == 1) {
+			if (tox_friend_get_connection_status(tox, f->num, NULL) == 1) {
 				FD_APPEND(f->fd[FTEXT_IN]);
 
 				if (f->tx.state == TRANSFER_NONE ||
@@ -1705,7 +1709,7 @@ loop(void)
 
 		/* Check for broken transfers (friend went offline, file_out was closed) */
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_self_get_friend_connection_status(tox, f->num) == 0) {
+			if (tox_friend_get_connection_status(tox, f->num, NULL) == 0) {
 				canceltxtransfer(f);
 				cancelrxtransfer(f);
 			}
@@ -1728,7 +1732,7 @@ loop(void)
 		 * sent.
 		 */
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_self_get_friend_connection_status(tox, f->num) == 0)
+			if (tox_friend_get_connection_status(tox, f->num, NULL) == 0)
 				continue;
 			if (f->tx.state != TRANSFER_INPROGRESS)
 				continue;
@@ -1740,7 +1744,7 @@ loop(void)
 
 		/* Accept pending transfers if any */
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_self_get_friend_connection_status(tox, f->num) == 0)
+			if (tox_friend_get_connection_status(tox, f->num, NULL) == 0)
 				continue;
 			if (f->rxstate == TRANSFER_NONE)
 				continue;
@@ -1761,7 +1765,7 @@ loop(void)
 
 		/* Answer pending calls */
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_self_get_friend_connection_status(tox, f->num) == 0)
+			if (tox_friend_get_connection_status(tox, f->num, NULL) == 0)
 				continue;
 			if (f->av.num < 0)
 				continue;
