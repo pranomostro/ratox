@@ -5,7 +5,7 @@ include config.mk
 
 TOXSRC = $(shell find toxcore/toxcore toxcore/toxav toxcore/toxencryptsave -name '*.c')
 
-HDR = arg.h config.h readpassphrase.h util.h
+HDR = arg.h config.h nodes.h readpassphrase.h util.h
 LIB = \
 	eprintf.o \
 	readpassphrase.o \
@@ -31,6 +31,10 @@ $(OBJ): $(HDR) config.mk
 config.h:
 	@echo creating $@ from config.def.h
 	@cp config.def.h $@
+
+nodes.h:
+	@echo creating $@ with nodegen
+	@./nodegen >$@
 
 .o:
 	@echo LD $@
