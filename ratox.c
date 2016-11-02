@@ -1191,7 +1191,7 @@ toxinit(void)
 		logmsg("Net > Using proxy %s:%hu\n", proxyaddr, proxyport);
 	}
 
-	tox = tox_new(&toxopt);
+	tox = tox_new(&toxopt, NULL);
 	if (!tox)
 		eprintf("Core : Tox > Initialization failed\n");
 
