@@ -990,7 +990,7 @@ dataload(struct Tox_Options *toxopt)
 	off_t    sz;
 	uint32_t pp2len = 0;
 	int      fd;
-	uint8_t *data, *passphrase2, *decrypted = NULL;
+	uint8_t *data, * intermediate, *passphrase2 = NULL;
 
 	fd = open(savefile, O_RDONLY);
 	if (fd < 0) {
@@ -1016,29 +1016,28 @@ reprompt1:
 		return;
 	}
 
-	data = malloc(sz);
-	if (!data)
+	intermediate = malloc(sz);
+	if (!intermediate)
 		eprintf("malloc:");
 
-	if (read(fd, data, sz) != sz)
+	if (read(fd, intermediate, sz) != sz)
 		eprintf("read %s:", savefile);
 
-	if (tox_is_data_encrypted(data)) {
+	if (tox_is_data_encrypted(intermediate)) {
 		toxopt->savedata_length = sz-TOX_PASS_ENCRYPTION_EXTRA_LENGTH;
-		decrypted = malloc(toxopt->savedata_length);
-		if(!decrypted)
+		data = malloc(toxopt->savedata_length);
+		if(!data)
 			eprintf("malloc:");
 		if (!encryptsavefile)
 			logmsg("Data : %s > Encrypted, but saving unencrypted\n", savefile);
 		while (readpass("Data : Passphrase > ", &passphrase, &pplen) < 0 ||
-		       !tox_pass_decrypt(data, sz, passphrase, pplen, decrypted, NULL));
+		       !tox_pass_decrypt(data, sz, passphrase, pplen, intermediate, NULL));
 	} else {
 		toxopt->savedata_length = sz;
-		decrypted = malloc(sz);
-		if(!decrypted)
+		data = malloc(sz);
+		if(!data)
 			eprintf("malloc:");
-		if (memcpy(decrypted, data, sz) < sz)
-			eprintf("Data : %s > Failed to load\n", savefile);
+		memcpy(data, intermediate, sz);
 		if (encryptsavefile) {
 			logmsg("Data : %s > Not encrypted, but saving encrypted\n", savefile);
 reprompt2:
@@ -1053,9 +1052,9 @@ reprompt2:
 		}
 	}
 
-	toxopt->savedata_data = decrypted;
+	toxopt->savedata_data = data;
 
-	free(data);
+	free(intermediate);
 	close(fd);
 }
 
@@ -1064,21 +1063,28 @@ datasave(void)
 {
 	off_t    sz;
 	int      fd;
-	uint8_t *data;
+	uint8_t *data, *intermediate;
 
 	fd = open(savefile, O_WRONLY | O_TRUNC | O_CREAT , 0666);
 	if (fd < 0)
 		eprintf("open %s:", savefile);
 
-	sz = encryptsavefile ? tox_encrypted_size(tox) : tox_size(tox);
-	data = malloc(sz);
-	if (!data)
+	sz = tox_get_savedata_size(tox);
+	intermediate = malloc(sz);
+	if (!intermediate)
 		eprintf("malloc:");
 
-	if (encryptsavefile)
-		tox_encrypted_save(tox, data, passphrase, pplen);
+	tox_get_savedata(tox, intermediate);
+
+	if (encryptsavefile){
+		sz += TOX_PASS_ENCRYPTION_EXTRA_LENGTH;
+		data = malloc(sz);
+		if (!intermediate)
+			eprintf("malloc:");
+		tox_pass_encrypt(intermediate, sz - TOX_PASS_ENCRYPTION_EXTRA_LENGTH, passphrase, pplen, data, NULL);
+	}
 	else
-		tox_save(tox, data);
+		memcpy(data, intermediate, sz);
 	if (write(fd, data, sz) != sz)
 		eprintf("write %s:", savefile);
 	fsync(fd);
