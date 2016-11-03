@@ -946,16 +946,16 @@ static void
 sendfriendtext(struct friend *f)
 {
 	ssize_t n;
-	int     r;
 	uint8_t buf[TOX_MAX_MESSAGE_LENGTH];
+	TOX_ERR_FRIEND_SEND_MESSAGE err;
 
 	n = fiforead(f->dirfd, &f->fd[FTEXT_IN], ffiles[FTEXT_IN], buf, sizeof(buf));
 	if (n <= 0)
 		return;
 	if (buf[n - 1] == '\n')
 		n--;
-	r = tox_send_message(tox, f->num, buf, n);
-	if (r < 0)
+	tox_friend_send_message(tox, f->num, TOX_MESSAGE_TYPE_NORMAL, buf, n, &err);
+	if (err != TOX_ERR_FRIEND_SEND_MESSAGE_OK)
 		weprintf("Failed to send message\n");
 }
 
@@ -966,7 +966,7 @@ removefriend(struct friend *f)
 
 	if (fiforead(f->dirfd, &f->fd[FREMOVE], ffiles[FREMOVE], &c, 1) != 1 || c != '1')
 		return;
-	tox_del_friend(tox, f->num);
+	tox_friend_delete(tox, f->num, NULL);
 	datasave();
 	logmsg(": %s > Removed\n", f->name);
 	frienddestroy(f);
@@ -1262,7 +1262,7 @@ toxconnect(void)
 	struct  node *n;
 	struct  node tmp;
 	size_t  i, j;
-	int     r;
+	bool r;
 	uint8_t id[TOX_ADDRESS_SIZE];
 
 	srand(time(NULL));
@@ -1280,8 +1280,8 @@ toxconnect(void)
 		if (ipv6 && !n->addr6)
 			continue;
 		str2id(n->idstr, id);
-		r = tox_bootstrap_from_address(tox, ipv6 ? n->addr6 : n->addr4, n->port, id);
-		if (r == 0)
+		r = tox_bootstrap(tox, ipv6 ? n->addr6 : n->addr4, n->port, id, NULL);
+		if (!r)
 			weprintf("Net : %s > Bootstrap failed\n", ipv6 ? n->addr6 : n->addr4);
 	}
 	return 0;
@@ -1539,10 +1539,11 @@ static void
 sendfriendreq(void *data)
 {
 	ssize_t n;
-	int     r;
+	uint32_t r;
 	char    buf[PIPE_BUF], *p;
 	char   *msg = "ratox is awesome!";
 	uint8_t id[TOX_ADDRESS_SIZE];
+	TOX_ERR_FRIEND_ADD err;
 
 	n = fiforead(gslots[REQUEST].dirfd, &gslots[REQUEST].fd[IN], gfiles[IN],
 		     buf, sizeof(buf) - 1);
@@ -1572,12 +1573,12 @@ out:
 	}
 	str2id(buf, id);
 
-	r = tox_add_friend(tox, id, (uint8_t *)msg, strlen(msg));
+	r = tox_friend_add(tox, id, (uint8_t *)msg, strlen(msg), &err);
 	ftruncate(gslots[REQUEST].fd[ERR], 0);
 	lseek(gslots[REQUEST].fd[ERR], 0, SEEK_SET);
 
-	if (r < 0) {
-		dprintf(gslots[REQUEST].fd[ERR], "%s\n", reqerr[-r]);
+	if (err != TOX_ERR_FRIEND_ADD_OK) {
+		dprintf(gslots[REQUEST].fd[ERR], "%s\n", reqerr[err]);
 		return;
 	}
 	friendcreate(r);
@@ -1638,13 +1639,14 @@ loop(void)
 	time_t t0, t1;
 	int    connected = 0, i, n, r, fd, fdmax;
 	char   tstamp[64], c;
+	uint32_t e;
 
 	t0 = time(NULL);
 	logmsg("DHT > Connecting\n");
 	toxconnect();
 	while (running) {
 		/* Handle connection states */
-		if (tox_isconnected(tox)) {
+		if (tox_self_get_connection_status(tox) != TOX_CONNECTION_NONE) {
 			if (!connected) {
 				logmsg("DHT > Connected\n");
 				TAILQ_FOREACH(f, &friendhead, entry) {
@@ -1830,8 +1832,8 @@ loop(void)
 				continue;
 			if (c != '0' && c != '1')
 				continue;
-			r = tox_add_friend_norequest(tox, req->id);
-			if (r < 0) {
+			e = tox_friend_add_norequest(tox, req->id, NULL);
+			if (e == UINT32_MAX) {
 				weprintf("Failed to add friend %s\n", req->idstr);
 				fiforeset(gslots[REQUEST].fd[OUT], &req->fd, reqfifo);
 				continue;
@@ -1841,7 +1843,7 @@ loop(void)
 				logmsg("Request : %s > Accepted\n", req->idstr);
 				datasave();
 			} else {
-				tox_del_friend(tox, r);
+				tox_friend_delete(tox, r, NULL);
 				logmsg("Request : %s > Rejected\n", req->idstr);
 			}
 			unlinkat(gslots[REQUEST].fd[OUT], req->idstr, 0);
