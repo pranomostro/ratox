@@ -107,7 +107,7 @@ static struct file ffiles[] = {
 };
 
 static char *ustate[] = {
-	[TOX_USER_STATUS_NONE]    = "online",
+	[TOX_USER_STATUS_NONE]    = "available",
 	[TOX_USER_STATUS_AWAY]    = "away",
 	[TOX_USER_STATUS_BUSY]    = "busy"
 };
@@ -143,8 +143,8 @@ struct call {
 struct friend {
 	char    name[TOX_MAX_NAME_LENGTH + 1];
 	int32_t num;
-	uint8_t id[TOX_ADDRESS_SIZE];
-	char    idstr[2 * TOX_ADDRESS_SIZE + 1];
+	uint8_t id[TOX_PUBLIC_KEY_SIZE];
+	char    idstr[2 * TOX_PUBLIC_KEY_SIZE + 1];
 	int     dirfd;
 	int     fd[LEN(ffiles)];
 	struct  transfer tx;
@@ -154,8 +154,8 @@ struct friend {
 };
 
 struct request {
-	uint8_t id[TOX_ADDRESS_SIZE];
-	char    idstr[2 * TOX_ADDRESS_SIZE + 1];
+	uint8_t id[TOX_PUBLIC_KEY_SIZE];
+	char    idstr[2 * TOX_PUBLIC_KEY_SIZE + 1];
 	char   *msg;
 	int     fd;
 	TAILQ_ENTRY(request) entry;
@@ -181,22 +181,26 @@ static int fifoopen(int, struct file);
 static void fiforeset(int, int *, struct file);
 static ssize_t fiforead(int, int *, struct file, void *, size_t);
 static uint32_t interval(Tox *, struct ToxAV*);
+
 static void cbcallinvite(void *, int32_t, void *);
 static void cbcallstart(void *, int32_t, void *);
 static void cbcallterminate(void *, int32_t, void *);
 static void cbcalltypechange(void *, int32_t, void *);
 static void cbcalldata(void *, int32_t, const int16_t *, uint16_t, void *);
+
 static void cancelcall(struct friend *, char *);
 static void sendfriendcalldata(struct friend *);
-static void cbconnstatus(Tox *, int32_t, uint8_t, void *);
-static void cbfriendmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
-static void cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, uint16_t, void *);
+
+static void cbconnstatus(Tox *, uint32_t, TOX_CONNECTION_STATUS, void *);
+static void cbfriendmessage(Tox *, uint32_t, TOX_MESSAGE_TYPE, const uint8_t *, size_t, void *);
+static void cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, size_t, void *);
 static void cbnamechange(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbstatusmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
 static void cbuserstate(Tox *, int32_t, uint8_t, void *);
 static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
 static void cbfilesendreq(Tox *, int32_t, uint8_t, uint64_t, const uint8_t *, uint16_t, void *);
 static void cbfiledata(Tox *, int32_t, uint8_t, const uint8_t *, uint16_t, void *);
+
 static void canceltxtransfer(struct friend *);
 static void cancelrxtransfer(struct friend *);
 static void sendfriendfile(struct friend *);
@@ -547,15 +551,16 @@ sendfriendcalldata(struct friend *f)
 }
 
 static void
-cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
+cbconnstatus(Tox *m, uint32_t frnum, TOX_CONNECTION status, void *udata)
 {
 	struct friend *f;
 	struct request *req, *rtmp;
-	int    r;
+	size_t r;
 	char   name[TOX_MAX_NAME_LENGTH + 1];
+	TOX_ERR_FRIEND_QUERY err;
 
-	r = tox_friend_get_name_size(tox, frnum, NULL);
-	if (r < 0) {
+	r = tox_friend_get_name_size(tox, frnum, &err);
+	if (err != TOX_ERR_FRIEND_QUERY_OK) {
 		weprintf("Failed to get name for friend number %ld\n", (long)frnum);
 		return;
 	} else if (r == 0) {
@@ -565,7 +570,7 @@ cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 		name[r] = '\0';
 	}
 
-	logmsg(": %s > %s\n", name, status ? "Online" : "Offline");
+	logmsg(": %s > %s\n", name, status == TOX_CONNECTION_NONE ? "Offline" : "Online");
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->num == frnum) {
@@ -580,7 +585,7 @@ cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 	for (req = TAILQ_FIRST(&reqhead); req; req = rtmp) {
 		rtmp = TAILQ_NEXT(req, entry);
 
-		if (memcmp(f->id, req->id, TOX_ADDRESS_SIZE))
+		if (memcmp(f->id, req->id, TOX_PUBLIC_KEY_SIZE))
 			continue;
 		unlinkat(gslots[REQUEST].fd[OUT], req->idstr, 0);
 		close(req->fd);
@@ -591,7 +596,7 @@ cbconnstatus(Tox *m, int32_t frnum, uint8_t status, void *udata)
 }
 
 static void
-cbfriendmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *udata)
+cbfriendmessage(Tox *m, uint32_t frnum, TOX_MESSAGE_TYPE type, const uint8_t *data, size_t len, void *udata)
 {
 	struct  friend *f;
 	time_t  t;
@@ -613,7 +618,7 @@ cbfriendmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *
 }
 
 static void
-cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, void *udata)
+cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, size_t len, void *udata)
 {
 	struct file reqfifo;
 	struct request *req;
@@ -623,7 +628,7 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, vo
 		eprintf("calloc:");
 	req->fd = -1;
 
-	memcpy(req->id, id, TOX_ADDRESS_SIZE);
+	memcpy(req->id, id, TOX_PUBLIC_KEY_SIZE);
 	id2str(req->id, req->idstr);
 
 	if (len > 0) {
@@ -1222,7 +1227,7 @@ toxinit(void)
 
 	framesize = (AUDIOSAMPLERATE * AUDIOFRAME * AUDIOCHANNELS) / 1000;
 
-	tox_callback_connection_status(tox, cbconnstatus, NULL);
+	tox_callback_friend_connection_status(tox, cbconnstatus, NULL);
 	tox_callback_friend_message(tox, cbfriendmessage, NULL);
 	tox_callback_friend_request(tox, cbfriendrequest, NULL);
 	tox_callback_name_change(tox, cbnamechange, NULL);
