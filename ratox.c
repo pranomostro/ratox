@@ -107,7 +107,7 @@ static struct file ffiles[] = {
 };
 
 static char *ustate[] = {
-	[TOX_USER_STATUS_NONE]    = "none",
+	[TOX_USER_STATUS_NONE]    = "online",
 	[TOX_USER_STATUS_AWAY]    = "away",
 	[TOX_USER_STATUS_BUSY]    = "busy"
 };
@@ -632,6 +632,8 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, uint16_t len, vo
 			eprintf("malloc:");
 		memcpy(req->msg, data, len);
 		req->msg[len] = '\0';
+	} else {
+		req->msg = "ratox is awesome!";
 	}
 
 	reqfifo.name = req->idstr;
@@ -1054,6 +1056,7 @@ reprompt2:
 	}
 
 	toxopt->savedata_data = data;
+	toxopt->savedata_type = TOX_SAVEDATA_TYPE_TOX_SAVE;
 
 	free(intermediate);
 	close(fd);
@@ -1243,7 +1246,7 @@ toxinit(void)
 	toxav_register_audio_callback(toxav, cbcalldata, NULL);
 
 	if(toxopt.savedata_data)
-		free(toxopt.savedata_data);
+		free((void *)toxopt.savedata_data);
 
 	return 0;
 }
