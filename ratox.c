@@ -191,12 +191,12 @@ static void cbcalldata(void *, int32_t, const int16_t *, uint16_t, void *);
 static void cancelcall(struct friend *, char *);
 static void sendfriendcalldata(struct friend *);
 
-static void cbconnstatus(Tox *, uint32_t, TOX_CONNECTION_STATUS, void *);
+static void cbconnstatus(Tox *, uint32_t, TOX_CONNECTION, void *);
 static void cbfriendmessage(Tox *, uint32_t, TOX_MESSAGE_TYPE, const uint8_t *, size_t, void *);
 static void cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, size_t, void *);
-static void cbnamechange(Tox *, int32_t, const uint8_t *, uint16_t, void *);
-static void cbstatusmessage(Tox *, int32_t, const uint8_t *, uint16_t, void *);
-static void cbuserstate(Tox *, int32_t, uint8_t, void *);
+static void cbnamechange(Tox *, uint32_t, const uint8_t *, size_t, void *);
+static void cbstatusmessage(Tox *, uint32_t, const uint8_t *, size_t, void *);
+static void cbfriendstate(Tox *, uint32_t, TOX_USER_STATUS, void *);
 static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
 static void cbfilesendreq(Tox *, int32_t, uint8_t, uint64_t, const uint8_t *, uint16_t, void *);
 static void cbfiledata(Tox *, int32_t, uint8_t, const uint8_t *, uint16_t, void *);
@@ -652,7 +652,7 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, size_t len, void
 }
 
 static void
-cbnamechange(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *user)
+cbnamechange(Tox *m, uint32_t frnum, const uint8_t *data, size_t len, void *user)
 {
 	struct  friend *f;
 	uint8_t name[len + 1];
@@ -676,7 +676,7 @@ cbnamechange(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *use
 }
 
 static void
-cbstatusmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *udata)
+cbstatusmessage(Tox *m, uint32_t frnum, const uint8_t *data, size_t len, void *udata)
 {
 	struct friend *f;
 	uint8_t status[len + 1];
@@ -697,7 +697,7 @@ cbstatusmessage(Tox *m, int32_t frnum, const uint8_t *data, uint16_t len, void *
 }
 
 static void
-cbuserstate(Tox *m, int32_t frnum, uint8_t state, void *udata)
+cbfriendstate(Tox *m, uint32_t frnum, TOX_USER_STATUS state, void *udata)
 {
 	struct friend *f;
 
@@ -1230,9 +1230,9 @@ toxinit(void)
 	tox_callback_friend_connection_status(tox, cbconnstatus, NULL);
 	tox_callback_friend_message(tox, cbfriendmessage, NULL);
 	tox_callback_friend_request(tox, cbfriendrequest, NULL);
-	tox_callback_name_change(tox, cbnamechange, NULL);
-	tox_callback_status_message(tox, cbstatusmessage, NULL);
-	tox_callback_user_status(tox, cbuserstate, NULL);
+	tox_callback_friend_name(tox, cbnamechange, NULL);
+	tox_callback_friend_status_message(tox, cbstatusmessage, NULL);
+	tox_callback_friend_status(tox, cbfriendstate, NULL);
 	tox_callback_file_control(tox, cbfilecontrol, NULL);
 	tox_callback_file_send_request(tox, cbfilesendreq, NULL);
 	tox_callback_file_data(tox, cbfiledata, NULL);
