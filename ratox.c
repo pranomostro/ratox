@@ -195,7 +195,6 @@ static void cbstatusmessage(Tox *, uint32_t, const uint8_t *, size_t, void *);
 static void cbfriendstate(Tox *, uint32_t, TOX_USER_STATUS, void *);
 static void cbfilecontrol(Tox *, uint32_t, uint32_t, TOX_FILE_CONTROL, void *);
 static void cbfilesendreq(Tox *, uint32_t, uint32_t, uint32_t, uint64_t, const uint8_t *, size_t, void *);
-static void cbfiledatareq(Tox *, uint32_t, uint32_t, uint64_t, size_t, void *);
 static void cbfiledata(Tox *, uint32_t, uint32_t, uint64_t, const uint8_t *, size_t, void *);
 
 static void canceltxtransfer(struct friend *);
