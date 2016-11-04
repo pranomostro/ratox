@@ -197,9 +197,9 @@ static void cbfriendrequest(Tox *, const uint8_t *, const uint8_t *, size_t, voi
 static void cbnamechange(Tox *, uint32_t, const uint8_t *, size_t, void *);
 static void cbstatusmessage(Tox *, uint32_t, const uint8_t *, size_t, void *);
 static void cbfriendstate(Tox *, uint32_t, TOX_USER_STATUS, void *);
-static void cbfilecontrol(Tox *, int32_t, uint8_t, uint8_t, uint8_t, const uint8_t *, uint16_t, void *);
-static void cbfilesendreq(Tox *, int32_t, uint8_t, uint64_t, const uint8_t *, uint16_t, void *);
-static void cbfiledata(Tox *, int32_t, uint8_t, const uint8_t *, uint16_t, void *);
+static void cbfilecontrol(Tox *, uint32_t, uint32_t, TOX_FILE_CONTROL, void *);
+static void cbfilesendreq(Tox *, uint32_t, uint32_t, uint32_t, uint64_t, const uint8_t *, size_t, void *);
+static void cbfiledata(Tox *, int32_t, uint32_t, uint64_t, const uint8_t *, size_t, void *);
 
 static void canceltxtransfer(struct friend *);
 static void cancelrxtransfer(struct friend *);
@@ -719,8 +719,7 @@ cbfriendstate(Tox *m, uint32_t frnum, TOX_USER_STATUS state, void *udata)
 }
 
 static void
-cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrltype,
-	      const uint8_t *data, uint16_t len, void *udata)
+cbfilecontrol(Tox *m, uint32_t frnum, uint32_t fnum, TOX_FILE_CONTROL ctrltype, void *udata)
 {
 	struct friend *f;
 
@@ -732,33 +731,30 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 
 	switch (ctrltype) {
 	case TOX_FILE_CONTROL_RESUME:
-		if (rec_sen == 1) {
-			if (f->tx.state == TRANSFER_PAUSED) {
-				logmsg(": %s : Tx > Resumed\n", f->name);
-				f->tx.state = TRANSFER_INPROGRESS;
-			} else {
-				f->tx.fnum = fnum;
-				f->tx.chunksz = tox_file_data_size(tox, fnum);
-				f->tx.buf = malloc(f->tx.chunksz);
-				if (!f->tx.buf)
-					eprintf("malloc:");
-				f->tx.n = 0;
-				f->tx.pendingbuf = 0;
-				f->tx.state = TRANSFER_INPROGRESS;
-				logmsg(": %s : Tx > In Progress\n", f->name);
-			}
+		if (f->tx.state == TRANSFER_PAUSED) {
+			logmsg(": %s : Tx > Resumed\n", f->name);
+			f->tx.state = TRANSFER_INPROGRESS;
+		} else {
+			f->tx.fnum = fnum;
+			f->tx.chunksz = tox_file_data_size(tox, fnum);
+			f->tx.buf = malloc(f->tx.chunksz);
+			if (!f->tx.buf)
+				eprintf("malloc:");
+			f->tx.n = 0;
+			f->tx.pendingbuf = 0;
+			f->tx.state = TRANSFER_INPROGRESS;
+			logmsg(": %s : Tx > In Progress\n", f->name);
 		}
 		break;
 	case TOX_FILE_CONTROL_PAUSE:
-		if (rec_sen == 1) {
-			if (f->tx.state == TRANSFER_INPROGRESS) {
-				logmsg(": %s : Tx > Paused\n", f->name);
-				f->tx.state = TRANSFER_PAUSED;
-			}
+		if (f->tx.state == TRANSFER_INPROGRESS) {
+			logmsg(": %s : Tx > Paused\n", f->name);
+			f->tx.state = TRANSFER_PAUSED;
 		}
 		break;
 	case TOX_FILE_CONTROL_CANCEL:
-		if (rec_sen == 1) {
+		/* Check wether we're sending or receiving */
+		if (f->tx.fnum == fnum) {
 			logmsg(": %s : Tx > Rejected\n", f->name);
 			f->tx.state = TRANSFER_NONE;
 			free(f->tx.buf);
@@ -779,8 +775,8 @@ cbfilecontrol(Tox *m, int32_t frnum, uint8_t rec_sen, uint8_t fnum, uint8_t ctrl
 }
 
 static void
-cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
-	      const uint8_t *fname, uint16_t flen, void *udata)
+cbfilesendreq(Tox *m, uint32_t frnum, uint32_t fnum, uint32_t kind, uint64_t fsz,
+	      const uint8_t *fname, size_t flen, void *udata)
 {
 	struct  friend *f;
 	uint8_t filename[flen + 1];
@@ -798,7 +794,7 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 	if (f->rxstate == TRANSFER_INPROGRESS) {
 		logmsg(": %s : Rx > Rejected %s, already one in progress\n",
 		       f->name, filename);
-		if (tox_file_send_control(tox, f->num, 1, fnum, TOX_FILE_CONTROL_CANCEL, NULL, 0) < 0)
+		if (!tox_file_control(tox, f->num, fnum, TOX_FILE_CONTROL_CANCEL, NULL))
 			weprintf("Failed to kill new Rx transfer\n");
 		return;
 	}
@@ -811,7 +807,7 @@ cbfilesendreq(Tox *m, int32_t frnum, uint8_t fnum, uint64_t fsz,
 }
 
 static void
-cbfiledata(Tox *m, int32_t frnum, uint8_t fnum, const uint8_t *data, uint16_t len, void *udata)
+cbfiledata(Tox *m, int32_t frnum, uint32_t fnum, uint64_t pos, const uint8_t *data, size_t len, void *udata)
 {
 	struct   friend *f;
 	ssize_t  n;
@@ -840,11 +836,9 @@ cbfiledata(Tox *m, int32_t frnum, uint8_t fnum, const uint8_t *data, uint16_t le
 		len -= n;
 	}
 
-	/* signaling a complete transfert is done by sending 0 bytes to the peer */
-	if (len == 0) {
+	/* When length is 0, the transfer is finished */
+	if (!len) {
 		logmsg(": %s : Rx > Complete\n", f->name);
-		if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILE_CONTROL_FINISHED, NULL, 0) < 0)
-			weprintf("Failed to signal file completion to the sender\n");
 		if (f->fd[FFILE_OUT] != -1) {
 			close(f->fd[FFILE_OUT]);
 			f->fd[FFILE_OUT] = -1;
@@ -861,7 +855,7 @@ canceltxtransfer(struct friend *f)
 	if (f->tx.state == TRANSFER_NONE)
 		return;
 	logmsg(": %s : Tx > Cancelling\n", f->name);
-	if (tox_file_send_control(tox, f->num, 0, 0, TOX_FILE_CONTROL_CANCEL, NULL, 0) < 0)
+	if (!tox_file_control(tox, f->num, 0, TOX_FILE_CONTROL_CANCEL, NULL))
 		weprintf("Failed to kill Tx transfer\n");
 	f->tx.state = TRANSFER_NONE;
 	free(f->tx.buf);
@@ -878,7 +872,7 @@ cancelrxtransfer(struct friend *f)
 	if (f->rxstate == TRANSFER_NONE)
 		return;
 	logmsg(": %s : Rx > Cancelling\n", f->name);
-	if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILE_CONTROL_CANCEL, NULL, 0) < 0)
+	if (!tox_file_control(tox, f->num, 0, TOX_FILE_CONTROL_CANCEL, NULL))
 		weprintf("Failed to kill Rx transfer\n");
 	if (f->fd[FFILE_OUT] != -1) {
 		close(f->fd[FFILE_OUT]);
@@ -1233,9 +1227,9 @@ toxinit(void)
 	tox_callback_friend_name(tox, cbnamechange, NULL);
 	tox_callback_friend_status_message(tox, cbstatusmessage, NULL);
 	tox_callback_friend_status(tox, cbfriendstate, NULL);
-	tox_callback_file_control(tox, cbfilecontrol, NULL);
-	tox_callback_file_send_request(tox, cbfilesendreq, NULL);
-	tox_callback_file_data(tox, cbfiledata, NULL);
+	tox_callback_file_recv_control(tox, cbfilecontrol, NULL);
+	tox_callback_file_recv(tox, cbfilesendreq, NULL);
+	tox_callback_file_recv_chunk(tox, cbfiledata, NULL);
 
 	toxav_register_callstate_callback(toxav, cbcallinvite, av_OnInvite, NULL);
 	toxav_register_callstate_callback(toxav, cbcallstart, av_OnStart, NULL);
@@ -1764,7 +1758,7 @@ loop(void)
 			if (r < 0)
 				continue;
 			f->fd[FFILE_OUT] = r;
-			if (tox_file_send_control(tox, f->num, 1, 0, TOX_FILE_CONTROL_RESUME, NULL, 0) < 0) {
+			if (!tox_file_control(tox, f->num, 0, TOX_FILE_CONTROL_RESUME, NULL)) {
 				weprintf("Failed to accept transfer from receiver\n");
 				cancelrxtransfer(f);
 			} else {
