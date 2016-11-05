@@ -1605,7 +1605,6 @@ loop(void)
 	struct file reqfifo;
 	struct friend *f, *ftmp;
 	struct request *req, *rtmp;
-	struct timespec curtime, diff;
 	struct timeval tv;
 	fd_set rfds;
 	time_t t0, t1;
