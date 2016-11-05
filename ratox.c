@@ -115,7 +115,7 @@ static char *ustate[] = {
 enum { TRANSFER_NONE, TRANSFER_INITIATED, TRANSFER_PENDING, TRANSFER_INPROGRESS, TRANSFER_PAUSED };
 
 struct transfer {
-	uint8_t  fnum;
+	uint32_t fnum;
 	uint8_t *buf;
 	int      chunksz;
 	ssize_t  n;
@@ -199,11 +199,11 @@ static void cbstatusmessage(Tox *, uint32_t, const uint8_t *, size_t, void *);
 static void cbfriendstate(Tox *, uint32_t, TOX_USER_STATUS, void *);
 static void cbfilecontrol(Tox *, uint32_t, uint32_t, TOX_FILE_CONTROL, void *);
 static void cbfilesendreq(Tox *, uint32_t, uint32_t, uint32_t, uint64_t, const uint8_t *, size_t, void *);
-static void cbfiledata(Tox *, int32_t, uint32_t, uint64_t, const uint8_t *, size_t, void *);
+static void cbfiledatareq(Tox *, uint32_t, uint32_t, uint64_t, size_t, void *);
+static void cbfiledata(Tox *, uint32_t, uint32_t, uint64_t, const uint8_t *, size_t, void *);
 
 static void canceltxtransfer(struct friend *);
 static void cancelrxtransfer(struct friend *);
-static void sendfriendfile(struct friend *);
 static void sendfriendtext(struct friend *);
 static void removefriend(struct friend *);
 static int readpass(const char *, uint8_t **, uint32_t *);
@@ -736,7 +736,7 @@ cbfilecontrol(Tox *m, uint32_t frnum, uint32_t fnum, TOX_FILE_CONTROL ctrltype, 
 			f->tx.state = TRANSFER_INPROGRESS;
 		} else {
 			f->tx.fnum = fnum;
-			f->tx.chunksz = tox_file_data_size(tox, fnum);
+			f->tx.chunksz = TOX_MAX_CUSTOM_PACKET_SIZE;
 			f->tx.buf = malloc(f->tx.chunksz);
 			if (!f->tx.buf)
 				eprintf("malloc:");
@@ -775,6 +775,44 @@ cbfilecontrol(Tox *m, uint32_t frnum, uint32_t fnum, TOX_FILE_CONTROL ctrltype, 
 }
 
 static void
+cbfiledatareq(Tox *m, uint32_t frnum, uint32_t fnum, uint64_t pos, size_t flen, void *udata)
+{
+	struct friend *f;
+	ssize_t n;
+
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->num == frnum)
+			break;
+
+	/* Grab another buffer from the FIFO */
+	if (!f->tx.pendingbuf) {
+		n = fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN], f->tx.buf,
+			     f->tx.chunksz);
+		f->tx.n = n;
+		f->tx.pendingbuf = 0;
+	}
+
+	if (f->tx.n == 0) {
+		/* Signal transfer completion to other end */
+		if (!tox_file_send_chunk(tox, f->num, f->tx.fnum, pos, NULL, 0, NULL))
+			weprintf("Failed to signal transfer completion to the receiver\n");
+		logmsg(": %s : Tx > Complete\n", f->name);
+		f->tx.state = TRANSFER_NONE;
+		free(f->tx.buf);
+		f->tx.buf = NULL;
+		return;
+	}
+	if (f->tx.n < 0) {
+		if (errno != EWOULDBLOCK)
+			weprintf("fiforead:");
+		return;
+	}
+
+	if (!tox_file_send_chunk(tox, f->num, f->tx.fnum, pos, f->tx.buf, f->tx.n, NULL))
+		f->tx.pendingbuf = 1;
+}
+
+static void
 cbfilesendreq(Tox *m, uint32_t frnum, uint32_t fnum, uint32_t kind, uint64_t fsz,
 	      const uint8_t *fname, size_t flen, void *udata)
 {
@@ -807,7 +845,7 @@ cbfilesendreq(Tox *m, uint32_t frnum, uint32_t fnum, uint32_t kind, uint64_t fsz
 }
 
 static void
-cbfiledata(Tox *m, int32_t frnum, uint32_t fnum, uint64_t pos, const uint8_t *data, size_t len, void *udata)
+cbfiledata(Tox *m, uint32_t frnum, uint32_t fnum, uint64_t pos, const uint8_t *data, size_t len, void *udata)
 {
 	struct   friend *f;
 	ssize_t  n;
@@ -881,59 +919,6 @@ cancelrxtransfer(struct friend *f)
 	ftruncate(f->fd[FFILE_STATE], 0);
 	lseek(f->fd[FFILE_STATE], 0, SEEK_SET);
 	f->rxstate = TRANSFER_NONE;
-}
-
-static void
-sendfriendfile(struct friend *f)
-{
-	struct  timespec start, now, diff = {0, 0};
-	ssize_t n;
-
-	clock_gettime(CLOCK_MONOTONIC, &start);
-
-	while (diff.tv_sec == 0 && diff.tv_nsec < interval(tox, toxav) * 1E6) {
-		/* Attempt to transmit the pending buffer */
-		if (f->tx.pendingbuf) {
-			if (tox_file_send_data(tox, f->num, f->tx.fnum, f->tx.buf, f->tx.n) < 0) {
-				clock_gettime(CLOCK_MONOTONIC, &f->tx.lastblock);
-				f->tx.cooldown = 1;
-				break;
-			}
-			f->tx.pendingbuf = 0;
-		}
-		/* Grab another buffer from the FIFO */
-		n = fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN], f->tx.buf,
-			     f->tx.chunksz);
-		if (n == 0) {
-			/* Signal transfer completion to other end */
-			if (tox_file_send_control(tox, f->num, 0, f->tx.fnum,
-						  TOX_FILE_CONTROL_FINISHED, NULL, 0) < 0)
-				weprintf("Failed to signal transfer completion to the receiver\n");
-			logmsg(": %s : Tx > Complete\n", f->name);
-			f->tx.state = TRANSFER_NONE;
-			free(f->tx.buf);
-			f->tx.buf = NULL;
-			f->tx.lastblock.tv_sec = 0;
-			f->tx.lastblock.tv_nsec = 0;
-			f->tx.cooldown = 0;
-			break;
-		}
-		if (n < 0) {
-			if (errno != EWOULDBLOCK)
-				weprintf("fiforead:");
-			break;
-		}
-		/* Store transfer size in case we can't send it right now */
-		f->tx.n = n;
-		if (tox_file_send_data(tox, f->num, f->tx.fnum, f->tx.buf, f->tx.n) < 0) {
-			clock_gettime(CLOCK_MONOTONIC, &f->tx.lastblock);
-			f->tx.cooldown = 1;
-			f->tx.pendingbuf = 1;
-			return;
-		}
-		clock_gettime(CLOCK_MONOTONIC, &now);
-		diff = timediff(start, now);
-	}
 }
 
 static void
@@ -1230,6 +1215,7 @@ toxinit(void)
 	tox_callback_file_recv_control(tox, cbfilecontrol, NULL);
 	tox_callback_file_recv(tox, cbfilesendreq, NULL);
 	tox_callback_file_recv_chunk(tox, cbfiledata, NULL);
+	tox_callback_file_chunk_request(tox, cbfiledatareq, NULL);
 
 	toxav_register_callstate_callback(toxav, cbcallinvite, av_OnInvite, NULL);
 	toxav_register_callstate_callback(toxav, cbcallstart, av_OnStart, NULL);
@@ -1728,7 +1714,7 @@ loop(void)
 		}
 
 		/* If we hit the receiver too hard, we will run out of
-		 * local buffer slots.	In that case tox_file_send_data()
+		 * local buffer slots.	In that case tox_file_send_chunk()
 		 * will return -1 and we will have to queue the buffer to
 		 * send it later.  If this is the last buffer read from
 		 * the FIFO, then select() won't make the fd readable again
@@ -1740,8 +1726,6 @@ loop(void)
 				continue;
 			if (f->tx.state != TRANSFER_INPROGRESS)
 				continue;
-			if (f->tx.pendingbuf)
-				sendfriendfile(f);
 			if (f->tx.state == TRANSFER_NONE)
 				FD_CLR(f->fd[FFILE_IN], &rfds);
 		}
@@ -1856,17 +1840,15 @@ loop(void)
 				case TRANSFER_NONE:
 					/* Prepare a new transfer */
 					snprintf(tstamp, sizeof(tstamp), "%lu", (unsigned long)time(NULL));
-					if (tox_new_file_sender(tox, f->num,
-								0, (uint8_t *)tstamp, strlen(tstamp)) < 0) {
+					f->tx.fnum = tox_file_send(tox, f->num, TOX_FILE_KIND_DATA, UINT64_MAX,
+					                           NULL, (uint8_t *)tstamp, strlen(tstamp), NULL);
+					if (f->tx.fnum == UINT32_MAX) {
 						weprintf("Failed to initiate new transfer\n");
 						fiforeset(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN]);
 					} else {
 						f->tx.state = TRANSFER_INITIATED;
 						logmsg(": %s : Tx > Initiated\n", f->name);
 					}
-					break;
-				case TRANSFER_INPROGRESS:
-					sendfriendfile(f);
 					break;
 				}
 			}
