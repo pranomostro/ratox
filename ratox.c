@@ -121,8 +121,6 @@ struct transfer {
 	ssize_t  n;
 	int      pendingbuf;
 	int      state;
-	struct   timespec lastblock;
-	int      cooldown;
 };
 
 enum {
@@ -759,9 +757,6 @@ cbfilecontrol(Tox *m, uint32_t frnum, uint32_t fnum, TOX_FILE_CONTROL ctrltype, 
 			f->tx.state = TRANSFER_NONE;
 			free(f->tx.buf);
 			f->tx.buf = NULL;
-			f->tx.lastblock.tv_sec = 0;
-			f->tx.lastblock.tv_nsec = 0;
-			f->tx.cooldown = 0;
 			fiforeset(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN]);
 		} else {
 			logmsg(": %s : Rx > Cancelled by Sender\n", f->name);
@@ -898,9 +893,6 @@ canceltxtransfer(struct friend *f)
 	f->tx.state = TRANSFER_NONE;
 	free(f->tx.buf);
 	f->tx.buf = NULL;
-	f->tx.lastblock.tv_sec = 0;
-	f->tx.lastblock.tv_nsec = 0;
-	f->tx.cooldown = 0;
 	fiforeset(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN]);
 }
 
@@ -1661,24 +1653,11 @@ loop(void)
 			FD_APPEND(req->fd);
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			/* File transfer cooldown */
-			if (f->tx.cooldown) {
-				clock_gettime(CLOCK_MONOTONIC, &curtime);
-				diff = timediff(f->tx.lastblock, curtime);
-
-				if (diff.tv_sec > 0 || diff.tv_nsec > interval(tox, toxav) * 3 * 1E6) {
-					f->tx.lastblock.tv_sec = 0;
-					f->tx.lastblock.tv_nsec = 0;
-					f->tx.cooldown = 0;
-				}
-			}
-
 			/* Only monitor friends that are online */
 			if (tox_friend_get_connection_status(tox, f->num, NULL) == 1) {
 				FD_APPEND(f->fd[FTEXT_IN]);
 
-				if (f->tx.state == TRANSFER_NONE ||
-				    (f->tx.state == TRANSFER_INPROGRESS && !f->tx.cooldown))
+				if (f->tx.state == TRANSFER_NONE)
 					FD_APPEND(f->fd[FFILE_IN]);
 				if (f->av.num < 0 ||
 				    (toxav_get_call_state(toxav, f->av.num) == av_CallActive &&
