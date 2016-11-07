@@ -180,8 +180,7 @@ static void fiforeset(int, int *, struct file);
 static ssize_t fiforead(int, int *, struct file, void *, size_t);
 static uint32_t interval(Tox *, struct ToxAV*);
 
-static void cbcallinvite(void *, int32_t, void *);
-static void cbcallstart(void *, int32_t, void *);
+static void cbcallinvite(ToxAV *, uint32_t, bool, bool, void *);
 static void cbcallterminate(void *, int32_t, void *);
 static void cbcalltypechange(void *, int32_t, void *);
 static void cbcalldata(void *, int32_t, const int16_t *, uint16_t, void *);
@@ -336,53 +335,30 @@ interval(Tox *m, struct ToxAV *av)
 }
 
 static void
-cbcallinvite(void *av, int32_t cnum, void *udata)
+cbcallinvite(ToxAV *av, uint32_t fnum, bool audio, bool video, void *udata)
 {
 	struct  friend *f;
-	int32_t fnum, r;
 
-	fnum = toxav_get_peer_id(toxav, cnum, 0);
-	if (fnum < 0) {
-		weprintf("Failed to determine peer-id from call-id\n");
-		r = toxav_reject(toxav, cnum, NULL);
-		if (r < 0)
-			weprintf("Failed to reject call\n");
-		return;
-	}
 	TAILQ_FOREACH(f, &friendhead, entry)
 		if (f->num == fnum)
 			break;
 	if (!f)
 		return;
 
-	f->av.num = cnum;
-	if (r < 0) {
-		weprintf("Failed to determine peer call type\n");
-		r = toxav_reject(toxav, f->av.num, NULL);
-		if (r < 0)
+	if (!audio) {
+		if (!toxav_call_control(toxav, f->av.num, TOXAV_CALL_CONTROL_CANCEL, NULL))
+			weprintf("Failed to reject call\n");
+		logmsg(": %s : Audio > Rejected (no audio)\n", f->name);
+		return;
+	}
+
+	if (!toxav_answer(av, f->num, AUDIOBITRATE, 0, NULL)) {
+		weprintf("Failed to answer call\n");
+		if (!toxav_call_control(toxav, f->av.num, TOXAV_CALL_CONTROL_CANCEL, NULL))
 			weprintf("Failed to reject call\n");
 		return;
 	}
 
-	logmsg(": %s : Audio : Rx > Inviting (%luHz/%luch)\n",
-	       f->name, AUDIOSAMPLERATE, AUDIOCHANNELS);
-
-	ftruncate(f->fd[FCALL_STATE], 0);
-	lseek(f->fd[FCALL_STATE], 0, SEEK_SET);
-	dprintf(f->fd[FCALL_STATE], "pending\n");
-}
-
-static void
-cbcallstart(void *av, int32_t cnum, void *udata)
-{
-	struct friend *f;
-	int    r;
-
-	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->av.num == cnum)
-			break;
-	if (!f)
-		return;
 
 	f->av.frame = malloc(sizeof(int16_t) * framesize);
 	if (!f->av.frame)
@@ -391,22 +367,13 @@ cbcallstart(void *av, int32_t cnum, void *udata)
 	f->av.n = 0;
 	f->av.lastsent.tv_sec = 0;
 	f->av.lastsent.tv_nsec = 0;
-
-	r = toxav_prepare_transmission(toxav, f->av.num, 0);
-	if (r < 0) {
-		weprintf("Failed to prepare Rx/Tx AV transmission\n");
-		r = toxav_hangup(toxav, f->av.num);
-		if (r < 0)
-			weprintf("Failed to hang up\n");
-		return;
-	}
 	f->av.state |= TRANSMITTING;
 
 	ftruncate(f->fd[FCALL_STATE], 0);
 	lseek(f->fd[FCALL_STATE], 0, SEEK_SET);
 	dprintf(f->fd[FCALL_STATE], "active\n");
 
-	logmsg(": %s : Audio > Started\n", f->name);
+	logmsg(": %s : Audio > Answered\n", f->name);
 }
 
 static void
@@ -1209,8 +1176,8 @@ toxinit(void)
 	tox_callback_file_recv_chunk(tox, cbfiledata, NULL);
 	tox_callback_file_chunk_request(tox, cbfiledatareq, NULL);
 
-	toxav_register_callstate_callback(toxav, cbcallinvite, av_OnInvite, NULL);
-	toxav_register_callstate_callback(toxav, cbcallstart, av_OnStart, NULL);
+	toxav_callback_call(toxav, cbcallinvite, NULL);
+
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnEnd, "Ended");
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnCancel, "Cancelled");
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnReject, "Rejected");
