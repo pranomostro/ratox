@@ -182,7 +182,7 @@ static uint32_t interval(Tox *, struct ToxAV*);
 
 static void cbcallinvite(ToxAV *, uint32_t, bool, bool, void *);
 static void cbcallterminate(void *, int32_t, void *);
-static void cbcalltypechange(void *, int32_t, void *);
+static void cbcallstate(ToxAV *, uint32_t, uint32_t, void *);
 static void cbcalldata(void *, int32_t, const int16_t *, uint16_t, void *);
 
 static void cancelcall(struct friend *, char *);
@@ -397,9 +397,27 @@ cbcallterminate(void *av, int32_t cnum, void *udata)
 }
 
 static void
-cbcalltypechange(void *av, int32_t cnum, void *udata)
+cbcallstate(ToxAV *av, uint32_t fnum, uint32_t state, void *udata)
 {
-	printf("Entered %s\n", __func__);
+	struct friend *f;
+
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (f->num == fnum)
+			break;
+	if (!f)
+		return;
+
+	if ((state & TOXAV_FRIEND_CALL_STATE_ERROR)
+	    || (state & TOXAV_FRIEND_CALL_STATE_FINISHED)) {
+		cancelcall(f, udata);
+		return;
+	}
+
+	/*
+	 * Perhaps, deal with TOXAV_FRIEND_CALL_STATE_*_A to notify that
+	 * friend is muted/deaf, or that he's not anymore.
+	 * This would require a new field in the 'call' structure.
+	 */
 }
 
 static void
@@ -1177,6 +1195,7 @@ toxinit(void)
 	tox_callback_file_chunk_request(tox, cbfiledatareq, NULL);
 
 	toxav_callback_call(toxav, cbcallinvite, NULL);
+	toxav_callback_call_state(toxav, cbcallstate, NULL);
 
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnEnd, "Ended");
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnCancel, "Cancelled");
@@ -1184,8 +1203,6 @@ toxinit(void)
 
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnRequestTimeout, "Request timeout");
 	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnPeerTimeout, "Peer timeout");
-	toxav_register_callstate_callback(toxav, cbcalltypechange, av_OnPeerCSChange, NULL);
-	toxav_register_callstate_callback(toxav, cbcalltypechange, av_OnSelfCSChange, NULL);
 
 	toxav_register_audio_callback(toxav, cbcalldata, NULL);
 
