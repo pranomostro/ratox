@@ -181,7 +181,6 @@ static ssize_t fiforead(int, int *, struct file, void *, size_t);
 static uint32_t interval(Tox *, struct ToxAV*);
 
 static void cbcallinvite(ToxAV *, uint32_t, bool, bool, void *);
-static void cbcallterminate(void *, int32_t, void *);
 static void cbcallstate(ToxAV *, uint32_t, uint32_t, void *);
 static void cbcalldata(void *, int32_t, const int16_t *, uint16_t, void *);
 
@@ -346,54 +345,17 @@ cbcallinvite(ToxAV *av, uint32_t fnum, bool audio, bool video, void *udata)
 		return;
 
 	if (!audio) {
-		if (!toxav_call_control(toxav, f->av.num, TOXAV_CALL_CONTROL_CANCEL, NULL))
+		if (!toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, NULL))
 			weprintf("Failed to reject call\n");
 		logmsg(": %s : Audio > Rejected (no audio)\n", f->name);
 		return;
 	}
 
-	if (!toxav_answer(av, f->num, AUDIOBITRATE, 0, NULL)) {
-		weprintf("Failed to answer call\n");
-		if (!toxav_call_control(toxav, f->av.num, TOXAV_CALL_CONTROL_CANCEL, NULL))
-			weprintf("Failed to reject call\n");
-		return;
-	}
-
-
-	f->av.frame = malloc(sizeof(int16_t) * framesize);
-	if (!f->av.frame)
-		eprintf("malloc:");
-
-	f->av.n = 0;
-	f->av.lastsent.tv_sec = 0;
-	f->av.lastsent.tv_nsec = 0;
-	f->av.state |= TRANSMITTING;
-
 	ftruncate(f->fd[FCALL_STATE], 0);
 	lseek(f->fd[FCALL_STATE], 0, SEEK_SET);
-	dprintf(f->fd[FCALL_STATE], "active\n");
+	dprintf(f->fd[FCALL_STATE], "pending\n");
 
-	logmsg(": %s : Audio > Answered\n", f->name);
-}
-
-static void
-cbcallterminate(void *av, int32_t cnum, void *udata)
-{
-	struct friend *f;
-	int    r;
-
-	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->av.num == cnum)
-			break;
-	if (!f)
-		return;
-
-	if (!strcmp(udata, "Peer timeout")) {
-		r = toxav_stop_call(toxav, cnum);
-		if (r < 0)
-			weprintf("Failed to stop call\n");
-	}
-	cancelcall(f, udata);
+	logmsg(": %s : Audio > Ringing\n", f->name);
 }
 
 static void
@@ -466,17 +428,13 @@ cbcalldata(void *av, int32_t cnum, const int16_t *data, uint16_t len, void *udat
 static void
 cancelcall(struct friend *f, char *action)
 {
-	int r;
-
 	logmsg(": %s : Audio > %s\n", f->name, action);
 
-	if (f->av.num != -1 && f->av.state & TRANSMITTING) {
-		r = toxav_kill_transmission(toxav, f->av.num);
-		if (r < 0)
-			weprintf("Failed to kill transmission\n");
+	if (f->av.state & TRANSMITTING) {
+		if (!toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, NULL))
+			weprintf("Failed to terminate call\n");
 	}
 	f->av.state = 0;
-	f->av.num = -1;
 
 	/* Cancel Rx side of the call */
 	if (f->fd[FCALL_OUT] != -1) {
@@ -1197,13 +1155,6 @@ toxinit(void)
 	toxav_callback_call(toxav, cbcallinvite, NULL);
 	toxav_callback_call_state(toxav, cbcallstate, NULL);
 
-	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnEnd, "Ended");
-	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnCancel, "Cancelled");
-	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnReject, "Rejected");
-
-	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnRequestTimeout, "Request timeout");
-	toxav_register_callstate_callback(toxav, cbcallterminate, av_OnPeerTimeout, "Peer timeout");
-
 	toxav_register_audio_callback(toxav, cbcalldata, NULL);
 
 	if(toxopt.savedata_data)
@@ -1717,7 +1668,7 @@ loop(void)
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			if (tox_friend_get_connection_status(tox, f->num, NULL) == 0)
 				continue;
-			if (f->av.num < 0)
+			if (!f->av.state)
 				continue;
 
 			fd = fifoopen(f->dirfd, ffiles[FCALL_OUT]);
@@ -1731,25 +1682,21 @@ loop(void)
 					f->fd[FCALL_OUT] = fd;
 			}
 
-			switch (toxav_get_call_state(toxav, f->av.num)) {
-			case av_CallStarting:
-				if (!(f->av.state & INCOMING))
-					continue;
-				if (!toxav_answer(toxav, f->av.num, AUDIOBITRATE, VIDEOBITRATE, NULL)) {
-					weprintf("Failed to answer call\n");
-					if (!toxav_reject(toxav, f->av.num, NULL))
-						weprintf("Failed to reject call\n");
-				}
-				break;
-			case av_CallActive:
-				if (!(f->av.state & INCOMING) && !(f->av.state & OUTGOING)) {
-					if (!toxav_hangup(toxav, f->av.num))
-						weprintf("Failed to hang up\n");
-				}
-				break;
-			default:
+			if (!(f->av.state & INCOMING))
+				continue;
+
+			if (!toxav_answer(toxav, f->av.num, AUDIOBITRATE, VIDEOBITRATE, NULL)) {
+				weprintf("Failed to answer call\n");
+				if (!toxav_reject(toxav, f->av.num, NULL))
+					weprintf("Failed to reject call\n");
 				break;
 			}
+
+			f->av.n = 0;
+			f->av.state |= TRANSMITTING;
+			f->av.frame = malloc(sizeof(int16_t) * framesize);
+			if (!f->av.frame)
+				eprintf("malloc:");
 		}
 
 		if (n == 0)
