@@ -182,7 +182,7 @@ static uint32_t interval(Tox *, struct ToxAV*);
 
 static void cbcallinvite(ToxAV *, uint32_t, bool, bool, void *);
 static void cbcallstate(ToxAV *, uint32_t, uint32_t, void *);
-static void cbcalldata(void *, int32_t, const int16_t *, uint16_t, void *);
+static void cbcalldata(ToxAV *, uint32_t, const int16_t *, size_t, uint8_t, uint32_t, void *);
 
 static void cancelcall(struct friend *, char *);
 static void sendfriendcalldata(struct friend *);
@@ -383,7 +383,8 @@ cbcallstate(ToxAV *av, uint32_t fnum, uint32_t state, void *udata)
 }
 
 static void
-cbcalldata(void *av, int32_t cnum, const int16_t *data, uint16_t len, void *udata)
+cbcalldata(ToxAV *av, uint32_t fnum, const int16_t *data, size_t len,
+           uint8_t channels, uint32_t rate, void *udata)
 {
 	struct   friend *f;
 	ssize_t  n, wrote;
@@ -391,7 +392,7 @@ cbcalldata(void *av, int32_t cnum, const int16_t *data, uint16_t len, void *udat
 	uint8_t *buf;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
-		if (f->av.num == cnum)
+		if (f->num == fnum)
 			break;
 	if (!f)
 		return;
@@ -409,7 +410,7 @@ cbcalldata(void *av, int32_t cnum, const int16_t *data, uint16_t len, void *udat
 	}
 
 	buf = (uint8_t *)data;
-	len *= 2;
+	len *= channels;
 	wrote = 0;
 	while (len > 0) {
 		n = write(f->fd[FCALL_OUT], &buf[wrote], len);
@@ -1155,7 +1156,7 @@ toxinit(void)
 	toxav_callback_call(toxav, cbcallinvite, NULL);
 	toxav_callback_call_state(toxav, cbcallstate, NULL);
 
-	toxav_register_audio_callback(toxav, cbcalldata, NULL);
+	toxav_callback_audio_receive_frame(toxav, cbcalldata, NULL);
 
 	if(toxopt.savedata_data)
 		free((void *)toxopt.savedata_data);
