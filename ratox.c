@@ -209,7 +209,7 @@ static int toxinit(void);
 static int toxconnect(void);
 static void id2str(uint8_t *, char *);
 static void str2id(char *, uint8_t *);
-static struct friend *friendcreate(int32_t);
+static struct friend *friendcreate(uint32_t);
 static void friendload(void);
 static void frienddestroy(struct friend *);
 static void loop(void);
@@ -1007,13 +1007,15 @@ datasave(void)
 			eprintf("malloc:");
 		tox_pass_encrypt(intermediate, sz - TOX_PASS_ENCRYPTION_EXTRA_LENGTH, passphrase, pplen, data, NULL);
 	} else {
-		data = intermediate;
+		data = malloc(sz);
+		memcpy(data, intermediate, sz);
 	}
 	if (write(fd, data, sz) != sz)
 		eprintf("write %s:", savefile);
 	fsync(fd);
 
 	free(data);
+	free(intermediate);
 	close(fd);
 }
 
@@ -1060,8 +1062,6 @@ localinit(void)
 	r = tox_self_get_name_size(tox);
 	if (r == 0) {
 		weprintf("Name : Empty\n");
-	} else if (r > sizeof(name) - 1) {
-		r = sizeof(name) - 1;
 	}
 	tox_self_get_name(tox, name);
 	name[r] = '\0';
@@ -1072,8 +1072,6 @@ localinit(void)
 	r = tox_self_get_status_message_size(tox);
 	if (r == 0) {
 		weprintf("Status : Empty\n");
-	} else if (r > sizeof(status) - 1) {
-		r = sizeof(status) - 1;
 	}
 	tox_self_get_status_message(tox, status);
 	status[r] = '\0';
@@ -1082,16 +1080,8 @@ localinit(void)
 
 	/* Dump user state */
 	r = tox_self_get_status(tox);
-	if (r < 0) {
-		weprintf("State : Empty\n");
-	} else if (r >= LEN(ustate)) {
-		ftruncate(gslots[STATE].fd[ERR], 0);
-		dprintf(gslots[STATE].fd[ERR], "invalid\n");
-		weprintf("State : %d > Invalid\n", r);
-	} else {
-		ftruncate(gslots[STATE].fd[OUT], 0);
-		dprintf(gslots[STATE].fd[OUT], "%s\n", ustate[r]);
-	}
+	ftruncate(gslots[STATE].fd[OUT], 0);
+	dprintf(gslots[STATE].fd[OUT], "%s\n", ustate[r]);
 
 	/* Dump ID */
 	idfd = open("id", O_WRONLY | O_CREAT, 0666);
@@ -1221,31 +1211,35 @@ str2id(char *idstr, uint8_t *id)
 }
 
 static struct friend *
-friendcreate(int32_t frnum)
+friendcreate(uint32_t frnum)
 {
 	struct  friend *f;
 	DIR    *d;
 	size_t  i;
 	int     r;
 	uint8_t status[TOX_MAX_STATUS_MESSAGE_LENGTH + 1];
+	TOX_ERR_FRIEND_QUERY err;
 
 	f = calloc(1, sizeof(*f));
 	if (!f)
 		eprintf("calloc:");
 
-	r = tox_friend_get_name_size(tox, frnum, NULL);
-	if (r < 0) {
+	i = tox_friend_get_name_size(tox, frnum, &err);
+	if (err != TOX_ERR_FRIEND_QUERY_OK) {
 		weprintf(": %ld : Name : Failed to get\n", (long)frnum);
 		return NULL;
-	} else if (r == 0) {
+	} else if (i == 0) {
 		snprintf(f->name, sizeof(f->name), "Anonymous");
 	} else {
 		tox_friend_get_name(tox, frnum, (uint8_t *)f->name, NULL);
-		f->name[r] = '\0';
+		f->name[i] = '\0';
 	}
 
 	f->num = frnum;
-	tox_friend_get_public_key(tox, f->num, f->id, NULL);
+	if(!tox_friend_get_public_key(tox, f->num, f->id, NULL)) {
+		weprintf(": %s: Key : Failed to get\n", f->name);
+		return NULL;
+	}
 	id2str(f->id, f->idstr);
 
 	r = mkdir(f->idstr, 0777);
@@ -1280,27 +1274,18 @@ friendcreate(int32_t frnum)
 		tox_friend_get_connection_status(tox, frnum, NULL));
 
 	/* Dump status */
-	r = tox_friend_get_status_message(tox, frnum, status, NULL);
-	if (r < 0) {
+	i = tox_friend_get_status_message(tox, frnum, status, NULL);
+	if (i == SIZE_MAX) {
 		weprintf(": %s : Status : Failed to get\n", f->name);
-		r = 0;
-	} else if (r > sizeof(status) - 1) {
-		r = sizeof(status) - 1;
+		i = 0;
 	}
-	status[r] = '\0';
+	status[i] = '\0';
 	ftruncate(f->fd[FSTATUS], 0);
 	dprintf(f->fd[FSTATUS], "%s\n", status);
 
 	/* Dump user state */
-	r = tox_friend_get_status(tox, frnum, NULL);
-	if (r < 0) {
-		weprintf(": %s : State : Failed to get\n", f->name);
-	} else if (r >= LEN(ustate)) {
-		weprintf(": %s : State : %d > Invalid\n", f->name, r);
-	} else {
-		ftruncate(f->fd[FSTATE], 0);
-		dprintf(f->fd[FSTATE], "%s\n", ustate[r]);
-	}
+	ftruncate(f->fd[FSTATE], 0);
+	dprintf(f->fd[FSTATE], "%s\n", ustate[tox_friend_get_status(tox, frnum, NULL)]);
 
 	/* Dump file pending state */
 	ftruncate(f->fd[FFILE_STATE], 0);
@@ -1340,7 +1325,7 @@ frienddestroy(struct friend *f)
 static void
 friendload(void)
 {
-	uint32_t sz;
+	size_t sz;
 	uint32_t i;
 	uint32_t *frnums;
 
