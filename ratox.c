@@ -130,7 +130,6 @@ enum {
 };
 
 struct call {
-	int      num;
 	int      state;
 	uint8_t *frame;
 	ssize_t  n;
@@ -486,7 +485,7 @@ sendfriendcalldata(struct friend *f)
 		nanosleep(&diff, NULL);
 	}
 	clock_gettime(CLOCK_MONOTONIC, &f->av.lastsent);
-	if (!toxav_audio_send_frame(toxav, f->av.num, buf, pcm, AUDIOCHANNELS, AUDIOCHANNELS, NULL))
+	if (!toxav_audio_send_frame(toxav, f->num, buf, pcm, AUDIOCHANNELS, AUDIOCHANNELS, NULL))
 		weprintf("Failed to send audio frame\n");
 }
 
@@ -1298,7 +1297,6 @@ friendcreate(uint32_t frnum)
 	dprintf(f->fd[FCALL_STATE], "none\n");
 
 	f->av.state = 0;
-	f->av.num = -1;
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
 
@@ -1582,7 +1580,7 @@ loop(void)
 
 				if (f->tx.state == TRANSFER_NONE)
 					FD_APPEND(f->fd[FFILE_IN]);
-				if (f->av.state & TRANSMITTING)
+				if (!f->av.state)
 					FD_APPEND(f->fd[FCALL_IN]);
 			}
 			FD_APPEND(f->fd[FREMOVE]);
@@ -1655,7 +1653,7 @@ loop(void)
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			if (tox_friend_get_connection_status(tox, f->num, NULL) == 0)
 				continue;
-			if (!f->av.state)
+			if (f->av.state)
 				continue;
 
 			fd = fifoopen(f->dirfd, ffiles[FCALL_OUT]);
@@ -1672,7 +1670,7 @@ loop(void)
 			if (!(f->av.state & INCOMING))
 				continue;
 
-			if (!toxav_answer(toxav, f->av.num, AUDIOBITRATE, VIDEOBITRATE, NULL)) {
+			if (!toxav_answer(toxav, f->num, AUDIOBITRATE, VIDEOBITRATE, NULL)) {
 				weprintf("Failed to answer call\n");
 				if (!toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, NULL))
 					weprintf("Failed to reject call\n");
