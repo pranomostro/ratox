@@ -1006,9 +1006,9 @@ datasave(void)
 		if (!intermediate)
 			eprintf("malloc:");
 		tox_pass_encrypt(intermediate, sz - TOX_PASS_ENCRYPTION_EXTRA_LENGTH, passphrase, pplen, data, NULL);
+	} else {
+		data = intermediate;
 	}
-	else
-		memcpy(data, intermediate, sz);
 	if (write(fd, data, sz) != sz)
 		eprintf("write %s:", savefile);
 	fsync(fd);
