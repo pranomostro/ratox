@@ -724,22 +724,12 @@ cbfiledatareq(Tox *m, uint32_t frnum, uint32_t fnum, uint64_t pos, size_t flen, 
 
 	/* Grab another buffer from the FIFO */
 	if (!f->tx.pendingbuf) {
-		n = fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN], f->tx.buf,
-			     f->tx.chunksz);
+		n = fiforead(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN],
+		             f->tx.buf, flen);
 		f->tx.n = n;
 		f->tx.pendingbuf = 0;
 	}
 
-	if (f->tx.n == 0) {
-		/* Signal transfer completion to other end */
-		if (!tox_file_send_chunk(tox, f->num, f->tx.fnum, pos, NULL, 0, NULL))
-			weprintf("Failed to signal transfer completion to the receiver\n");
-		logmsg(": %s : Tx > Complete\n", f->name);
-		f->tx.state = TRANSFER_NONE;
-		free(f->tx.buf);
-		f->tx.buf = NULL;
-		return;
-	}
 	if (f->tx.n < 0) {
 		if (errno != EWOULDBLOCK)
 			weprintf("fiforead:");
@@ -748,6 +738,21 @@ cbfiledatareq(Tox *m, uint32_t frnum, uint32_t fnum, uint64_t pos, size_t flen, 
 
 	if (!tox_file_send_chunk(tox, f->num, f->tx.fnum, pos, f->tx.buf, f->tx.n, NULL))
 		f->tx.pendingbuf = 1;
+
+	/*
+	 * For streams, core will know that the transfer is finished
+	 * if a chunk with length less than the length requested in the
+	 * callback is sent.
+	 */
+	if (!f->tx.pendingbuf && f->tx.n < flen) {
+		logmsg(": %s : Tx > Complete\n", f->name);
+		f->tx.state = TRANSFER_NONE;
+		f->tx.fnum = -1;
+		free(f->tx.buf);
+		f->tx.buf = NULL;
+		fiforeset(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN]);
+		return;
+	}
 }
 
 static void
