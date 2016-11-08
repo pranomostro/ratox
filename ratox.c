@@ -1202,7 +1202,7 @@ id2str(uint8_t *id, char *idstr)
 	int  i;
 	char hex[] = "0123456789ABCDEF";
 
-	for (i = 0; i < TOX_ADDRESS_SIZE; i++) {
+	for (i = 0; i < TOX_PUBLIC_KEY_SIZE; i++) {
 		*idstr++ = hex[(id[i] >> 4) & 0xf];
 		*idstr++ = hex[id[i] & 0xf];
 	}
