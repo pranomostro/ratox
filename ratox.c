@@ -771,10 +771,12 @@ cbfilesendreq(Tox *m, uint32_t frnum, uint32_t fnum, uint32_t kind, uint64_t fsz
 	if (f->rxstate == TRANSFER_INPROGRESS) {
 		logmsg(": %s : Rx > Rejected %s, already one in progress\n",
 		       f->name, filename);
-		if (!tox_file_control(tox, f->num, fnum, TOX_FILE_CONTROL_CANCEL, NULL))
+		if (!tox_file_control(tox, f->num, f->tx.fnum, TOX_FILE_CONTROL_CANCEL, NULL))
 			weprintf("Failed to kill new Rx transfer\n");
 		return;
 	}
+
+	f->tx.fnum = fnum;
 
 	ftruncate(f->fd[FFILE_STATE], 0);
 	lseek(f->fd[FFILE_STATE], 0, SEEK_SET);
@@ -832,8 +834,9 @@ canceltxtransfer(struct friend *f)
 	if (f->tx.state == TRANSFER_NONE)
 		return;
 	logmsg(": %s : Tx > Cancelling\n", f->name);
-	if (!tox_file_control(tox, f->num, 0, TOX_FILE_CONTROL_CANCEL, NULL))
+	if (!tox_file_control(tox, f->num, f->tx.fnum, TOX_FILE_CONTROL_CANCEL, NULL))
 		weprintf("Failed to kill Tx transfer\n");
+	f->tx.fnum = -1;
 	f->tx.state = TRANSFER_NONE;
 	free(f->tx.buf);
 	f->tx.buf = NULL;
@@ -846,7 +849,7 @@ cancelrxtransfer(struct friend *f)
 	if (f->rxstate == TRANSFER_NONE)
 		return;
 	logmsg(": %s : Rx > Cancelling\n", f->name);
-	if (!tox_file_control(tox, f->num, 0, TOX_FILE_CONTROL_CANCEL, NULL))
+	if (!tox_file_control(tox, f->num, f->tx.fnum, TOX_FILE_CONTROL_CANCEL, NULL))
 		weprintf("Failed to kill Rx transfer\n");
 	if (f->fd[FFILE_OUT] != -1) {
 		close(f->fd[FFILE_OUT]);
@@ -1654,7 +1657,7 @@ loop(void)
 			if (r < 0)
 				continue;
 			f->fd[FFILE_OUT] = r;
-			if (!tox_file_control(tox, f->num, 0, TOX_FILE_CONTROL_RESUME, NULL)) {
+			if (!tox_file_control(tox, f->num, f->tx.fnum, TOX_FILE_CONTROL_RESUME, NULL)) {
 				weprintf("Failed to accept transfer from receiver\n");
 				cancelrxtransfer(f);
 			} else {
