@@ -1324,8 +1324,8 @@ frienddestroy(struct friend *f)
 
 	canceltxtransfer(f);
 	cancelrxtransfer(f);
-	if (f->av.num != -1 && toxav_get_call_state(toxav, f->av.num) != av_CallNonExistent)
-		cancelcall(f, "Destroying"); /* todo: check state */
+	if (f->av.state > 0)
+		cancelcall(f, "Destroying");
 	for (i = 0; i < LEN(ffiles); i++) {
 		if (f->dirfd != -1) {
 			unlinkat(f->dirfd, ffiles[i].name, 0);
@@ -1594,9 +1594,7 @@ loop(void)
 
 				if (f->tx.state == TRANSFER_NONE)
 					FD_APPEND(f->fd[FFILE_IN]);
-				if (f->av.num < 0 ||
-				    (toxav_get_call_state(toxav, f->av.num) == av_CallActive &&
-				     f->av.state & TRANSMITTING))
+				if (f->av.state & TRANSMITTING)
 					FD_APPEND(f->fd[FCALL_IN]);
 			}
 			FD_APPEND(f->fd[FREMOVE]);
@@ -1688,7 +1686,7 @@ loop(void)
 
 			if (!toxav_answer(toxav, f->av.num, AUDIOBITRATE, VIDEOBITRATE, NULL)) {
 				weprintf("Failed to answer call\n");
-				if (!toxav_reject(toxav, f->av.num, NULL))
+				if (!toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, NULL))
 					weprintf("Failed to reject call\n");
 				break;
 			}
@@ -1763,8 +1761,7 @@ loop(void)
 				}
 			}
 			if (FD_ISSET(f->fd[FCALL_IN], &rfds)) {
-				switch (toxav_get_call_state(toxav, f->av.num)) {
-				case av_CallNonExistent:
+				if (f->av.state == 0) {
 					if (!toxav_call(toxav, f->num, AUDIOBITRATE, VIDEOBITRATE, NULL)) {
 						weprintf("Failed to call\n");
 						fiforeset(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN]);
@@ -1772,13 +1769,9 @@ loop(void)
 					}
 					f->av.state |= OUTGOING;
 					logmsg(": %s : Audio : Tx > Inviting\n", f->name);
-					break;
-				case av_CallActive:
+				} else {
 					f->av.state |= OUTGOING;
 					sendfriendcalldata(f);
-					break;
-				default:
-					break;
 				}
 			}
 			if (FD_ISSET(f->fd[FREMOVE], &rfds))
