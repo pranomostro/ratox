@@ -117,7 +117,6 @@ enum { TRANSFER_NONE, TRANSFER_INITIATED, TRANSFER_PENDING, TRANSFER_INPROGRESS,
 struct transfer {
 	uint32_t fnum;
 	uint8_t *buf;
-	int      chunksz;
 	ssize_t  n;
 	int      pendingbuf;
 	int      state;
@@ -677,8 +676,7 @@ cbfilecontrol(Tox *m, uint32_t frnum, uint32_t fnum, TOX_FILE_CONTROL ctrltype, 
 			f->tx.state = TRANSFER_INPROGRESS;
 		} else {
 			f->tx.fnum = fnum;
-			f->tx.chunksz = TOX_MAX_CUSTOM_PACKET_SIZE;
-			f->tx.buf = malloc(f->tx.chunksz);
+			f->tx.buf = malloc(TOX_MAX_CUSTOM_PACKET_SIZE);
 			if (!f->tx.buf)
 				eprintf("malloc:");
 			f->tx.n = 0;
