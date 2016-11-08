@@ -1589,7 +1589,7 @@ loop(void)
 
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			/* Only monitor friends that are online */
-			if (tox_friend_get_connection_status(tox, f->num, NULL) == 1) {
+			if (tox_friend_get_connection_status(tox, f->num, NULL) != TOX_CONNECTION_NONE) {
 				FD_APPEND(f->fd[FTEXT_IN]);
 
 				if (f->tx.state == TRANSFER_NONE)
