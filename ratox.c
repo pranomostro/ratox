@@ -798,23 +798,6 @@ cbfiledata(Tox *m, uint32_t frnum, uint32_t fnum, uint64_t pos, const uint8_t *d
 	if (!f)
 		return;
 
-	while (len > 0) {
-		n = write(f->fd[FFILE_OUT], &data[wrote], len);
-		if (n < 0) {
-			if (errno == EPIPE) {
-				cancelrxtransfer(f);
-				break;
-			} else if (errno == EWOULDBLOCK) {
-				continue;
-			}
-			break;
-		} else if (n == 0) {
-			break;
-		}
-		wrote += n;
-		len -= n;
-	}
-
 	/* When length is 0, the transfer is finished */
 	if (!len) {
 		logmsg(": %s : Rx > Complete\n", f->name);
@@ -825,6 +808,21 @@ cbfiledata(Tox *m, uint32_t frnum, uint32_t fnum, uint64_t pos, const uint8_t *d
 		ftruncate(f->fd[FFILE_STATE], 0);
 		lseek(f->fd[FFILE_STATE], 0, SEEK_SET);
 		f->rxstate = TRANSFER_NONE;
+		return;
+	}
+
+	while (len > 0) {
+		n = write(f->fd[FFILE_OUT], &data[wrote], len);
+		if (n < 0) {
+			if (errno == EPIPE) {
+				cancelrxtransfer(f);
+				break;
+			} else if (errno == EWOULDBLOCK) {
+				continue;
+			}
+		}
+		wrote += n;
+		len -= n;
 	}
 }
 
