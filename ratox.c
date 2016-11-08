@@ -957,7 +957,7 @@ reprompt1:
 		if (!encryptsavefile)
 			logmsg("Data : %s > Encrypted, but saving unencrypted\n", savefile);
 		while (readpass("Data : Passphrase > ", &passphrase, &pplen) < 0 ||
-		       !tox_pass_decrypt(data, sz, passphrase, pplen, intermediate, NULL));
+		       !tox_pass_decrypt(intermediate, sz, passphrase, pplen, data, NULL));
 	} else {
 		toxopt->savedata_length = sz;
 		data = malloc(sz);
