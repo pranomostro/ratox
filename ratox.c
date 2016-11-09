@@ -1613,23 +1613,6 @@ loop(void)
 			}
 		}
 
-		/* If we hit the receiver too hard, we will run out of
-		 * local buffer slots.	In that case tox_file_send_chunk()
-		 * will return -1 and we will have to queue the buffer to
-		 * send it later.  If this is the last buffer read from
-		 * the FIFO, then select() won't make the fd readable again
-		 * so we have to check if there's anything pending to be
-		 * sent.
-		 */
-		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_friend_get_connection_status(tox, f->num, NULL) == 0)
-				continue;
-			if (f->tx.state != TRANSFER_INPROGRESS)
-				continue;
-			if (f->tx.state == TRANSFER_NONE)
-				FD_CLR(f->fd[FFILE_IN], &rfds);
-		}
-
 		/* Accept pending transfers if any */
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			if (tox_friend_get_connection_status(tox, f->num, NULL) == 0)
