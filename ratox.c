@@ -3,6 +3,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <arpa/inet.h>
+
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -212,7 +214,7 @@ static void friendload(void);
 static void frienddestroy(struct friend *);
 static void loop(void);
 static void initshutdown(int);
-static void shutdown(void);
+static void toxshutdown(void);
 static void usage(void);
 
 #define FD_APPEND(fd) do {	\
@@ -1503,7 +1505,7 @@ setnospam(void *data)
 		}
 	}
 
-	nsval = strtoul((char *)nospam, NULL, 16);
+	nsval = htonl(strtoul((char *)nospam, NULL, 16));
 	tox_self_set_nospam(tox, nsval);
 	datasave();
 	logmsg("Nospam > %08X\n", nsval);
@@ -1773,7 +1775,7 @@ initshutdown(int sig)
 }
 
 static void
-shutdown(void)
+toxshutdown(void)
 {
 	struct friend *f, *ftmp;
 	struct request *r, *rtmp;
@@ -1880,6 +1882,6 @@ main(int argc, char *argv[])
 	localinit();
 	friendload();
 	loop();
-	shutdown();
+	toxshutdown();
 	return 0;
 }
