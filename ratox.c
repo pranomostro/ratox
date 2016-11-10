@@ -1599,7 +1599,7 @@ loop(void)
 
 		/* Check for broken transfers (friend went offline, file_out was closed) */
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_friend_get_connection_status(tox, f->num, NULL) == 0) {
+			if (tox_friend_get_connection_status(tox, f->num, NULL) == TOX_CONNECTION_NONE) {
 				canceltxtransfer(f);
 				cancelrxtransfer(f);
 			}
@@ -1636,7 +1636,7 @@ loop(void)
 
 		/* Answer pending calls */
 		TAILQ_FOREACH(f, &friendhead, entry) {
-			if (tox_friend_get_connection_status(tox, f->num, NULL) == 0)
+			if (tox_friend_get_connection_status(tox, f->num, NULL) == TOX_CONNECTION_NONE)
 				continue;
 			if (f->av.state)
 				continue;
@@ -1655,7 +1655,7 @@ loop(void)
 			if (!(f->av.state & INCOMING))
 				continue;
 
-			if (!toxav_answer(toxav, f->num, AUDIOBITRATE, VIDEOBITRATE, NULL)) {
+			if (!toxav_answer(toxav, f->num, AUDIOBITRATE, 0, NULL)) {
 				weprintf("Failed to answer call\n");
 				if (!toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, NULL))
 					weprintf("Failed to reject call\n");
@@ -1667,6 +1667,7 @@ loop(void)
 			f->av.frame = malloc(sizeof(int16_t) * framesize);
 			if (!f->av.frame)
 				eprintf("malloc:");
+
 		}
 
 		if (n == 0)
@@ -1733,7 +1734,7 @@ loop(void)
 			}
 			if (FD_ISSET(f->fd[FCALL_IN], &rfds)) {
 				if (f->av.state == 0) {
-					if (!toxav_call(toxav, f->num, AUDIOBITRATE, VIDEOBITRATE, NULL)) {
+					if (!toxav_call(toxav, f->num, AUDIOBITRATE, 0, NULL)) {
 						weprintf("Failed to call\n");
 						fiforeset(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN]);
 						break;

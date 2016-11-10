@@ -66,6 +66,12 @@ static struct node nodes[] = {
 		.idstr = "2B2137E094F743AC8BD44652C55F41DFACC502F125E99E4FE24D40537489E32F"
 	},
 	{
+		.addr4 = "148.251.23.146",
+		.addr6 = "2a01:4f8:201:8493::2",
+		.port = 2306,
+		.idstr = "7AED21F94D82B05774F697B209628CD5A9AD17E0C073D9329076A4C28ED28147"
+	},
+	{
 		.addr4 = "104.223.122.15",
 		.addr6 = "2607:ff48:aa81:800::35eb:1",
 		.port = 33445,
@@ -138,6 +144,12 @@ static struct node nodes[] = {
 		.idstr = "4E3F7D37295664BBD0741B6DBCB6431D6CD77FC4105338C2FC31567BF5C8224A"
 	},
 	{
+		.addr4 = "92.54.84.70",
+		.addr6 = NULL,
+		.port = 33445,
+		.idstr = "5625A62618CB4FCA70E147A71B29695F38CC65FF0CBD68AD46254585BE564802"
+	},
+	{
 		.addr4 = "195.93.190.6",
 		.addr6 = "2a01:d0:ffff:a8a::2",
 		.port = 33445,
@@ -148,6 +160,12 @@ static struct node nodes[] = {
 		.addr6 = "loki.uplinklabs.net",
 		.port = 33445,
 		.idstr = "1A56EA3EDF5DF4C0AEABBF3C2E4E603890F87E983CAC8A0D532A335F2C6E3E1F"
+	},
+	{
+		.addr4 = "toxnode.nek0.net",
+		.addr6 = "toxnode.nek0.net",
+		.port = 33445,
+		.idstr = "20965721D32CE50C3E837DD75B33908B33037E6225110BFF209277AEAF3F9639"
 	},
 	{
 		.addr4 = "95.215.44.78",
@@ -166,6 +184,12 @@ static struct node nodes[] = {
 		.addr6 = "2001:bc8:4400:2100::1c:50f",
 		.port = 33445,
 		.idstr = "2C289F9F37C20D09DA83565588BF496FAB3764853FA38141817A72E3F18ACA0B"
+	},
+	{
+		.addr4 = "sorunome.de",
+		.addr6 = "sorunome.de",
+		.port = 33445,
+		.idstr = "02807CF4F8BB8FB390CC3794BDF1E8449E9A8392C5D3F2200019DA9F1E812E46"
 	},
 	{
 		.addr4 = "37.97.185.116",
@@ -198,10 +222,22 @@ static struct node nodes[] = {
 		.idstr = "49183DBF0E865713154069D1C7C7A2732ED78CF32C4D76AF5304FE31C5FEB81A"
 	},
 	{
+		.addr4 = "hibiki.eve.moe",
+		.addr6 = "hibiki.eve.moe",
+		.port = 33445,
+		.idstr = "D3EB45181B343C2C222A5BCF72B760638E15ED87904625AAD351C594EEFAE03E"
+	},
+	{
 		.addr4 = "shigure.eve.moe",
 		.addr6 = "shigure.eve.moe",
 		.port = 33445,
 		.idstr = "1A480A53FAF2CBBFCC382D786C43E69EEE23F22C7C23A7CFEB6180A373E23E54"
+	},
+	{
+		.addr4 = "tox.deadteam.org",
+		.addr6 = "tox.deadteam.org",
+		.port = 33445,
+		.idstr = "C7D284129E83877D63591F14B3F658D77FF9BA9BA7293AEB2BDFBFE1A803AF47"
 	},
 	{
 		.addr4 = "prok.pw",
@@ -222,10 +258,10 @@ static struct node nodes[] = {
 		.idstr = "A856243058D1DE633379508ADCAFCF944E40E1672FF402750EF712E30C42012A"
 	},
 	{
-		.addr4 = "92.54.84.70",
-		.addr6 = NULL,
-		.port = 33445,
-		.idstr = "5625A62618CB4FCA70E147A71B29695F38CC65FF0CBD68AD46254585BE564802"
+		.addr4 = "46.101.197.175",
+		.addr6 = "2a03:b0c0:3:d0::ac:5001",
+		.port = 443,
+		.idstr = "CD133B521159541FB1D326DE9850F5E56A6C724B5B8E5EB5CD8D950408E95707"
 	},
 	{
 		.addr4 = "tox.zodiaclabs.org",
@@ -234,64 +270,16 @@ static struct node nodes[] = {
 		.idstr = "A09162D68618E742FFBCA1C2C70385E6679604B2D80EA6E84AD0996A1AC8A074"
 	},
 	{
-		.addr4 = "195.154.119.113",
-		.addr6 = "2001:bc8:3698:101::1",
-		.port = 33445,
-		.idstr = "E398A69646B8CEACA9F0B84F553726C1C49270558C57DF5F3C368F05A7D71354"
-	},
-	{
-		.addr4 = "46.101.197.175",
-		.addr6 = "2a03:b0c0:3:d0::ac:5001",
-		.port = 443,
-		.idstr = "CD133B521159541FB1D326DE9850F5E56A6C724B5B8E5EB5CD8D950408E95707"
-	},
-	{
-		.addr4 = "148.251.23.146",
-		.addr6 = "2a01:4f8:201:8493::2",
-		.port = 2306,
-		.idstr = "7AED21F94D82B05774F697B209628CD5A9AD17E0C073D9329076A4C28ED28147"
-	},
-	{
-		.addr4 = "zawertun.net",
-		.addr6 = NULL,
-		.port = 33445,
-		.idstr = "5521952892FBD5C185DF7180DB4DEF69D7844DEEE79B1F75A634ED9DF656756E"
-	},
-	{
-		.addr4 = "toxnode.nek0.net",
-		.addr6 = "toxnode.nek0.net",
-		.port = 33445,
-		.idstr = "20965721D32CE50C3E837DD75B33908B33037E6225110BFF209277AEAF3F9639"
-	},
-	{
-		.addr4 = "sorunome.de",
-		.addr6 = "sorunome.de",
-		.port = 33445,
-		.idstr = "02807CF4F8BB8FB390CC3794BDF1E8449E9A8392C5D3F2200019DA9F1E812E46"
-	},
-	{
-		.addr4 = "hibiki.eve.moe",
-		.addr6 = "hibiki.eve.moe",
-		.port = 33445,
-		.idstr = "D3EB45181B343C2C222A5BCF72B760638E15ED87904625AAD351C594EEFAE03E"
-	},
-	{
-		.addr4 = "tox.deadteam.org",
-		.addr6 = "tox.deadteam.org",
-		.port = 33445,
-		.idstr = "C7D284129E83877D63591F14B3F658D77FF9BA9BA7293AEB2BDFBFE1A803AF47"
-	},
-	{
-		.addr4 = "maggie.prok.pw",
-		.addr6 = "maggie.prok.pw",
-		.port = 33445,
-		.idstr = "B75583B6D967DB8AD7C6D3B6F9318194BCC79B2FEF18F69E2DF275B779E7AA30"
-	},
-	{
 		.addr4 = "144.76.60.215",
 		.addr6 = "2a01:4f8:191:64d6::1",
 		.port = 33445,
 		.idstr = "04119E835DF3E78BACF0F84235B300546AF8B936F035185E2A8E9E0A67C8924F"
+	},
+	{
+		.addr4 = "195.154.119.113",
+		.addr6 = "2001:bc8:3698:101::1",
+		.port = 33445,
+		.idstr = "E398A69646B8CEACA9F0B84F553726C1C49270558C57DF5F3C368F05A7D71354"
 	},
 	{
 		.addr4 = "46.38.239.179",
@@ -348,6 +336,12 @@ static struct node nodes[] = {
 		.idstr = "31910C0497D347FF160D6F3A6C0E317BAFA71E8E03BC4CBB2A185C9D4FB8B31E"
 	},
 	{
+		.addr4 = "zawertun.net",
+		.addr6 = NULL,
+		.port = 33445,
+		.idstr = "5521952892FBD5C185DF7180DB4DEF69D7844DEEE79B1F75A634ED9DF656756E"
+	},
+	{
 		.addr4 = "87.98.168.93",
 		.addr6 = NULL,
 		.port = 33445,
@@ -376,6 +370,12 @@ static struct node nodes[] = {
 		.addr6 = "2a06:8ec0:1:bb::3862",
 		.port = 33445,
 		.idstr = "728925473812C7AAC482BE7250BCCAD0B8CB9F737BF3D42ABD34459C1768F854"
+	},
+	{
+		.addr4 = "maggie.prok.pw",
+		.addr6 = "maggie.prok.pw",
+		.port = 33445,
+		.idstr = "B75583B6D967DB8AD7C6D3B6F9318194BCC79B2FEF18F69E2DF275B779E7AA30"
 	},
 	{
 		.addr4 = "138.201.172.228",
