@@ -1098,7 +1098,7 @@ localinit(void)
 
 	/* Dump Nospam */
 	ftruncate(gslots[NOSPAM].fd[OUT], 0);
-	dprintf(gslots[NOSPAM].fd[OUT], "%08X\n", tox_self_get_nospam(tox));
+	dprintf(gslots[NOSPAM].fd[OUT], "%08X\n", ntohl(tox_self_get_nospam(tox)));
 
 	return 0;
 }
@@ -1505,8 +1505,8 @@ setnospam(void *data)
 		}
 	}
 
-	nsval = htonl(strtoul((char *)nospam, NULL, 16));
-	tox_self_set_nospam(tox, nsval);
+	nsval = strtoul((char *)nospam, NULL, 16);
+	tox_self_set_nospam(tox, htonl(nsval));
 	datasave();
 	logmsg("Nospam > %08X\n", nsval);
 	ftruncate(gslots[NOSPAM].fd[OUT], 0);
