@@ -11,7 +11,7 @@
 
 /* Audio settings definition */
 #define AUDIOCHANNELS     1
-#define AUDIOBITRATE      32000
+#define AUDIOBITRATE      32
 #define AUDIOFRAME        20
 #define AUDIOSAMPLERATE   48000
 
