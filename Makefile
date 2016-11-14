@@ -3,13 +3,10 @@ include config.mk
 .POSIX:
 .SUFFIXES: .c .o
 
-TOXSRC = $(shell find toxcore/toxcore toxcore/toxav toxcore/toxencryptsave -name '*.c')
-
 HDR = arg.h config.h nodes.h readpassphrase.h util.h
 LIB = \
 	eprintf.o \
-	readpassphrase.o \
-	$(TOXSRC:.c=.o)
+	readpassphrase.o
 SRC = \
 	ratox.c
 
@@ -23,8 +20,6 @@ binlib: util.a
 	$(MAKE) bin
 
 bin: $(BIN)
-
-$(BIN): util.a $(OBJ)
 
 $(OBJ): $(HDR) config.mk
 
