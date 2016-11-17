@@ -972,7 +972,7 @@ reprompt1:
 	if (tox_is_data_encrypted(intermediate)) {
 		toxopt->savedata_length = sz-TOX_PASS_ENCRYPTION_EXTRA_LENGTH;
 		data = malloc(toxopt->savedata_length);
-		if(!data)
+		if (!data)
 			eprintf("malloc:");
 		if (!encryptsavefile)
 			logmsg("Data : %s > Encrypted, but saving unencrypted\n", savefile);
@@ -981,7 +981,7 @@ reprompt1:
 	} else {
 		toxopt->savedata_length = sz;
 		data = malloc(sz);
-		if(!data)
+		if (!data)
 			eprintf("malloc:");
 		memcpy(data, intermediate, sz);
 		if (encryptsavefile) {
@@ -1171,7 +1171,7 @@ toxinit(void)
 
 	toxav_callback_audio_receive_frame(toxav, cbcalldata, NULL);
 
-	if(toxopt.savedata_data)
+	if (toxopt.savedata_data)
 		free((void *)toxopt.savedata_data);
 
 	return 0;
@@ -1259,7 +1259,7 @@ friendcreate(uint32_t frnum)
 	}
 
 	f->num = frnum;
-	if(!tox_friend_get_public_key(tox, f->num, f->id, NULL)) {
+	if (!tox_friend_get_public_key(tox, f->num, f->id, NULL)) {
 		weprintf(": %s: Key : Failed to get\n", f->name);
 		return NULL;
 	}
