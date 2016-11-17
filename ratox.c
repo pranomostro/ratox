@@ -129,6 +129,7 @@ enum {
 	INCOMING     = 1 << 1,
 	TRANSMITTING = 1 << 2,
 	INCOMPLETE   = 1 << 3,
+	RINGING      = 1 << 4,
 };
 
 struct call {
@@ -350,6 +351,7 @@ cbcallinvite(ToxAV *av, uint32_t fnum, bool audio, bool video, void *udata)
 		return;
 	}
 
+	f->av.state |= RINGING;
 	ftruncate(f->fd[FCALL_STATE], 0);
 	lseek(f->fd[FCALL_STATE], 0, SEEK_SET);
 	dprintf(f->fd[FCALL_STATE], "pending\n");
@@ -1652,22 +1654,23 @@ loop(void)
 					f->fd[FCALL_OUT] = fd;
 			}
 
-			if (!(f->av.state & INCOMING))
-				continue;
-
-			if (!toxav_answer(toxav, f->num, AUDIOBITRATE, 0, NULL)) {
-				weprintf("Failed to answer call\n");
-				if (!toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, NULL))
-					weprintf("Failed to reject call\n");
-				break;
+			if (f->av.state & TRANSMITTING) {
+				if ((f->av.state & INCOMING) || (f->av.state & OUTGOING))
+					continue;
+				cancelcall(f, "Hanged up");
+			} else {
+				if (!(f->av.state & INCOMING))
+					continue;
+				if (!toxav_answer(toxav, f->num, AUDIOBITRATE, 0, NULL)) {
+					weprintf("Failed to answer call\n");
+					if (!toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, NULL))
+						weprintf("Failed to reject call\n");
+					break;
+				}
+				f->av.state &= ~RINGING;
+				f->av.state |= TRANSMITTING;
+				logmsg(": %s : Audio > Answered\n", f->name);
 			}
-
-			f->av.n = 0;
-			f->av.state |= TRANSMITTING;
-			f->av.frame = malloc(sizeof(int16_t) * framesize);
-			if (!f->av.frame)
-				eprintf("malloc:");
-
 		}
 
 		if (n == 0)
