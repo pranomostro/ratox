@@ -39,6 +39,17 @@ const char *reqerr[] = {
 	[TOX_ERR_FRIEND_ADD_MALLOC]         = "Error increasing the friend list size"
 };
 
+const char *callerr[] = {
+	[TOXAV_ERR_SEND_FRAME_NULL]                  = "Samples pointer is NULL",
+	[TOXAV_ERR_SEND_FRAME_FRIEND_NOT_FOUND]      = "No friend matching this ID",
+	[TOXAV_ERR_SEND_FRAME_FRIEND_NOT_IN_CALL]    = "Currently not in a call",
+	[TOXAV_ERR_SEND_FRAME_SYNC]                  = "Synchronization error occurred",
+	[TOXAV_ERR_SEND_FRAME_INVALID]               = "One of the frame parameters was invalid",
+	[TOXAV_ERR_SEND_FRAME_PAYLOAD_TYPE_DISABLED] = "Either friend turned off audio receiving or we turned off sending for the said payload.",
+	[TOXAV_ERR_SEND_FRAME_RTP_FAILED]            = "Failed to push frame through rtp interface"
+};
+
+
 struct node {
 	char    *addr4;
 	char    *addr6;
@@ -133,10 +144,10 @@ enum {
 };
 
 struct call {
-	int      state;
-	uint8_t *frame;
-	ssize_t  n;
-	struct   timespec lastsent;
+	int       state;
+	int16_t *frame;
+	ssize_t   n;
+	struct    timespec lastsent;
 };
 
 struct friend {
@@ -372,15 +383,21 @@ cbcallstate(ToxAV *av, uint32_t fnum, uint32_t state, void *udata)
 
 	if ((state & TOXAV_FRIEND_CALL_STATE_ERROR)
 	    || (state & TOXAV_FRIEND_CALL_STATE_FINISHED)) {
-		cancelcall(f, udata);
+		cancelcall(f, "Finished");
 		return;
 	}
 
 	/*
-	 * Perhaps, deal with TOXAV_FRIEND_CALL_STATE_*_A to notify that
-	 * friend is muted/deaf, or that he's not anymore.
-	 * This would require a new field in the 'call' structure.
+	 * As long as we receive a state callback, it means the peer
+	 * accepted the call
 	 */
+	f->av.state |= TRANSMITTING;
+
+	/* let us start sending audio */
+	if (state & TOXAV_FRIEND_CALL_STATE_ACCEPTING_A) {
+		f->av.state |= OUTGOING;
+		logmsg(": %s : Audio > Started/Resumed\n", f->name);
+	}
 }
 
 static void
@@ -390,7 +407,7 @@ cbcalldata(ToxAV *av, uint32_t fnum, const int16_t *data, size_t len,
 	struct   friend *f;
 	ssize_t  n, wrote;
 	int      fd;
-	uint8_t *buf;
+	int16_t *buf;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
 		if (f->num == fnum)
@@ -410,7 +427,7 @@ cbcalldata(ToxAV *av, uint32_t fnum, const int16_t *data, size_t len,
 		}
 	}
 
-	buf = (uint8_t *)data;
+	buf = (int16_t *)data;
 	len *= channels;
 	wrote = 0;
 	while (len > 0) {
@@ -457,8 +474,8 @@ static void
 sendfriendcalldata(struct friend *f)
 {
 	struct   timespec now, diff;
-	ssize_t  n, pcm;
-	int16_t *buf;
+	ssize_t  n;
+	TOXAV_ERR_SEND_FRAME err;
 
 	n = fiforead(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN],
 		     f->av.frame + (f->av.state & INCOMPLETE) * f->av.n,
@@ -477,10 +494,9 @@ sendfriendcalldata(struct friend *f)
 		return;
 	}
 
-	pcm = AUDIOFRAME * AUDIOSAMPLERATE / 1000;
-	buf = malloc(pcm * AUDIOCHANNELS * 2);
-	if (!buf)
-		eprintf("malloc:");
+	/* discard data if friend doesn't accept audio */
+	if (!(f->av.state & OUTGOING))
+		return;
 
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	diff = timediff(f->av.lastsent, now);
@@ -489,8 +505,9 @@ sendfriendcalldata(struct friend *f)
 		nanosleep(&diff, NULL);
 	}
 	clock_gettime(CLOCK_MONOTONIC, &f->av.lastsent);
-	if (!toxav_audio_send_frame(toxav, f->num, buf, pcm, AUDIOCHANNELS, AUDIOCHANNELS, NULL))
-		weprintf("Failed to send audio frame\n");
+	if (!toxav_audio_send_frame(toxav, f->num, f->av.frame,
+	                            framesize, AUDIOCHANNELS, AUDIOSAMPLERATE, &err))
+		weprintf("Failed to send audio frame: %s\n", callerr[err]);
 }
 
 static void
@@ -1584,7 +1601,7 @@ loop(void)
 
 				if (f->tx.state == TRANSFER_NONE)
 					FD_APPEND(f->fd[FFILE_IN]);
-				if (!f->av.state)
+				if (!f->av.state || (f->av.state & TRANSMITTING))
 					FD_APPEND(f->fd[FCALL_IN]);
 			}
 			FD_APPEND(f->fd[FREMOVE]);
@@ -1736,17 +1753,21 @@ loop(void)
 				}
 			}
 			if (FD_ISSET(f->fd[FCALL_IN], &rfds)) {
-				if (f->av.state == 0) {
+				if (!f->av.state) {
 					if (!toxav_call(toxav, f->num, AUDIOBITRATE, 0, NULL)) {
 						weprintf("Failed to call\n");
 						fiforeset(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN]);
 						break;
 					}
+					f->av.n = 0;
 					f->av.state |= OUTGOING;
+					f->av.frame = malloc(sizeof(int16_t) * framesize);
+					if (!f->av.frame)
+						eprintf("malloc:");
 					logmsg(": %s : Audio : Tx > Inviting\n", f->name);
 				} else {
-					f->av.state |= OUTGOING;
-					sendfriendcalldata(f);
+					if (f->av.state & OUTGOING)
+						sendfriendcalldata(f);
 				}
 			}
 			if (FD_ISSET(f->fd[FREMOVE], &rfds))
