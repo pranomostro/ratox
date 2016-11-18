@@ -144,10 +144,10 @@ enum {
 };
 
 struct call {
-	int       state;
-	int16_t *frame;
-	ssize_t   n;
-	struct    timespec lastsent;
+	int      state;
+	uint8_t *frame;
+	ssize_t  n;
+	struct   timespec lastsent;
 };
 
 struct friend {
@@ -407,7 +407,7 @@ cbcalldata(ToxAV *av, uint32_t fnum, const int16_t *data, size_t len,
 	struct   friend *f;
 	ssize_t  n, wrote;
 	int      fd;
-	int16_t *buf;
+	uint8_t *buf;
 
 	TAILQ_FOREACH(f, &friendhead, entry)
 		if (f->num == fnum)
@@ -427,8 +427,8 @@ cbcalldata(ToxAV *av, uint32_t fnum, const int16_t *data, size_t len,
 		}
 	}
 
-	buf = (int16_t *)data;
-	len *= channels;
+	buf = (uint8_t *)data;
+	len *= 2;
 	wrote = 0;
 	while (len > 0) {
 		n = write(f->fd[FCALL_OUT], &buf[wrote], len);
@@ -505,7 +505,7 @@ sendfriendcalldata(struct friend *f)
 		nanosleep(&diff, NULL);
 	}
 	clock_gettime(CLOCK_MONOTONIC, &f->av.lastsent);
-	if (!toxav_audio_send_frame(toxav, f->num, f->av.frame,
+	if (!toxav_audio_send_frame(toxav, f->num, (int16_t *)f->av.frame,
 	                            framesize, AUDIOCHANNELS, AUDIOSAMPLERATE, &err))
 		weprintf("Failed to send audio frame: %s\n", callerr[err]);
 }
@@ -1760,6 +1760,8 @@ loop(void)
 						break;
 					}
 					f->av.n = 0;
+					f->av.lastsent.tv_sec = 0;
+					f->av.lastsent.tv_nsec = 0;
 					f->av.state |= OUTGOING;
 					f->av.frame = malloc(sizeof(int16_t) * framesize);
 					if (!f->av.frame)
