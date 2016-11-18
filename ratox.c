@@ -1657,7 +1657,7 @@ loop(void)
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			if (tox_friend_get_connection_status(tox, f->num, NULL) == TOX_CONNECTION_NONE)
 				continue;
-			if (f->av.state)
+			if (!f->av.state)
 				continue;
 
 			fd = fifoopen(f->dirfd, ffiles[FCALL_OUT]);
