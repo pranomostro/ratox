@@ -500,8 +500,8 @@ sendfriendcalldata(struct friend *f)
 
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	diff = timediff(f->av.lastsent, now);
-	if (diff.tv_sec == 0 && diff.tv_nsec < AUDIOFRAME * 1E6) {
-		diff.tv_nsec = AUDIOFRAME * 1E6 - diff.tv_nsec;
+	if (diff.tv_sec == 0 && diff.tv_nsec < (AUDIOFRAME - 1) * 1E6) {
+		diff.tv_nsec = (AUDIOFRAME - 1) * 1E6 - diff.tv_nsec;
 		nanosleep(&diff, NULL);
 	}
 	clock_gettime(CLOCK_MONOTONIC, &f->av.lastsent);
