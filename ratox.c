@@ -489,16 +489,13 @@ sendfriendcalldata(struct friend *f)
 	ssize_t  n;
 	TOXAV_ERR_SEND_FRAME err;
 
-	if (!f->av.state)
-		return;
-
 	n = fiforead(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN],
-		     f->av.frame + (f->av.state & INCOMPLETE) * f->av.n,
-		     framesize * sizeof(int16_t) - (f->av.state & INCOMPLETE) * f->av.n);
+		     f->av.frame + (f->av.state & INCOMPLETE)/INCOMPLETE * f->av.n,
+		     framesize * sizeof(int16_t) - (f->av.state & INCOMPLETE)/INCOMPLETE * f->av.n);
 	if (n == 0) {
 		f->av.state &= ~OUTGOING;
 		return;
-	} else if (n < 0) {
+	} else if (n < 0 || n > framesize * sizeof(int16_t)) {
 		return;
 	} else if (n == (framesize * sizeof(int16_t) - (f->av.state & INCOMPLETE) * f->av.n)) {
 		f->av.state &= ~INCOMPLETE;
@@ -1773,7 +1770,7 @@ loop(void)
 					f->av.state |= RINGING;
 					logmsg(": %s : Audio : Tx > Inviting\n", f->name);
 				} else {
-					if (f->av.state & OUTGOING)
+					if (f->av.state & TRANSMITTING)
 						sendfriendcalldata(f);
 				}
 			}
