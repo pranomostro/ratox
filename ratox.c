@@ -383,6 +383,7 @@ cbcallstate(ToxAV *av, uint32_t fnum, uint32_t state, void *udata)
 
 	if ((state & TOXAV_FRIEND_CALL_STATE_ERROR)
 	    || (state & TOXAV_FRIEND_CALL_STATE_FINISHED)) {
+		f->av.state &= ~TRANSMITTING;
 		cancelcall(f, "Finished");
 		return;
 	}
@@ -391,12 +392,23 @@ cbcallstate(ToxAV *av, uint32_t fnum, uint32_t state, void *udata)
 	 * As long as we receive a state callback, it means the peer
 	 * accepted the call
 	 */
-	f->av.state |= TRANSMITTING;
+	if (f->av.state & RINGING) {
+		f->av.n = 0;
+		f->av.lastsent.tv_sec = 0;
+		f->av.lastsent.tv_nsec = 0;
+
+		f->av.frame = malloc(sizeof(int16_t) * framesize);
+		if (!f->av.frame)
+			eprintf("malloc:");
+
+		f->av.state &= ~RINGING;
+		f->av.state |= TRANSMITTING;
+	}
 
 	/* let us start sending audio */
 	if (state & TOXAV_FRIEND_CALL_STATE_ACCEPTING_A) {
 		f->av.state |= OUTGOING;
-		logmsg(": %s : Audio > Started/Resumed\n", f->name);
+		logmsg(": %s : Audio > Started\n", f->name);
 	}
 }
 
@@ -477,6 +489,9 @@ sendfriendcalldata(struct friend *f)
 	ssize_t  n;
 	TOXAV_ERR_SEND_FRAME err;
 
+	if (!f->av.state)
+		return;
+
 	n = fiforead(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN],
 		     f->av.frame + (f->av.state & INCOMPLETE) * f->av.n,
 		     framesize * sizeof(int16_t) - (f->av.state & INCOMPLETE) * f->av.n);
@@ -493,10 +508,6 @@ sendfriendcalldata(struct friend *f)
 		f->av.n += n;
 		return;
 	}
-
-	/* discard data if friend doesn't accept audio */
-	if (!(f->av.state & OUTGOING))
-		return;
 
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	diff = timediff(f->av.lastsent, now);
@@ -1672,10 +1683,10 @@ loop(void)
 			}
 
 			if (f->av.state & TRANSMITTING) {
-				if ((f->av.state & INCOMING) || (f->av.state & OUTGOING))
-					continue;
-				cancelcall(f, "Hanged up");
-			} else {
+				if (!(f->av.state & INCOMING) && !(f->av.state & OUTGOING))
+					cancelcall(f, "Hanged up");
+			}
+			if (f->av.state & RINGING) {
 				if (!(f->av.state & INCOMING))
 					continue;
 				if (!toxav_answer(toxav, f->num, AUDIOBITRATE, 0, NULL)) {
@@ -1759,13 +1770,7 @@ loop(void)
 						fiforeset(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN]);
 						break;
 					}
-					f->av.n = 0;
-					f->av.lastsent.tv_sec = 0;
-					f->av.lastsent.tv_nsec = 0;
-					f->av.state |= OUTGOING;
-					f->av.frame = malloc(sizeof(int16_t) * framesize);
-					if (!f->av.frame)
-						eprintf("malloc:");
+					f->av.state |= RINGING;
 					logmsg(": %s : Audio : Tx > Inviting\n", f->name);
 				} else {
 					if (f->av.state & OUTGOING)
