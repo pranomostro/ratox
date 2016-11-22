@@ -406,10 +406,8 @@ cbcallstate(ToxAV *av, uint32_t fnum, uint32_t state, void *udata)
 	}
 
 	/* let us start sending audio */
-	if (state & TOXAV_FRIEND_CALL_STATE_ACCEPTING_A) {
+	if (state & TOXAV_FRIEND_CALL_STATE_ACCEPTING_A)
 		f->av.state |= OUTGOING;
-		logmsg(": %s : Audio > Started\n", f->name);
-	}
 }
 
 static void
@@ -1681,7 +1679,7 @@ loop(void)
 
 			if (f->av.state & TRANSMITTING) {
 				if (!(f->av.state & INCOMING) && !(f->av.state & OUTGOING))
-					cancelcall(f, "Hanged up");
+					cancelcall(f, "Hung up");
 			}
 			if (f->av.state & RINGING) {
 				if (!(f->av.state & INCOMING))
@@ -1694,7 +1692,6 @@ loop(void)
 				}
 				f->av.state &= ~RINGING;
 				f->av.state |= TRANSMITTING;
-				logmsg(": %s : Audio > Answered\n", f->name);
 			}
 		}
 
