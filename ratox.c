@@ -495,7 +495,7 @@ sendfriendcalldata(struct friend *f)
 		return;
 	} else if (n < 0) {
 		return;
-	} else if (n == (framesize * sizeof(int16_t) - (f->av.state & INCOMPLETE) * f->av.n)) {
+	} else if (n == (framesize * sizeof(int16_t) - (f->av.state & INCOMPLETE ? f->av.n : 0))) {
 		f->av.state &= ~INCOMPLETE;
 		f->av.n = 0;
 	} else {
