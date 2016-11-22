@@ -488,12 +488,12 @@ sendfriendcalldata(struct friend *f)
 	TOXAV_ERR_SEND_FRAME err;
 
 	n = fiforead(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN],
-		     f->av.frame + (f->av.state & INCOMPLETE)/INCOMPLETE * f->av.n,
-		     framesize * sizeof(int16_t) - (f->av.state & INCOMPLETE)/INCOMPLETE * f->av.n);
+		     f->av.frame + (f->av.state & INCOMPLETE ? f->av.n : 0),
+		     framesize * sizeof(int16_t) - (f->av.state & INCOMPLETE ? f->av.n : 0));
 	if (n == 0) {
 		f->av.state &= ~OUTGOING;
 		return;
-	} else if (n < 0 || n > framesize * sizeof(int16_t)) {
+	} else if (n < 0) {
 		return;
 	} else if (n == (framesize * sizeof(int16_t) - (f->av.state & INCOMPLETE) * f->av.n)) {
 		f->av.state &= ~INCOMPLETE;
