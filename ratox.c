@@ -896,7 +896,7 @@ sendfriendtext(struct friend *f)
 	n = fiforead(f->dirfd, &f->fd[FTEXT_IN], ffiles[FTEXT_IN], buf, sizeof(buf));
 	if (n <= 0)
 		return;
-	if (buf[n - 1] == '\n')
+	if (buf[n - 1] == '\n' && n > 1)
 		n--;
 	tox_friend_send_message(tox, f->num, TOX_MESSAGE_TYPE_NORMAL, buf, n, &err);
 	if (err != TOX_ERR_FRIEND_SEND_MESSAGE_OK)
