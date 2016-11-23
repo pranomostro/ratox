@@ -152,7 +152,7 @@ struct call {
 
 struct friend {
 	char    name[TOX_MAX_NAME_LENGTH + 1];
-	int32_t num;
+	uint32_t num;
 	uint8_t id[TOX_PUBLIC_KEY_SIZE];
 	char    idstr[2 * TOX_PUBLIC_KEY_SIZE + 1];
 	int     dirfd;
@@ -768,7 +768,7 @@ cbfiledatareq(Tox *m, uint32_t frnum, uint32_t fnum, uint64_t pos, size_t flen, 
 	 * if a chunk with length less than the length requested in the
 	 * callback is sent.
 	 */
-	if (!f->tx.pendingbuf && f->tx.n < flen) {
+	if (!f->tx.pendingbuf && (size_t)f->tx.n < flen) {
 		logmsg(": %s : Tx > Complete\n", f->name);
 		f->tx.state = TRANSFER_NONE;
 		f->tx.fnum = -1;
@@ -1333,7 +1333,7 @@ friendcreate(uint32_t frnum)
 static void
 frienddestroy(struct friend *f)
 {
-	int i;
+	size_t i;
 
 	canceltxtransfer(f);
 	cancelrxtransfer(f);
@@ -1557,7 +1557,8 @@ loop(void)
 	struct timeval tv;
 	fd_set rfds;
 	time_t t0, t1;
-	int    connected = 0, i, n, r, fd, fdmax;
+	size_t i;
+	int    connected = 0, n, r, fd, fdmax;
 	char   tstamp[64], c;
 	uint32_t e;
 
@@ -1788,7 +1789,7 @@ toxshutdown(void)
 {
 	struct friend *f, *ftmp;
 	struct request *r, *rtmp;
-	int    i, m;
+	size_t    i, m;
 
 	logmsg("Shutdown\n");
 
