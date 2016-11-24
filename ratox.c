@@ -389,10 +389,23 @@ cbcallstate(ToxAV *av, uint32_t fnum, uint32_t state, void *udata)
 	}
 
 	/*
-	 * As long as we receive a state callback, it means the peer
-	 * accepted the call
+	 * If we've are ringing a friend, and he sends a control that's
+	 * not FINISHED, it means he accepted the call, so we can start
+	 * transmitting audio frames
 	 */
 	if (f->av.state & RINGING) {
+		f->av.state &= ~RINGING;
+		f->av.state |= TRANSMITTING;
+	}
+
+	/*
+	 * Move on in case we're already sending audio data
+	 */
+	if (state & OUTGOING)
+		return;
+
+	/* let us start sending audio */
+	if (state & TOXAV_FRIEND_CALL_STATE_ACCEPTING_A) {
 		f->av.n = 0;
 		f->av.lastsent.tv_sec = 0;
 		f->av.lastsent.tv_nsec = 0;
@@ -401,13 +414,8 @@ cbcallstate(ToxAV *av, uint32_t fnum, uint32_t state, void *udata)
 		if (!f->av.frame)
 			eprintf("malloc:");
 
-		f->av.state &= ~RINGING;
-		f->av.state |= TRANSMITTING;
-	}
-
-	/* let us start sending audio */
-	if (state & TOXAV_FRIEND_CALL_STATE_ACCEPTING_A)
 		f->av.state |= OUTGOING;
+	}
 }
 
 static void
@@ -1768,7 +1776,7 @@ loop(void)
 					f->av.state |= RINGING;
 					logmsg(": %s : Audio : Tx > Inviting\n", f->name);
 				} else {
-					if (f->av.state & TRANSMITTING)
+					if (f->av.state & OUTGOING)
 						sendfriendcalldata(f);
 				}
 			}
