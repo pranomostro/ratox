@@ -397,25 +397,6 @@ cbcallstate(ToxAV *av, uint32_t fnum, uint32_t state, void *udata)
 		f->av.state &= ~RINGING;
 		f->av.state |= TRANSMITTING;
 	}
-
-	/*
-	 * Move on in case we're already sending audio data
-	 */
-	if (state & OUTGOING)
-		return;
-
-	/* let us start sending audio */
-	if (state & TOXAV_FRIEND_CALL_STATE_ACCEPTING_A) {
-		f->av.n = 0;
-		f->av.lastsent.tv_sec = 0;
-		f->av.lastsent.tv_nsec = 0;
-
-		f->av.frame = malloc(sizeof(int16_t) * framesize);
-		if (!f->av.frame)
-			eprintf("malloc:");
-
-		f->av.state |= OUTGOING;
-	}
 }
 
 static void
@@ -501,7 +482,8 @@ sendfriendcalldata(struct friend *f)
 	if (n == 0) {
 		f->av.state &= ~OUTGOING;
 		return;
-	} else if (n < 0) {
+	} else if (n < 0 || state & RINGING) {
+		/* discard data as long as the call is not established */
 		return;
 	} else if (n == (framesize * sizeof(int16_t) - (f->av.state & INCOMPLETE ? f->av.n : 0))) {
 		f->av.state &= ~INCOMPLETE;
@@ -1616,7 +1598,7 @@ loop(void)
 
 				if (f->tx.state == TRANSFER_NONE)
 					FD_APPEND(f->fd[FFILE_IN]);
-				if (!f->av.state || (f->av.state & TRANSMITTING))
+				if (!f->av.state || (f->av.state & OUTGOING))
 					FD_APPEND(f->fd[FCALL_IN]);
 			}
 			FD_APPEND(f->fd[FREMOVE]);
@@ -1686,10 +1668,9 @@ loop(void)
 					f->fd[FCALL_OUT] = fd;
 			}
 
-			if (f->av.state & TRANSMITTING) {
-				if (!(f->av.state & INCOMING) && !(f->av.state & OUTGOING))
-					cancelcall(f, "Hung up");
-			}
+			if (!(f->av.state & INCOMING) && !(f->av.state & OUTGOING))
+				cancelcall(f, "Hung up");
+
 			if (f->av.state & RINGING) {
 				if (!(f->av.state & INCOMING))
 					continue;
@@ -1773,6 +1754,15 @@ loop(void)
 						fiforeset(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN]);
 						break;
 					}
+					f->av.n = 0;
+					f->av.lastsent.tv_sec = 0;
+					f->av.lastsent.tv_nsec = 0;
+
+					f->av.frame = malloc(sizeof(int16_t) * framesize);
+					if (!f->av.frame)
+						eprintf("malloc:");
+
+					f->av.state |= OUTGOING;
 					f->av.state |= RINGING;
 					logmsg(": %s : Audio : Tx > Inviting\n", f->name);
 				} else {
