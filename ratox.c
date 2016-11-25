@@ -785,6 +785,12 @@ cbfilesendreq(Tox *m, uint32_t frnum, uint32_t fnum, uint32_t kind, uint64_t fsz
 	memcpy(filename, fname, flen);
 	filename[flen] = '\0';
 
+	if (kind == TOX_FILE_KIND_AVATAR) {
+		if (!tox_file_control(tox, f->num, fnum, TOX_FILE_CONTROL_CANCEL, NULL))
+			weprintf("Failed to kill avatar transfer\n");
+		return;
+	}
+
 	/* We only support a single transfer at a time */
 	if (f->rxstate == TRANSFER_INPROGRESS) {
 		logmsg(": %s : Rx > Rejected %s, already one in progress\n",
