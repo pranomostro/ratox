@@ -448,7 +448,7 @@ cancelcall(struct friend *f, char *action)
 {
 	logmsg(": %s : Audio > %s\n", f->name, action);
 
-	if (f->av.state & TRANSMITTING) {
+	if (f->av.state & TRANSMITTING || f->av.state & RINGING) {
 		if (!toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, NULL))
 			weprintf("Failed to terminate call\n");
 	}
@@ -1545,6 +1545,7 @@ loop(void)
 	struct friend *f, *ftmp;
 	struct request *req, *rtmp;
 	struct timeval tv;
+	struct timespec callstart, now;
 	fd_set rfds;
 	time_t t0, t1;
 	size_t i;
@@ -1598,7 +1599,7 @@ loop(void)
 
 				if (f->tx.state == TRANSFER_NONE)
 					FD_APPEND(f->fd[FFILE_IN]);
-				if (!f->av.state || (f->av.state & OUTGOING))
+				if (!f->av.state || ((f->av.state & TRANSMITTING) && (f->av.state & OUTGOING)))
 					FD_APPEND(f->fd[FCALL_IN]);
 			}
 			FD_APPEND(f->fd[FREMOVE]);
@@ -1671,7 +1672,13 @@ loop(void)
 			if (f->av.state == TRANSMITTING)
 				cancelcall(f, "Hung up");
 
+
 			if (f->av.state & RINGING) {
+				if (f->av.state & OUTGOING) {
+					clock_gettime(CLOCK_MONOTONIC, &now);
+					if (now.tv_sec - callstart.tv_sec > RINGINGDELAY)
+						cancelcall(f, "Timeout");
+				}
 				if (!(f->av.state & INCOMING))
 					continue;
 				if (!toxav_answer(toxav, f->num, AUDIOBITRATE, 0, NULL)) {
@@ -1754,6 +1761,7 @@ loop(void)
 						fiforeset(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN]);
 						break;
 					}
+					clock_gettime(CLOCK_MONOTONIC, &callstart);
 					f->av.n = 0;
 					f->av.lastsent.tv_sec = 0;
 					f->av.lastsent.tv_nsec = 0;
