@@ -1668,7 +1668,7 @@ loop(void)
 					f->fd[FCALL_OUT] = fd;
 			}
 
-			if (!(f->av.state & INCOMING) && !(f->av.state & OUTGOING))
+			if (f->av.state == TRANSMITTING)
 				cancelcall(f, "Hung up");
 
 			if (f->av.state & RINGING) {
