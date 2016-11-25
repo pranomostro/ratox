@@ -1550,7 +1550,7 @@ loop(void)
 	size_t i;
 	int    connected = 0, n, r, fd, fdmax;
 	char   tstamp[64], c;
-	uint32_t e;
+	uint32_t frnum;
 
 	t0 = time(NULL);
 	logmsg("DHT > Connecting\n");
@@ -1705,18 +1705,18 @@ loop(void)
 				continue;
 			if (c != '0' && c != '1')
 				continue;
-			e = tox_friend_add_norequest(tox, req->id, NULL);
-			if (e == UINT32_MAX) {
+			frnum = tox_friend_add_norequest(tox, req->id, NULL);
+			if (frnum == UINT32_MAX) {
 				weprintf("Failed to add friend %s\n", req->idstr);
 				fiforeset(gslots[REQUEST].fd[OUT], &req->fd, reqfifo);
 				continue;
 			}
 			if (c == '1') {
-				friendcreate(r);
+				friendcreate(frnum);
 				logmsg("Request : %s > Accepted\n", req->idstr);
 				datasave();
 			} else {
-				tox_friend_delete(tox, r, NULL);
+				tox_friend_delete(tox, frnum, NULL);
 				logmsg("Request : %s > Rejected\n", req->idstr);
 			}
 			unlinkat(gslots[REQUEST].fd[OUT], req->idstr, 0);
