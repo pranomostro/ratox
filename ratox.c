@@ -1551,9 +1551,8 @@ loop(void)
 	struct friend *f, *ftmp;
 	struct request *req, *rtmp;
 	struct timeval tv;
-	struct timespec callstart, now;
 	fd_set rfds;
-	time_t t0, t1;
+	time_t t0, t1, c0, c1;
 	size_t i;
 	int    connected = 0, n, r, fd, fdmax;
 	char   tstamp[64], c;
@@ -1681,8 +1680,8 @@ loop(void)
 
 			if (f->av.state & RINGING) {
 				if (f->av.state & OUTGOING) {
-					clock_gettime(CLOCK_MONOTONIC, &now);
-					if (now.tv_sec - callstart.tv_sec > RINGINGDELAY)
+					c1 = time(NULL);
+					if (c1 > c0 + RINGINGDELAY)
 						cancelcall(f, "Timeout");
 				}
 				if (!(f->av.state & INCOMING))
@@ -1767,7 +1766,7 @@ loop(void)
 						fiforeset(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN]);
 						break;
 					}
-					clock_gettime(CLOCK_MONOTONIC, &callstart);
+					c0 = time(NULL);
 					f->av.n = 0;
 					f->av.lastsent.tv_sec = 0;
 					f->av.lastsent.tv_nsec = 0;
