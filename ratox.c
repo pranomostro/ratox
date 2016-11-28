@@ -1157,16 +1157,16 @@ toxinit(void)
 
 	framesize = (AUDIOSAMPLERATE * AUDIOFRAME * AUDIOCHANNELS) / 1000;
 
-	tox_callback_friend_connection_status(tox, cbconnstatus, NULL);
-	tox_callback_friend_message(tox, cbfriendmessage, NULL);
-	tox_callback_friend_request(tox, cbfriendrequest, NULL);
-	tox_callback_friend_name(tox, cbnamechange, NULL);
-	tox_callback_friend_status_message(tox, cbstatusmessage, NULL);
-	tox_callback_friend_status(tox, cbfriendstate, NULL);
-	tox_callback_file_recv_control(tox, cbfilecontrol, NULL);
-	tox_callback_file_recv(tox, cbfilesendreq, NULL);
-	tox_callback_file_recv_chunk(tox, cbfiledata, NULL);
-	tox_callback_file_chunk_request(tox, cbfiledatareq, NULL);
+	tox_callback_friend_connection_status(tox, cbconnstatus);
+	tox_callback_friend_message(tox, cbfriendmessage);
+	tox_callback_friend_request(tox, cbfriendrequest);
+	tox_callback_friend_name(tox, cbnamechange);
+	tox_callback_friend_status_message(tox, cbstatusmessage);
+	tox_callback_friend_status(tox, cbfriendstate);
+	tox_callback_file_recv_control(tox, cbfilecontrol);
+	tox_callback_file_recv(tox, cbfilesendreq);
+	tox_callback_file_recv_chunk(tox, cbfiledata);
+	tox_callback_file_chunk_request(tox, cbfiledatareq);
 
 	toxav_callback_call(toxav, cbcallinvite, NULL);
 	toxav_callback_call_state(toxav, cbcallstate, NULL);
@@ -1584,7 +1584,7 @@ loop(void)
 				toxconnect();
 			}
 		}
-		tox_iterate(tox);
+		tox_iterate(tox, NULL);
 		toxav_iterate(toxav);
 
 		/* Prepare select-fd-set */
