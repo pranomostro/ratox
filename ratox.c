@@ -221,7 +221,7 @@ static int toxinit(void);
 static int toxconnect(void);
 static void id2str(uint8_t *, char *);
 static void str2id(char *, uint8_t *);
-static struct friend *friendcreate(uint32_t);
+static void friendcreate(uint32_t);
 static void friendload(void);
 static void frienddestroy(struct friend *);
 static void loop(void);
@@ -1235,7 +1235,7 @@ str2id(char *idstr, uint8_t *id)
 		sscanf(p, "%2hhx", &id[i]);
 }
 
-static struct friend *
+static void
 friendcreate(uint32_t frnum)
 {
 	struct  friend *f;
@@ -1252,7 +1252,7 @@ friendcreate(uint32_t frnum)
 	i = tox_friend_get_name_size(tox, frnum, &err);
 	if (err != TOX_ERR_FRIEND_QUERY_OK) {
 		weprintf(": %ld : Name : Failed to get\n", (long)frnum);
-		return NULL;
+		return;
 	} else if (i == 0) {
 		snprintf(f->name, sizeof(f->name), "Anonymous");
 	} else {
@@ -1263,7 +1263,7 @@ friendcreate(uint32_t frnum)
 	f->num = frnum;
 	if (!tox_friend_get_public_key(tox, f->num, f->id, NULL)) {
 		weprintf(": %s: Key : Failed to get\n", f->name);
-		return NULL;
+		return;
 	}
 	id2str(f->id, f->idstr);
 
@@ -1322,8 +1322,6 @@ friendcreate(uint32_t frnum)
 	f->av.state = 0;
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
-
-	return f;
 }
 
 static void
