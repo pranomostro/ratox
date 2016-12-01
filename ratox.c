@@ -3,6 +3,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <arpa/inet.h>
+
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -87,8 +89,9 @@ static void setstatus(void *);
 static void setuserstate(void *);
 static void sendfriendreq(void *);
 static void setnospam(void *);
+static void newconf(void *);
 
-enum { NAME, STATUS, STATE, REQUEST, NOSPAM };
+enum { NAME, STATUS, STATE, REQUEST, NOSPAM, CONF };
 
 static struct slot gslots[] = {
 	[NAME]    = { .name = "name",	 .cb = setname,	      .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
@@ -96,6 +99,7 @@ static struct slot gslots[] = {
 	[STATE]   = { .name = "state",	 .cb = setuserstate,  .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
 	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outisfolder = 1, .dirfd = -1, .fd = {-1, -1, -1} },
 	[NOSPAM]  = { .name = "nospam",	 .cb = setnospam,     .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
+	[CONF]    = { .name = "conf",    .cb = newconf,       .outisfolder = 1, .dirfd = -1, .fd = {-1, -1, -1} },
 };
 
 enum { FTEXT_IN, FFILE_IN, FCALL_IN, FTEXT_OUT, FFILE_OUT, FCALL_OUT,
@@ -115,6 +119,18 @@ static struct file ffiles[] = {
 	[FSTATE]      = { .type = STATIC, .name = "state",	  .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 	[FFILE_STATE] = { .type = STATIC, .name = "file_pending", .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 	[FCALL_STATE] = { .type = STATIC, .name = "call_state",	  .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+};
+
+enum { CMEMBERS, CINVITE, CLEAVE, CTITLE_IN, CTITLE_OUT, CTEXT_IN, CTEXT_OUT };
+
+static struct file cfiles[] = {
+	[CMEMBERS]    = { .type = STATIC, .name = "members",      .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[CINVITE]     = { .type = FIFO,	  .name = "invite",	  .flags = O_RDONLY | O_NONBLOCK	 },
+	[CLEAVE]      = { .type = FIFO,   .name = "leave",	  .flags = O_RDONLY | O_NONBLOCK	 },
+	[CTITLE_OUT]  = { .type = STATIC, .name = "title_out",	  .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[CTITLE_IN]   = { .type = FIFO,   .name = "title_in",	  .flags = O_RDONLY | O_NONBLOCK	 },
+	[CTEXT_IN]    = { .type = FIFO,	  .name = "text_in",	  .flags = O_RDONLY | O_NONBLOCK	 },
+	[CTEXT_OUT]   = { .type = STATIC, .name = "text_out",	  .flags = O_WRONLY | O_APPEND | O_CREAT },
 };
 
 static char *ustate[] = {
@@ -161,6 +177,14 @@ struct friend {
 	TAILQ_ENTRY(friend) entry;
 };
 
+struct conference {
+	uint32_t num;
+	char     numstr[2 * sizeof(uint32_t)];
+	int      dirfd;
+	int      fd[LEN(gfiles)];
+	TAILQ_ENTRY(conference) entry;
+};
+
 struct request {
 	uint8_t id[TOX_PUBLIC_KEY_SIZE];
 	char    idstr[2 * TOX_PUBLIC_KEY_SIZE + 1];
@@ -170,6 +194,7 @@ struct request {
 };
 
 static TAILQ_HEAD(friendhead, friend) friendhead = TAILQ_HEAD_INITIALIZER(friendhead);
+static TAILQ_HEAD(confhead, conference) confhead = TAILQ_HEAD_INITIALIZER(confhead);
 static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
 
 static Tox *tox;
@@ -220,6 +245,7 @@ static int toxconnect(void);
 static void id2str(uint8_t *, char *);
 static void str2id(char *, uint8_t *);
 static struct friend *friendcreate(uint32_t);
+static struct conference * confcreate(uint32_t);
 static void friendload(void);
 static void frienddestroy(struct friend *);
 static void loop(void);
@@ -1324,6 +1350,61 @@ friendcreate(uint32_t frnum)
 	return f;
 }
 
+static struct conference *
+confcreate(uint32_t cnum)
+{
+	struct conference *c;
+	DIR	*d;
+	size_t 	i;
+	int     r;
+	uint8_t title[TOX_MAX_NAME_LENGTH + 1];
+	TOX_ERR_CONFERENCE_TITLE err;
+
+	c = calloc(1, sizeof(*c));
+	if(!c)
+		eprintf("calloc:");
+	c->num = cnum;
+	sprintf(c->numstr, "%08X", ntohl(c->num));
+	r = mkdir(c->numstr, 0777);
+	if(r < 0 && errno != EEXIST)
+		eprintf("mkdir %s:", c->numstr);
+
+	d = opendir(c->numstr);
+	if (!d)
+		eprintf("opendir %s:", c->numstr);
+
+	r = dirfd(d);
+	if (r < 0)
+		eprintf("dirfd %s:", c->numstr);
+	c->dirfd = r;
+
+	for (i = 0; i < LEN(cfiles); i++) {
+		c->fd[i] = -1;
+		if (cfiles[i].type == FIFO) {
+			fiforeset(c->dirfd, &c->fd[i], cfiles[i]);
+		} else if (cfiles[i].type == STATIC) {
+			c->fd[i] = fifoopen(c->dirfd, cfiles[i]);
+		}
+	}
+
+	/*The peer list is written when we invite the members by the callback*/
+	ftruncate(c->fd[CMEMBERS], 0);
+
+	i = tox_conference_get_title_size(tox, cnum, &err);
+	if (err != TOX_ERR_CONFERENCE_TITLE_OK) {
+		weprintf("Unable to obtain conference title for %d\n", cnum);
+	} else {
+		tox_conference_get_title(tox, cnum, title, NULL);
+		title[i] = '\0';
+		ftruncate(c->fd[CTITLE_OUT], 0);
+		dprintf(c->fd[CTITLE_OUT], "%s\n", title);
+	}
+
+	TAILQ_INSERT_TAIL(&confhead, c, entry);
+
+	return c;
+}
+
 static void
 frienddestroy(struct friend *f)
 {
@@ -1540,6 +1621,30 @@ setnospam(void *data)
 	dprintf(idfd, "\n");
 end:
 	fiforeset(gslots[NOSPAM].dirfd, &gslots[NOSPAM].fd[IN], gfiles[IN]);
+}
+
+static void
+newconf(void *data)
+{
+	uint32_t cnum;
+	size_t n;
+	char title[TOX_MAX_NAME_LENGTH + 1];
+
+	n = fiforead(gslots[CONF].dirfd, &gslots[NAME].fd[IN], gfiles[IN],
+		     title, sizeof(title) - 1);
+	if (n <= 0)
+		return;
+	if (title[n - 1] == '\n')
+		n--;
+	title[n] = '\0';
+	cnum = tox_conference_new(tox, NULL);
+	if (cnum == UINT32_MAX) {
+		weprintf("Failed to create new conference\n");
+		return;
+	}
+	if (!tox_conference_set_title(tox, cnum, (uint8_t *)title, n, NULL))
+		weprintf("Failed to set conference title to \"%s\"", title);
+	confcreate(cnum);
 }
 
 static void
