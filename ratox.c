@@ -3,6 +3,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <arpa/inet.h>
+
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -1362,7 +1364,7 @@ confcreate(uint32_t cnum)
 	if(!c)
 		eprintf("calloc:");
 	c->num = cnum;
-	sprintf(c->numstr, "%08X", c->num);
+	sprintf(c->numstr, "%08X", ntohl(c->num));
 	r = mkdir(c->numstr, 0777);
 	if(r < 0 && errno != EEXIST)
 		eprintf("mkdir %s:", c->numstr);
