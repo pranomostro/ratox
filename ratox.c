@@ -926,7 +926,7 @@ readpass(const char *prompt, uint8_t **target, uint32_t *len)
 		return -1;
 	*target = realloc(*target, strlen(p)); /* not null-terminated */
 	if (!*target)
-		eprintf("malloc:");
+		eprintf("realloc:");
 	memcpy(*target, p, strlen(p));
 	*len = strlen(p);
 	return 0;

@@ -18,12 +18,6 @@ static struct node nodes[] = {
 		.idstr = "461FA3776EF0FA655F1A05477DF1B3B614F7D6B124F7DB1DD4FE3C08B03B640F"
 	},
 	{
-		.addr4 = "104.167.101.29",
-		.addr6 = NULL,
-		.port = 33445,
-		.idstr = "5918AC3C06955962A75AD7DF4F80A5D7C34F7DB9E1498D2E0495DE35B3FE8A57"
-	},
-	{
 		.addr4 = "205.185.116.116",
 		.addr6 = NULL,
 		.port = 33445,
@@ -130,12 +124,6 @@ static struct node nodes[] = {
 		.addr6 = "2a02:f680:1:1100::3313",
 		.port = 33445,
 		.idstr = "24156472041E5F220D1FA11D9DF32F7AD697D59845701CDD7BE7D1785EB9DB39"
-	},
-	{
-		.addr4 = "128.199.199.197",
-		.addr6 = "2400:6180:0:d0::17a:a001",
-		.port = 33445,
-		.idstr = "B05C8869DBB4EDDD308F43C1A974A20A725A36EACCA123862FDE9945BF9D3E09"
 	},
 	{
 		.addr4 = "bootybay.club",
@@ -258,15 +246,27 @@ static struct node nodes[] = {
 		.idstr = "A856243058D1DE633379508ADCAFCF944E40E1672FF402750EF712E30C42012A"
 	},
 	{
-		.addr4 = "tox.zodiaclabs.org",
-		.addr6 = "v6.tox.zodiaclabs.org",
-		.port = 33445,
-		.idstr = "A09162D68618E742FFBCA1C2C70385E6679604B2D80EA6E84AD0996A1AC8A074"
-	},
-	{
 		.addr4 = "46.101.197.175",
 		.addr6 = "2a03:b0c0:3:d0::ac:5001",
 		.port = 443,
 		.idstr = "CD133B521159541FB1D326DE9850F5E56A6C724B5B8E5EB5CD8D950408E95707"
+	},
+	{
+		.addr4 = "104.167.101.29",
+		.addr6 = NULL,
+		.port = 33445,
+		.idstr = "5918AC3C06955962A75AD7DF4F80A5D7C34F7DB9E1498D2E0495DE35B3FE8A57"
+	},
+	{
+		.addr4 = "128.199.199.197",
+		.addr6 = "2400:6180:0:d0::17a:a001",
+		.port = 33445,
+		.idstr = "B05C8869DBB4EDDD308F43C1A974A20A725A36EACCA123862FDE9945BF9D3E09"
+	},
+	{
+		.addr4 = "tox.zodiaclabs.org",
+		.addr6 = "v6.tox.zodiaclabs.org",
+		.port = 33445,
+		.idstr = "A09162D68618E742FFBCA1C2C70385E6679604B2D80EA6E84AD0996A1AC8A074"
 	}
 };
