@@ -1,0 +1,9 @@
+. ./common
+
+spawn_users
+add_friends
+send_text
+echo :: $(basename $0) - $(echolor 2 OK)
+
+cleanup
+exit 0
