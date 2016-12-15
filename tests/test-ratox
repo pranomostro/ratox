@@ -2,6 +2,7 @@
 
 spawn_users
 add_friends
+send_text
 send_file
 echo :: $(basename $0) - $(echolor 2 OK)
 

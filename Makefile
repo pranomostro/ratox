@@ -65,6 +65,6 @@ clean:
 
 check: all
 	@echo testing
-	@cd tests; sh test-chat && sh test-file && sh test-request
+	@cd tests; sh test-ratox
 
 .PHONY: all binlib bin install uninstall clean check

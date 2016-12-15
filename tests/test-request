@@ -1,8 +1,0 @@
-. ./common
-
-spawn_users
-add_friends
-echo :: $(basename $0) - $(echolor 2 OK)
-
-cleanup
-exit 0
