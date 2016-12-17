@@ -2,8 +2,13 @@
 
 spawn_users
 add_friends
-send_text
-send_file
+for i in $(seq 1 16); do
+	change_name
+	change_status
+	send_text
+	send_file
+done
+
 echo :: $(basename $0) - $(echolor 2 OK)
 
 cleanup

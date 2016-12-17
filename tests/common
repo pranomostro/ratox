@@ -36,13 +36,29 @@ add_friends() {
 	while [ $(cat u1/$id2/online) -eq 0 ]; do sleep 1; done
 }
 
+change_name() {
+	NAME=$(dd bs=64 count=1 if=/dev/urandom 2>/dev/null|tr -cd '\11\12\15\40-\176\n'|sed 's/$/\n/')
+	id1=$(cut -b-64 < u1/id)
+	echo ":: changing name of u1"
+	echo "$NAME" >u1/name/in
+	while ! grep -Fq -- "$NAME"  u2/$id1/name; do sleep 1; done
+}
+
+change_status() {
+	STATUS=$(dd bs=128 count=1 if=/dev/urandom 2>/dev/null|tr -cd '\11\12\15\40-\176\n'|sed 's/$/\n/')
+	id1=$(cut -b-64 < u1/id)
+	echo ":: changing status of u1"
+	echo "$STATUS" >u1/name/in
+	while ! grep -Fq -- "$STATUS"  u2/$id1/name; do sleep 1; done
+}
+
 send_text() {
 	RND=$(tr -cd 'A-F0-9' </dev/urandom|fold -w16|head -n1)
 	id1=$(cut -b-64 < u1/id)
 	id2=$(cut -b-64 < u2/id)
 	echo ":: sending text to u2"
 	echo "$RND" > u1/$id2/text_in
-	while ! grep -q "$RND" u2/$id1/text_out; do sleep 1; done
+	while ! grep -q -- "$RND" u2/$id1/text_out; do sleep 1; done
 }
 
 send_file() {
