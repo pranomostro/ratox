@@ -63,8 +63,4 @@ clean:
 	@echo cleaning
 	@rm -f $(BIN) $(OBJ) $(LIB) util.a
 
-check: all
-	@echo testing
-	@cd tests; sh test-chat && sh test-file && sh test-request
-
 .PHONY: all binlib bin install uninstall clean check
