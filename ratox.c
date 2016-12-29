@@ -179,7 +179,7 @@ struct friend {
 
 struct conference {
 	uint32_t num;
-	char     numstr[2 * sizeof(uint32_t)];
+	char     numstr[2 * sizeof(uint32_t) + 1];
 	int      dirfd;
 	int      fd[LEN(gfiles)];
 	TAILQ_ENTRY(conference) entry;
@@ -221,6 +221,7 @@ static void cbcalldata(ToxAV *, uint32_t, const int16_t *, size_t, uint8_t, uint
 
 static void cancelcall(struct friend *, char *);
 static void sendfriendcalldata(struct friend *);
+static void writemembers(struct conference *);
 
 static void cbconnstatus(Tox *, uint32_t, TOX_CONNECTION, void *);
 static void cbfriendmessage(Tox *, uint32_t, TOX_MESSAGE_TYPE, const uint8_t *, size_t, void *);
@@ -528,6 +529,33 @@ sendfriendcalldata(struct friend *f)
 	if (!toxav_audio_send_frame(toxav, f->num, (int16_t *)f->av.frame,
 	                            framesize, AUDIOCHANNELS, AUDIOSAMPLERATE, &err))
 		weprintf("Failed to send audio frame: %s\n", callerr[err]);
+}
+
+static void
+writemembers(struct conference *c)
+{
+	size_t i;
+	uint32_t peers, pnum;
+	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
+	TOX_ERR_CONFERENCE_PEER_QUERY err;
+
+	/*The peer list is written when we invite the members by the callback*/
+	ftruncate(c->fd[CMEMBERS], 0);
+	peers = tox_conference_peer_count(tox, c->num, &err);
+
+	if (err != TOX_ERR_CONFERENCE_PEER_QUERY_OK) {
+		weprintf("Unable to obtain peer count for conference %d\n", c->num);
+		return;
+	}
+	for (pnum = 0; pnum < peers; pnum++) {
+		if (!tox_conference_peer_get_name(tox, c->num, pnum, name, NULL)) {
+			weprintf("Unable to obtain the name for peer %d\n", pnum);
+		} else {
+			i = tox_conference_peer_get_name_size(tox, c->num, pnum, NULL);
+			name[i] = '\0';
+			dprintf(c->fd[CMEMBERS], "%s\n", name);
+		}
+	}
 }
 
 static void
@@ -1354,17 +1382,17 @@ static struct conference *
 confcreate(uint32_t cnum)
 {
 	struct conference *c;
-	DIR	*d;
-	size_t 	i;
-	int     r;
-	uint8_t title[TOX_MAX_NAME_LENGTH + 1];
+	DIR	 *d;
+	size_t	 i;
+	int	 r;
+	uint8_t	 title[TOX_MAX_NAME_LENGTH + 1];
 	TOX_ERR_CONFERENCE_TITLE err;
 
 	c = calloc(1, sizeof(*c));
 	if(!c)
 		eprintf("calloc:");
 	c->num = cnum;
-	sprintf(c->numstr, "%08X", ntohl(c->num));
+	sprintf(c->numstr, "%08X", c->num);
 	r = mkdir(c->numstr, 0777);
 	if(r < 0 && errno != EEXIST)
 		eprintf("mkdir %s:", c->numstr);
@@ -1387,14 +1415,13 @@ confcreate(uint32_t cnum)
 		}
 	}
 
-	/*The peer list is written when we invite the members by the callback*/
-	ftruncate(c->fd[CMEMBERS], 0);
+	writemembers(c);
 
-	i = tox_conference_get_title_size(tox, cnum, &err);
+	i = tox_conference_get_title_size(tox, c->num, &err);
 	if (err != TOX_ERR_CONFERENCE_TITLE_OK) {
 		weprintf("Unable to obtain conference title for %d\n", cnum);
 	} else {
-		tox_conference_get_title(tox, cnum, title, NULL);
+		tox_conference_get_title(tox, c->num, title, NULL);
 		title[i] = '\0';
 		ftruncate(c->fd[CTITLE_OUT], 0);
 		dprintf(c->fd[CTITLE_OUT], "%s\n", title);
@@ -1423,6 +1450,22 @@ frienddestroy(struct friend *f)
 	}
 	rmdir(f->idstr);
 	TAILQ_REMOVE(&friendhead, f, entry);
+}
+
+static void
+confdestroy(struct conference *c)
+{
+	size_t i;
+
+	for (i = 0; i <LEN(cfiles); i++) {
+		if(c->dirfd != -1) {
+			unlinkat(c->dirfd, cfiles[i].name, 0);
+			if (c->fd[i] != -1)
+				close(c->fd[i]);
+		}
+	}
+	rmdir(c->numstr);
+	TAILQ_REMOVE(&confhead, c, entry);
 }
 
 static void
@@ -1630,7 +1673,7 @@ newconf(void *data)
 	size_t n;
 	char title[TOX_MAX_NAME_LENGTH + 1];
 
-	n = fiforead(gslots[CONF].dirfd, &gslots[NAME].fd[IN], gfiles[IN],
+	n = fiforead(gslots[CONF].dirfd, &gslots[CONF].fd[IN], gfiles[IN],
 		     title, sizeof(title) - 1);
 	if (n <= 0)
 		return;
@@ -1780,7 +1823,6 @@ loop(void)
 			if (f->av.state == TRANSMITTING)
 				cancelcall(f, "Hung up");
 
-
 			if (f->av.state & RINGING) {
 				if (f->av.state & OUTGOING) {
 					c1 = time(NULL);
@@ -1903,6 +1945,7 @@ toxshutdown(void)
 {
 	struct friend *f, *ftmp;
 	struct request *r, *rtmp;
+	struct conference *c, *ctmp;
 	size_t    i, m;
 
 	logmsg("Shutdown\n");
@@ -1913,6 +1956,12 @@ toxshutdown(void)
 	for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
 		ftmp = TAILQ_NEXT(f, entry);
 		frienddestroy(f);
+	}
+
+	/* Conferences */
+	for (c = TAILQ_FIRST(&confhead); c; c=ctmp) {
+		ctmp = TAILQ_NEXT(c, entry);
+		confdestroy(c);
 	}
 
 	/* Requests */
