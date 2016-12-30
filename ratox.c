@@ -49,7 +49,6 @@ const char *callerr[] = {
 	[TOXAV_ERR_SEND_FRAME_RTP_FAILED]            = "Failed to push frame through rtp interface"
 };
 
-
 struct node {
 	char    *addr4;
 	char    *addr6;
@@ -181,7 +180,7 @@ struct conference {
 	uint32_t num;
 	char     numstr[2 * sizeof(uint32_t) + 1];
 	int      dirfd;
-	int      fd[LEN(gfiles)];
+	int      fd[LEN(cfiles)];
 	TAILQ_ENTRY(conference) entry;
 };
 
@@ -193,9 +192,18 @@ struct request {
 	TAILQ_ENTRY(request) entry;
 };
 
+struct invite {
+	char 	*fifoname;
+	char	*cookie;
+	size_t	 cookielen;
+	int	 fd;
+	TAILQ_ENTRY(invite) entry;
+};
+
 static TAILQ_HEAD(friendhead, friend) friendhead = TAILQ_HEAD_INITIALIZER(friendhead);
 static TAILQ_HEAD(confhead, conference) confhead = TAILQ_HEAD_INITIALIZER(confhead);
 static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
+static TAILQ_HEAD(invhead, invite) invhead = TAILQ_HEAD_INITIALIZER(invhead);
 
 static Tox *tox;
 static ToxAV *toxav;
@@ -233,6 +241,11 @@ static void cbfilecontrol(Tox *, uint32_t, uint32_t, TOX_FILE_CONTROL, void *);
 static void cbfilesendreq(Tox *, uint32_t, uint32_t, uint32_t, uint64_t, const uint8_t *, size_t, void *);
 static void cbfiledata(Tox *, uint32_t, uint32_t, uint64_t, const uint8_t *, size_t, void *);
 
+static void cbconfinvite(Tox *, uint32_t, TOX_CONFERENCE_TYPE, const uint8_t *, size_t, void *);
+static void cbconfmessage(Tox *, uint32_t, uint32_t, TOX_MESSAGE_TYPE, const uint8_t *, size_t, void *);
+static void cbconftitle(Tox *, uint32_t, uint32_t, const uint8_t *, size_t, void *);
+static void cbconfmembers(Tox *, uint32_t, uint32_t, TOX_CONFERENCE_STATE_CHANGE, void *);
+
 static void canceltxtransfer(struct friend *);
 static void cancelrxtransfer(struct friend *);
 static void sendfriendtext(struct friend *);
@@ -245,8 +258,8 @@ static int toxinit(void);
 static int toxconnect(void);
 static void id2str(uint8_t *, char *);
 static void str2id(char *, uint8_t *);
-static struct friend *friendcreate(uint32_t);
-static struct conference * confcreate(uint32_t);
+static void friendcreate(uint32_t);
+static void confcreate(uint32_t);
 static void friendload(void);
 static void frienddestroy(struct friend *);
 static void loop(void);
@@ -466,6 +479,75 @@ cbcalldata(ToxAV *av, uint32_t fnum, const int16_t *data, size_t len,
 		wrote += n;
 		len -= n;
 	}
+}
+
+static void
+cbconfinvite(Tox *m, uint32_t frnum, TOX_CONFERENCE_TYPE type, const uint8_t *cookie, size_t clen, void * udata)
+{
+	printf("called function %s\n", __func__);
+
+	size_t i, j, namelen;
+	struct file invfifo;
+	struct invite *inv;
+	uint8_t id[TOX_PUBLIC_KEY_SIZE];
+
+	if (!tox_friend_get_public_key(tox, frnum, id, NULL)) {
+		weprintf(": %d: Key: Failed to get for invite\n", frnum);
+		return;
+	}
+
+	inv = calloc(1, sizeof(*inv));
+	if (!inv)
+		eprintf("calloc:");
+	inv->fd = -1;
+
+	inv->cookielen = clen;
+	inv->cookie = malloc(inv->cookielen);
+	if (!inv->cookie)
+		eprintf("malloc:");
+
+	namelen = 2 * TOX_PUBLIC_KEY_SIZE + 1 + 2 * clen + 1;
+	inv->fifoname = malloc(namelen);
+	if (!inv->fifoname)
+		eprintf("malloc:");
+
+	memcpy(inv->cookie, cookie, clen);
+
+	i = 0;
+	id2str(id, inv->fifoname);
+	i += 2 * TOX_PUBLIC_KEY_SIZE;
+	inv->fifoname[i] = '_';
+	i++;
+	for(j = 0; j < clen; i+=2, j++)
+		sprintf(inv->fifoname + i, "%02X", cookie[j]);
+	i++;
+	inv->fifoname[i] = '\0';
+
+	invfifo.name = inv->fifoname;
+	invfifo.flags = O_RDONLY | O_NONBLOCK;
+	fiforeset(gslots[CONF].fd[OUT], &inv->fd, invfifo);
+
+	TAILQ_INSERT_TAIL(&invhead, inv, entry);
+
+	logmsg("Invite: %s\n", inv->fifoname);
+}
+
+static void
+cbconfmessage(Tox *m, uint32_t cnum, uint32_t pnum, TOX_MESSAGE_TYPE type, const uint8_t *msg, size_t len, void *udata)
+{
+	printf("called function %s\n", __func__);
+}
+
+static void
+cbconftitle(Tox *m, uint32_t cnum, uint32_t pnum, const uint8_t *title, size_t len, void * udata)
+{
+	printf("called function %s\n", __func__);
+}
+
+static void
+cbconfmembers(Tox *m, uint32_t cnum, uint32_t pnum, TOX_CONFERENCE_STATE_CHANGE type, void *udata)
+{
+	printf("called function %s\n", __func__);
 }
 
 static void
@@ -1225,6 +1307,11 @@ toxinit(void)
 
 	toxav_callback_audio_receive_frame(toxav, cbcalldata, NULL);
 
+	tox_callback_conference_invite(tox, cbconfinvite);
+	tox_callback_conference_message(tox, cbconfmessage);
+	tox_callback_conference_title(tox, cbconftitle);
+	tox_callback_conference_namelist_change(tox, cbconfmembers);
+
 	if (toxopt.savedata_data)
 		free((void *)toxopt.savedata_data);
 
@@ -1287,7 +1374,7 @@ str2id(char *idstr, uint8_t *id)
 		sscanf(p, "%2hhx", &id[i]);
 }
 
-static struct friend *
+static void
 friendcreate(uint32_t frnum)
 {
 	struct  friend *f;
@@ -1304,7 +1391,7 @@ friendcreate(uint32_t frnum)
 	i = tox_friend_get_name_size(tox, frnum, &err);
 	if (err != TOX_ERR_FRIEND_QUERY_OK) {
 		weprintf(": %ld : Name : Failed to get\n", (long)frnum);
-		return NULL;
+		return;
 	} else if (i == 0) {
 		snprintf(f->name, sizeof(f->name), "Anonymous");
 	} else {
@@ -1315,7 +1402,7 @@ friendcreate(uint32_t frnum)
 	f->num = frnum;
 	if (!tox_friend_get_public_key(tox, f->num, f->id, NULL)) {
 		weprintf(": %s: Key : Failed to get\n", f->name);
-		return NULL;
+		return;
 	}
 	id2str(f->id, f->idstr);
 
@@ -1374,11 +1461,9 @@ friendcreate(uint32_t frnum)
 	f->av.state = 0;
 
 	TAILQ_INSERT_TAIL(&friendhead, f, entry);
-
-	return f;
 }
 
-static struct conference *
+static void
 confcreate(uint32_t cnum)
 {
 	struct conference *c;
@@ -1428,8 +1513,6 @@ confcreate(uint32_t cnum)
 	}
 
 	TAILQ_INSERT_TAIL(&confhead, c, entry);
-
-	return c;
 }
 
 static void
