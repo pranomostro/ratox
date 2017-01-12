@@ -1,7 +1,8 @@
-/*	$OpenBSD: readpassphrase.c,v 1.22 2010/01/13 10:20:54 dtucker Exp $	*/
+/*	$OpenBSD: readpassphrase.c,v 1.25 2015/09/14 10:45:27 guenther Exp $	*/
 
 /*
- * Copyright (c) 2000-2002, 2007 Todd C. Miller <Todd.Miller@courtesan.com>
+ * Copyright (c) 2000-2002, 2007, 2010
+ *	Todd C. Miller <Todd.Miller@courtesan.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -20,29 +21,25 @@
  * Materiel Command, USAF, under agreement number F39502-99-1-0512.
  */
 
-#include <termios.h>
-#include <signal.h>
 #include <ctype.h>
-#include <fcntl.h>
 #include <errno.h>
-#include <string.h>
-#include <unistd.h>
+#include <fcntl.h>
 #include <paths.h>
+#include <pwd.h>
+#include <signal.h>
+#include <string.h>
+#include <termios.h>
+#include <unistd.h>
 
 #include "readpassphrase.h"
 
 #ifdef TCSASOFT
-# define _T_FLUSH	(TCSAFLUSH|TCSASOFT)
+#define _T_FLUSH	(TCSAFLUSH|TCSASOFT)
 #else
-# define _T_FLUSH	(TCSAFLUSH)
+#define _T_FLUSH	(TCSAFLUSH)
 #endif
 
-/* SunOS 4.x which lacks _POSIX_VDISABLE, but has VDISABLE */
-#if !defined(_POSIX_VDISABLE) && defined(VDISABLE)
-#  define _POSIX_VDISABLE       VDISABLE
-#endif
-
-static volatile sig_atomic_t signo[NSIG];
+static volatile sig_atomic_t signo[_NSIG];
 
 static void handler(int);
 
@@ -63,7 +60,7 @@ readpassphrase(const char *prompt, char *buf, size_t bufsiz, int flags)
 	}
 
 restart:
-	for (i = 0; i < NSIG; i++)
+	for (i = 0; i < _NSIG; i++)
 		signo[i] = 0;
 	nr = -1;
 	save_errno = 0;
@@ -80,6 +77,27 @@ restart:
 		}
 		input = STDIN_FILENO;
 		output = STDERR_FILENO;
+	}
+
+	/*
+	 * Turn off echo if possible.
+	 * If we are using a tty but are not the foreground pgrp this will
+	 * generate SIGTTOU, so do it *before* installing the signal handlers.
+	 */
+	if (input != STDIN_FILENO && tcgetattr(input, &oterm) == 0) {
+		memcpy(&term, &oterm, sizeof(term));
+		if (!(flags & RPP_ECHO_ON))
+			term.c_lflag &= ~(ECHO | ECHONL);
+#ifdef VSTATUS
+		if (term.c_cc[VSTATUS] != _POSIX_VDISABLE)
+			term.c_cc[VSTATUS] = _POSIX_VDISABLE;
+#endif
+		(void)tcsetattr(input, _T_FLUSH, &term);
+	} else {
+		memset(&term, 0, sizeof(term));
+		term.c_lflag |= ECHO;
+		memset(&oterm, 0, sizeof(oterm));
+		oterm.c_lflag |= ECHO;
 	}
 
 	/*
@@ -100,52 +118,32 @@ restart:
 	(void)sigaction(SIGTTIN, &sa, &savettin);
 	(void)sigaction(SIGTTOU, &sa, &savettou);
 
-	/* Turn off echo if possible. */
-	if (input != STDIN_FILENO && tcgetattr(input, &oterm) == 0) {
-		memcpy(&term, &oterm, sizeof(term));
-		if (!(flags & RPP_ECHO_ON))
-			term.c_lflag &= ~(ECHO | ECHONL);
-#ifdef VSTATUS
-		if (term.c_cc[VSTATUS] != _POSIX_VDISABLE)
-			term.c_cc[VSTATUS] = _POSIX_VDISABLE;
-#endif
-		(void)tcsetattr(input, _T_FLUSH, &term);
-	} else {
-		memset(&term, 0, sizeof(term));
-		term.c_lflag |= ECHO;
-		memset(&oterm, 0, sizeof(oterm));
-		oterm.c_lflag |= ECHO;
-	}
-
-	/* No I/O if we are already backgrounded. */
-	if (signo[SIGTTOU] != 1 && signo[SIGTTIN] != 1) {
-		if (!(flags & RPP_STDIN))
-			(void)write(output, prompt, strlen(prompt));
-		end = buf + bufsiz - 1;
-		p = buf;
-		while ((nr = read(input, &ch, 1)) == 1 && ch != '\n' && ch != '\r') {
-			if (p < end) {
-				if ((flags & RPP_SEVENBIT))
-					ch &= 0x7f;
-				if (isalpha(ch)) {
-					if ((flags & RPP_FORCELOWER))
-						ch = (char)tolower(ch);
-					if ((flags & RPP_FORCEUPPER))
-						ch = (char)toupper(ch);
-				}
-				*p++ = ch;
+	if (!(flags & RPP_STDIN))
+		(void)write(output, prompt, strlen(prompt));
+	end = buf + bufsiz - 1;
+	p = buf;
+	while ((nr = read(input, &ch, 1)) == 1 && ch != '\n' && ch != '\r') {
+		if (p < end) {
+			if ((flags & RPP_SEVENBIT))
+				ch &= 0x7f;
+			if (isalpha((unsigned char)ch)) {
+				if ((flags & RPP_FORCELOWER))
+					ch = (char)tolower((unsigned char)ch);
+				if ((flags & RPP_FORCEUPPER))
+					ch = (char)toupper((unsigned char)ch);
 			}
+			*p++ = ch;
 		}
-		*p = '\0';
-		save_errno = errno;
-		if (!(term.c_lflag & ECHO))
-			(void)write(output, "\n", 1);
 	}
+	*p = '\0';
+	save_errno = errno;
+	if (!(term.c_lflag & ECHO))
+		(void)write(output, "\n", 1);
 
 	/* Restore old terminal settings and signals. */
 	if (memcmp(&term, &oterm, sizeof(term)) != 0) {
 		while (tcsetattr(input, _T_FLUSH, &oterm) == -1 &&
-		    errno == EINTR)
+		    errno == EINTR && !signo[SIGTTOU])
 			continue;
 	}
 	(void)sigaction(SIGALRM, &savealrm, NULL);
@@ -164,7 +162,7 @@ restart:
 	 * If we were interrupted by a signal, resend it to ourselves
 	 * now that we have restored the signal handlers.
 	 */
-	for (i = 0; i < NSIG; i++) {
+	for (i = 0; i < _NSIG; i++) {
 		if (signo[i]) {
 			kill(getpid(), i);
 			switch (i) {
@@ -183,9 +181,7 @@ restart:
 	return(nr == -1 ? NULL : buf);
 }
 
-static void
-handler(int s)
+static void handler(int s)
 {
-
 	signo[s] = 1;
 }
