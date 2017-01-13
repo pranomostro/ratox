@@ -64,7 +64,7 @@ struct file {
 	int         flags;
 };
 
-enum { NONE, FIFO, STATIC, FOLDER };
+enum { NONE, FIFO, STATIC };
 enum { IN, OUT, ERR };
 
 static struct file gfiles[] = {
@@ -1058,7 +1058,7 @@ readpass(const char *prompt, uint8_t **target, uint32_t *len)
 		return -1;
 	*target = realloc(*target, strlen(p)); /* not null-terminated */
 	if (!*target)
-		eprintf("malloc:");
+		eprintf("realloc:");
 	memcpy(*target, p, strlen(p));
 	*len = strlen(p);
 	return 0;
@@ -1157,14 +1157,14 @@ datasave(void)
 
 	tox_get_savedata(tox, intermediate);
 
+	sz += encryptsavefile ? TOX_PASS_ENCRYPTION_EXTRA_LENGTH : 0;
+	data = malloc(sz);
+	if (!data)
+		eprintf("malloc:");
+
 	if (encryptsavefile){
-		sz += TOX_PASS_ENCRYPTION_EXTRA_LENGTH;
-		data = malloc(sz);
-		if (!intermediate)
-			eprintf("malloc:");
 		tox_pass_encrypt(intermediate, sz - TOX_PASS_ENCRYPTION_EXTRA_LENGTH, passphrase, pplen, data, NULL);
 	} else {
-		data = malloc(sz);
 		memcpy(data, intermediate, sz);
 	}
 	if (write(fd, data, sz) != sz)
