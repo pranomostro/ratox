@@ -64,7 +64,7 @@ struct file {
 	int         flags;
 };
 
-enum { NONE, FIFO, STATIC, FOLDER };
+enum { NONE, FIFO, STATIC };
 enum { IN, OUT, ERR };
 
 static struct file gfiles[] = {
