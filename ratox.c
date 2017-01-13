@@ -49,7 +49,6 @@ const char *callerr[] = {
 	[TOXAV_ERR_SEND_FRAME_RTP_FAILED]            = "Failed to push frame through rtp interface"
 };
 
-
 struct node {
 	char    *addr4;
 	char    *addr6;
@@ -1674,7 +1673,6 @@ loop(void)
 
 			if (f->av.state == TRANSMITTING)
 				cancelcall(f, "Hung up");
-
 
 			if (f->av.state & RINGING) {
 				if (f->av.state & OUTGOING) {
