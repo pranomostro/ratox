@@ -531,21 +531,62 @@ cbconfinvite(Tox *m, uint32_t frnum, TOX_CONFERENCE_TYPE type, const uint8_t *co
 }
 
 static void
-cbconfmessage(Tox *m, uint32_t cnum, uint32_t pnum, TOX_MESSAGE_TYPE type, const uint8_t *msg, size_t len, void *udata)
+cbconfmessage(Tox *m, uint32_t cnum, uint32_t pnum, TOX_MESSAGE_TYPE type, const uint8_t *data, size_t len, void *udata)
 {
-	printf("called function %s\n", __func__);
+	struct  conference *c;
+	time_t  t;
+	uint8_t msg[len + 1], namt[TOX_MAX_NAME_LENGTH + 1];
+	char    buft[64];
+
+	memcpy(msg, data, len);
+	msg[len] = '\0';
+
+	TAILQ_FOREACH(c, &confhead, entry) {
+		if (c->num == cnum) {
+			t = time(NULL);
+			strftime(buft, sizeof(buft), "%F %R", localtime(&t));
+			if (!tox_conference_peer_get_name(tox, c->num, pnum, namt, NULL)) {
+				weprintf("Unable to obtain name for peer %d in conference %s\n", pnum, c->numstr);
+				return;
+			}
+			namt[tox_conference_peer_get_name_size(tox, c->num, pnum, NULL)] = '\0';
+			dprintf(c->fd[CTEXT_OUT], "%s <%s> %s\n", buft, namt, msg);
+			break;
+		}
+	}
 }
 
 static void
-cbconftitle(Tox *m, uint32_t cnum, uint32_t pnum, const uint8_t *title, size_t len, void * udata)
+cbconftitle(Tox *m, uint32_t cnum, uint32_t pnum, const uint8_t *data, size_t len, void * udata)
 {
-	printf("called function %s\n", __func__);
+	struct  conference *c;
+	char    title[TOX_MAX_NAME_LENGTH + 1];
+
+	memcpy(title, data, len);
+	title[len] = '\0';
+
+	TAILQ_FOREACH(c, &confhead, entry) {
+		if (c->num == cnum) {
+			ftruncate(c->fd[CTITLE_OUT], 0);
+			lseek(c->fd[CTITLE_OUT], 0, SEEK_SET);
+			dprintf(c->fd[CTITLE_OUT], "%s\n", title);
+			logmsg(": %s : Title > %s\n", c->numstr, title);
+			break;
+		}
+	}
 }
 
 static void
 cbconfmembers(Tox *m, uint32_t cnum, uint32_t pnum, TOX_CONFERENCE_STATE_CHANGE type, void *udata)
 {
-	printf("called function %s\n", __func__);
+	struct  conference *c;
+
+	TAILQ_FOREACH(c, &confhead, entry) {
+		if (c->num == cnum) {
+			writemembers(c);
+			break;
+		}
+	}
 }
 
 static void
