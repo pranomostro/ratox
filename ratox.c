@@ -1026,7 +1026,7 @@ datasave(void)
 
 	sz += encryptsavefile ? TOX_PASS_ENCRYPTION_EXTRA_LENGTH : 0;
 	data = malloc(sz);
-	if(!data)
+	if (!data)
 		eprintf("malloc:");
 
 	if (encryptsavefile){
