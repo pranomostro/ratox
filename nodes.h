@@ -1,5 +1,11 @@
 static struct node nodes[] = {
 	{
+		.addr4 = "tox.zodiaclabs.org",
+		.addr6 = "v6.tox.zodiaclabs.org",
+		.port = 33445,
+		.idstr = "A09162D68618E742FFBCA1C2C70385E6679604B2D80EA6E84AD0996A1AC8A074"
+	},
+	{
 		.addr4 = "biribiri.org",
 		.addr6 = NULL,
 		.port = 33445,
@@ -96,12 +102,6 @@ static struct node nodes[] = {
 		.idstr = "9E7BD4793FFECA7F32238FA2361040C09025ED3333744483CA6F3039BFF0211E"
 	},
 	{
-		.addr4 = "95.31.20.151",
-		.addr6 = NULL,
-		.port = 33445,
-		.idstr = "9CA69BB74DE7C056D1CC6B16AB8A0A38725C0349D187D8996766958584D39340"
-	},
-	{
 		.addr4 = "104.233.104.126",
 		.addr6 = NULL,
 		.port = 33445,
@@ -132,12 +132,6 @@ static struct node nodes[] = {
 		.idstr = "0CB9D8D636F8E3D71CF44A3019408A846B7BEDFA2810853355DB58C0A36BFE38"
 	},
 	{
-		.addr4 = "91.121.66.124",
-		.addr6 = "2001:41d0:1:757c::1",
-		.port = 33445,
-		.idstr = "4E3F7D37295664BBD0741B6DBCB6431D6CD77FC4105338C2FC31567BF5C8224A"
-	},
-	{
 		.addr4 = "92.54.84.70",
 		.addr6 = NULL,
 		.port = 33445,
@@ -154,12 +148,6 @@ static struct node nodes[] = {
 		.addr6 = "loki.uplinklabs.net",
 		.port = 33445,
 		.idstr = "1A56EA3EDF5DF4C0AEABBF3C2E4E603890F87E983CAC8A0D532A335F2C6E3E1F"
-	},
-	{
-		.addr4 = "toxnode.nek0.net",
-		.addr6 = "toxnode.nek0.net",
-		.port = 33445,
-		.idstr = "20965721D32CE50C3E837DD75B33908B33037E6225110BFF209277AEAF3F9639"
 	},
 	{
 		.addr4 = "95.215.44.78",
@@ -228,12 +216,6 @@ static struct node nodes[] = {
 		.idstr = "1A480A53FAF2CBBFCC382D786C43E69EEE23F22C7C23A7CFEB6180A373E23E54"
 	},
 	{
-		.addr4 = "tox.deadteam.org",
-		.addr6 = "tox.deadteam.org",
-		.port = 33445,
-		.idstr = "C7D284129E83877D63591F14B3F658D77FF9BA9BA7293AEB2BDFBFE1A803AF47"
-	},
-	{
 		.addr4 = "46.229.52.198",
 		.addr6 = NULL,
 		.port = 33445,
@@ -246,27 +228,51 @@ static struct node nodes[] = {
 		.idstr = "A856243058D1DE633379508ADCAFCF944E40E1672FF402750EF712E30C42012A"
 	},
 	{
+		.addr4 = "144.217.86.39",
+		.addr6 = "fe80::f816:3eff:fe61:92e3",
+		.port = 33445,
+		.idstr = "7E5668E0EE09E19F320AD47902419331FFEE147BB3606769CFBE921A2A2FD34C"
+	},
+	{
+		.addr4 = "77.37.160.178",
+		.addr6 = NULL,
+		.port = 33440,
+		.idstr = "CE678DEAFA29182EFD1B0C5B9BC6999E5A20B50A1A6EC18B91C8EBB591712416"
+	},
+	{
+		.addr4 = "77.37.142.179",
+		.addr6 = NULL,
+		.port = 33445,
+		.idstr = "98F5830A426C6BF165F895F04B897AFC4F57331B4BE0561F583C9F323194227B"
+	},
+	{
 		.addr4 = "46.101.197.175",
 		.addr6 = "2a03:b0c0:3:d0::ac:5001",
 		.port = 443,
 		.idstr = "CD133B521159541FB1D326DE9850F5E56A6C724B5B8E5EB5CD8D950408E95707"
 	},
 	{
-		.addr4 = "104.167.101.29",
-		.addr6 = NULL,
-		.port = 33445,
-		.idstr = "5918AC3C06955962A75AD7DF4F80A5D7C34F7DB9E1498D2E0495DE35B3FE8A57"
+		.addr4 = "185.14.30.213",
+		.addr6 = "2a00:1ca8:a7::e8b",
+		.port = 443,
+		.idstr = "2555763C8C460495B14157D234DD56B86300A2395554BCAE4621AC345B8C1B1B"
 	},
 	{
-		.addr4 = "128.199.199.197",
-		.addr6 = "2400:6180:0:d0::17a:a001",
+		.addr4 = "toxnode.nek0.net",
+		.addr6 = "toxnode.nek0.net",
 		.port = 33445,
-		.idstr = "B05C8869DBB4EDDD308F43C1A974A20A725A36EACCA123862FDE9945BF9D3E09"
+		.idstr = "20965721D32CE50C3E837DD75B33908B33037E6225110BFF209277AEAF3F9639"
 	},
 	{
-		.addr4 = "tox.zodiaclabs.org",
-		.addr6 = "v6.tox.zodiaclabs.org",
+		.addr4 = "91.121.66.124",
+		.addr6 = "2001:41d0:1:757c::1",
 		.port = 33445,
-		.idstr = "A09162D68618E742FFBCA1C2C70385E6679604B2D80EA6E84AD0996A1AC8A074"
+		.idstr = "4E3F7D37295664BBD0741B6DBCB6431D6CD77FC4105338C2FC31567BF5C8224A"
+	},
+	{
+		.addr4 = "tox.deadteam.org",
+		.addr6 = "tox.deadteam.org",
+		.port = 33445,
+		.idstr = "C7D284129E83877D63591F14B3F658D77FF9BA9BA7293AEB2BDFBFE1A803AF47"
 	}
 };

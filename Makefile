@@ -62,3 +62,5 @@ uninstall:
 clean:
 	@echo cleaning
 	@rm -f $(BIN) $(OBJ) $(LIB) util.a
+
+.PHONY: all binlib bin install uninstall clean
