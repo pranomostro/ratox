@@ -484,8 +484,6 @@ cbcalldata(ToxAV *av, uint32_t fnum, const int16_t *data, size_t len,
 static void
 cbconfinvite(Tox *m, uint32_t frnum, TOX_CONFERENCE_TYPE type, const uint8_t *cookie, size_t clen, void * udata)
 {
-	printf("called function %s\n", __func__);
-
 	size_t i, j, namelen;
 	struct file invfifo;
 	struct invite *inv;
@@ -2029,7 +2027,8 @@ toxshutdown(void)
 	struct friend *f, *ftmp;
 	struct request *r, *rtmp;
 	struct conference *c, *ctmp;
-	size_t    i, m;
+	struct invite *i, *itmp;
+	size_t    s, m;
 
 	logmsg("Shutdown\n");
 
@@ -2061,18 +2060,33 @@ toxshutdown(void)
 		free(r);
 	}
 
-	/* Global files and slots */
-	for (i = 0; i < LEN(gslots); i++) {
-		for (m = 0; m < LEN(gfiles); m++) {
-			if (gslots[i].dirfd != -1) {
-				unlinkat(gslots[i].dirfd, gfiles[m].name,
-					 (gslots[i].outisfolder && m == OUT)
-					 ? AT_REMOVEDIR : 0);
-				if (gslots[i].fd[m] != -1)
-					close(gslots[i].fd[m]);
-			}
+	/* Invites */
+	for (i = TAILQ_FIRST(&invhead); i; i = itmp) {
+		itmp = TAILQ_NEXT(i, entry);
+
+		if(gslots[CONF].fd[OUT] != -1) {
+			unlinkat(gslots[CONF].fd[OUT], i->fifoname, 0);
+			if (i->fd != -1)
+				close(i->fd);
 		}
-		rmdir(gslots[i].name);
+		TAILQ_REMOVE(&invhead, i, entry);
+		free(i->fifoname);
+		free(i->cookie);
+		free(i);
+	}
+
+	/* Global files and slots */
+	for (s = 0; s < LEN(gslots); s++) {
+		for (m = 0; m < LEN(gfiles); m++) {
+			if (gslots[s].dirfd != -1) {
+				unlinkat(gslots[s].dirfd, gfiles[m].name,
+					 (gslots[s].outisfolder && m == OUT)
+					 ? AT_REMOVEDIR : 0);
+				if (gslots[s].fd[m] != -1)
+					close(gslots[s].fd[m]);
+			}
+			}
+		rmdir(gslots[s].name);
 	}
 	unlink("id");
 	if (idfd != -1)
