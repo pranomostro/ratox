@@ -196,6 +196,7 @@ struct invite {
 	char 	*fifoname;
 	char	*cookie;
 	size_t	 cookielen;
+	uint32_t inviter;
 	int	 fd;
 	TAILQ_ENTRY(invite) entry;
 };
@@ -499,6 +500,7 @@ cbconfinvite(Tox *m, uint32_t frnum, TOX_CONFERENCE_TYPE type, const uint8_t *co
 		eprintf("calloc:");
 	inv->fd = -1;
 
+	inv->inviter = frnum;
 	inv->cookielen = clen;
 	inv->cookie = malloc(inv->cookielen);
 	if (!inv->cookie)
@@ -1815,16 +1817,18 @@ newconf(void *data)
 static void
 loop(void)
 {
-	struct file reqfifo;
+	struct file reqfifo, invfifo;
 	struct friend *f, *ftmp;
 	struct request *req, *rtmp;
+	struct conference *c;
+	struct invite *inv, *itmp;
 	struct timeval tv;
 	fd_set rfds;
 	time_t t0, t1, c0, c1;
 	size_t i;
 	int    connected = 0, n, r, fd, fdmax;
-	char   tstamp[64], c;
-	uint32_t frnum;
+	char   tstamp[64], ch;
+	uint32_t frnum, cnum;
 
 	t0 = time(NULL);
 	logmsg("DHT > Connecting\n");
@@ -1865,6 +1869,9 @@ loop(void)
 		TAILQ_FOREACH(req, &reqhead, entry)
 			FD_APPEND(req->fd);
 
+		TAILQ_FOREACH(inv, &invhead, entry)
+			FD_APPEND(inv->fd);
+
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			/* Only monitor friends that are online */
 			if (tox_friend_get_connection_status(tox, f->num, NULL) != TOX_CONNECTION_NONE) {
@@ -1876,6 +1883,12 @@ loop(void)
 					FD_APPEND(f->fd[FCALL_IN]);
 			}
 			FD_APPEND(f->fd[FREMOVE]);
+		}
+
+		TAILQ_FOREACH(c, &confhead, entry) {
+			FD_APPEND(c->fd[CLEAVE]);
+			FD_APPEND(c->fd[CTITLE_IN]);
+			FD_APPEND(c->fd[CTEXT_IN]);
 		}
 
 		tv.tv_sec = 0;
@@ -1923,6 +1936,7 @@ loop(void)
 				f->rxstate = TRANSFER_INPROGRESS;
 			}
 		}
+
 
 		/* Answer pending calls */
 		TAILQ_FOREACH(f, &friendhead, entry) {
@@ -1980,9 +1994,9 @@ loop(void)
 			reqfifo.name = req->idstr;
 			reqfifo.flags = O_RDONLY | O_NONBLOCK;
 			if (fiforead(gslots[REQUEST].fd[OUT], &req->fd, reqfifo,
-				     &c, 1) != 1)
+				     &ch, 1) != 1)
 				continue;
-			if (c != '0' && c != '1')
+			if (ch != '0' && ch != '1')
 				continue;
 			frnum = tox_friend_add_norequest(tox, req->id, NULL);
 			if (frnum == UINT32_MAX) {
@@ -1990,7 +2004,7 @@ loop(void)
 				fiforeset(gslots[REQUEST].fd[OUT], &req->fd, reqfifo);
 				continue;
 			}
-			if (c == '1') {
+			if (ch == '1') {
 				friendcreate(frnum);
 				logmsg("Request : %s > Accepted\n", req->idstr);
 				datasave();
@@ -2003,6 +2017,35 @@ loop(void)
 			TAILQ_REMOVE(&reqhead, req, entry);
 			free(req->msg);
 			free(req);
+		}
+
+		for (inv = TAILQ_FIRST(&invhead); inv; inv = itmp) {
+			itmp = TAILQ_NEXT(inv, entry);
+			if (FD_ISSET(inv->fd, &rfds) == 0)
+				continue;
+			invfifo.name = inv->fifoname;
+			invfifo.flags = O_RDONLY | O_NONBLOCK;
+			if (fiforead(gslots[CONF].fd[OUT], &inv->fd, invfifo,
+			    &ch, 1) != 1)
+				continue;
+			if (ch != '0' && ch != '1')
+				continue;
+			else if (ch == '1'){
+				cnum = tox_conference_join(tox, inv->inviter, (uint8_t *)inv->cookie,
+							   inv->cookielen, NULL);
+				if(cnum == UINT32_MAX) {
+					weprintf("Failed to join conference\n");
+					fiforeset(gslots[CONF].fd[OUT], &inv->fd, invfifo);
+					continue;
+				} else {
+					logmsg("Invite : %d > Accepted\n", cnum);
+				}
+				confcreate(cnum);
+			}
+			unlinkat(gslots[CONF].fd[OUT], inv->fifoname, 0);
+			close(inv->fd);
+			free(inv->fifoname);
+			free(inv->cookie);
 		}
 
 		for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
