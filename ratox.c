@@ -3,8 +3,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include <arpa/inet.h>
-
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
