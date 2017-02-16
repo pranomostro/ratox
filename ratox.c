@@ -124,8 +124,8 @@ static struct file cfiles[] = {
 	[CMEMBERS]    = { .type = STATIC, .name = "members",      .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 	[CINVITE]     = { .type = FIFO,	  .name = "invite",	  .flags = O_RDONLY | O_NONBLOCK	 },
 	[CLEAVE]      = { .type = FIFO,   .name = "leave",	  .flags = O_RDONLY | O_NONBLOCK	 },
-	[CTITLE_OUT]  = { .type = STATIC, .name = "title_out",	  .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 	[CTITLE_IN]   = { .type = FIFO,   .name = "title_in",	  .flags = O_RDONLY | O_NONBLOCK	 },
+	[CTITLE_OUT]  = { .type = STATIC, .name = "title_out",	  .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 	[CTEXT_IN]    = { .type = FIFO,	  .name = "text_in",	  .flags = O_RDONLY | O_NONBLOCK	 },
 	[CTEXT_OUT]   = { .type = STATIC, .name = "text_out",	  .flags = O_WRONLY | O_APPEND | O_CREAT },
 };

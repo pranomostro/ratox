@@ -53,6 +53,15 @@ to help explain the semantics of the individual files.
 |   |-- text_in			# 'echo yo dude > text_in' to send a text to this friend
 |   `-- text_out		# 'tail -f text_out' to dump to stdout any text received
 |
+|-- 00000000
+|   |-- members                 # list of people in the conference
+|   |-- invite                  # 'echo 0A734CBA717CEB7883D.... >invite' to invite
+|   |-- leave                   # 'echo 1 >leave' to leave the conference
+|   |-- title_in                # 'echo new-title >title_in' to update the conference title
+|   |-- title_out               # contains the current title
+|   |-- text_in                 # 'echo blablahumbla >text_in' to message the other conference members
+|   |-- text_out                # contains the messages sent so far in the conference
+|
 |-- id				# 'cat id' to show your own ID, you can give this to your friends
 |
 |-- name			# changing your nick
@@ -86,7 +95,7 @@ Features
 
 1 v 1 messaging: Yes
 File transfer: Yes
-Group chat: No
+Group chat: Yes
 Audio: Yes
 Video: No
 DNS discovery: No
@@ -114,6 +123,9 @@ toxi URI: No
 NOTE: Some of these features are not intended to be developed
 in ratox itself but rather in external scripts[1] that are built upon
 ratox.
+
+Group chats do not have file transfers or audio, but will be updated
+in the near future.
 
 
 Examples
