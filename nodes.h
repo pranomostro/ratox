@@ -12,10 +12,10 @@ static struct node nodes[] = {
 		.idstr = "F404ABAA1C99A9D37D61AB54898F56793E1DEF8BD46B1038B9D822E8460FAB67"
 	},
 	{
-		.addr4 = "178.62.250.138",
-		.addr6 = "2a03:b0c0:2:d0::16:1",
+		.addr4 = "nodes.tox.chat",
+		.addr6 = NULL,
 		.port = 33445,
-		.idstr = "788236D34978D1D5BD822F0A5BEBD2C53C64CC31CD3149350EE27D4D9A2F9B6B"
+		.idstr = "6FC41E2BD381D37E9748FC0E0328CE086AF9598BECC8FEB7DDF2E440475F300E"
 	},
 	{
 		.addr4 = "130.133.110.14",
@@ -54,12 +54,6 @@ static struct node nodes[] = {
 		.idstr = "DA4E4ED4B697F2E9B000EEFE3A34B554ACD3F45F5C96EAEA2516DD7FF9AF7B43"
 	},
 	{
-		.addr4 = "192.99.168.140",
-		.addr6 = NULL,
-		.port = 33445,
-		.idstr = "6A4D0607A296838434A6A7DDF99F50EF9D60A2C510BBF31FE538A25CB6B4652F"
-	},
-	{
 		.addr4 = "95.215.46.114",
 		.addr6 = "2a02:7aa0:1619::bdbd:17b8",
 		.port = 33445,
@@ -96,12 +90,6 @@ static struct node nodes[] = {
 		.idstr = "53737F6D47FA6BD2808F378E339AF45BF86F39B64E79D6D491C53A1D522E7039"
 	},
 	{
-		.addr4 = "81.4.110.149",
-		.addr6 = "2a00:d880:3:2::8bdc:f19",
-		.port = 33445,
-		.idstr = "9E7BD4793FFECA7F32238FA2361040C09025ED3333744483CA6F3039BFF0211E"
-	},
-	{
 		.addr4 = "104.233.104.126",
 		.addr6 = NULL,
 		.port = 33445,
@@ -112,12 +100,6 @@ static struct node nodes[] = {
 		.addr6 = "2001:41d0:a:1a3b::18",
 		.port = 33445,
 		.idstr = "AEC204B9A4501412D5F0BB67D9C81B5DB3EE6ADA64122D32A3E9B093D544327D"
-	},
-	{
-		.addr4 = "5.135.59.163",
-		.addr6 = NULL,
-		.port = 33445,
-		.idstr = "2D320F971EF2CA18004416C2AAE7BA52BF7949DB34EA8E2E21AF67BD367BE211"
 	},
 	{
 		.addr4 = "185.58.206.164",
@@ -144,10 +126,16 @@ static struct node nodes[] = {
 		.idstr = "FB4CE0DDEFEED45F26917053E5D24BDDA0FA0A3D83A672A9DA2375928B37023D"
 	},
 	{
-		.addr4 = "loki.uplinklabs.net",
-		.addr6 = "loki.uplinklabs.net",
+		.addr4 = "tox.uplinklabs.net",
+		.addr6 = "tox.uplinklabs.net",
 		.port = 33445,
 		.idstr = "1A56EA3EDF5DF4C0AEABBF3C2E4E603890F87E983CAC8A0D532A335F2C6E3E1F"
+	},
+	{
+		.addr4 = "toxnode.nek0.net",
+		.addr6 = "toxnode.nek0.net",
+		.port = 33445,
+		.idstr = "20965721D32CE50C3E837DD75B33908B33037E6225110BFF209277AEAF3F9639"
 	},
 	{
 		.addr4 = "95.215.44.78",
@@ -210,10 +198,10 @@ static struct node nodes[] = {
 		.idstr = "D3EB45181B343C2C222A5BCF72B760638E15ED87904625AAD351C594EEFAE03E"
 	},
 	{
-		.addr4 = "shigure.eve.moe",
-		.addr6 = "shigure.eve.moe",
+		.addr4 = "tox.deadteam.org",
+		.addr6 = "tox.deadteam.org",
 		.port = 33445,
-		.idstr = "1A480A53FAF2CBBFCC382D786C43E69EEE23F22C7C23A7CFEB6180A373E23E54"
+		.idstr = "C7D284129E83877D63591F14B3F658D77FF9BA9BA7293AEB2BDFBFE1A803AF47"
 	},
 	{
 		.addr4 = "46.229.52.198",
@@ -228,10 +216,10 @@ static struct node nodes[] = {
 		.idstr = "A856243058D1DE633379508ADCAFCF944E40E1672FF402750EF712E30C42012A"
 	},
 	{
-		.addr4 = "144.217.86.39",
-		.addr6 = "fe80::f816:3eff:fe61:92e3",
-		.port = 33445,
-		.idstr = "7E5668E0EE09E19F320AD47902419331FFEE147BB3606769CFBE921A2A2FD34C"
+		.addr4 = "185.14.30.213",
+		.addr6 = "2a00:1ca8:a7::e8b",
+		.port = 443,
+		.idstr = "2555763C8C460495B14157D234DD56B86300A2395554BCAE4621AC345B8C1B1B"
 	},
 	{
 		.addr4 = "77.37.160.178",
@@ -240,10 +228,28 @@ static struct node nodes[] = {
 		.idstr = "CE678DEAFA29182EFD1B0C5B9BC6999E5A20B50A1A6EC18B91C8EBB591712416"
 	},
 	{
-		.addr4 = "77.37.142.179",
+		.addr4 = "85.21.144.224",
 		.addr6 = NULL,
 		.port = 33445,
-		.idstr = "98F5830A426C6BF165F895F04B897AFC4F57331B4BE0561F583C9F323194227B"
+		.idstr = "8F738BBC8FA9394670BCAB146C67A507B9907C8E564E28C2B59BEBB2FF68711B"
+	},
+	{
+		.addr4 = "tox.natalenko.name",
+		.addr6 = "tox.natalenko.name",
+		.port = 33445,
+		.idstr = "1CB6EBFD9D85448FA70D3CAE1220B76BF6FCE911B46ACDCF88054C190589650B"
+	},
+	{
+		.addr4 = "37.187.122.30",
+		.addr6 = NULL,
+		.port = 33445,
+		.idstr = "BEB71F97ED9C99C04B8489BB75579EB4DC6AB6F441B603D63533122F1858B51D"
+	},
+	{
+		.addr4 = "202.36.75.162",
+		.addr6 = NULL,
+		.port = 33445,
+		.idstr = "F202E0936ABEE09067F55B0955C3FF6A84ABEED3C750A9EB930D926D03248F4C"
 	},
 	{
 		.addr4 = "46.101.197.175",
@@ -252,27 +258,21 @@ static struct node nodes[] = {
 		.idstr = "CD133B521159541FB1D326DE9850F5E56A6C724B5B8E5EB5CD8D950408E95707"
 	},
 	{
-		.addr4 = "185.14.30.213",
-		.addr6 = "2a00:1ca8:a7::e8b",
-		.port = 443,
-		.idstr = "2555763C8C460495B14157D234DD56B86300A2395554BCAE4621AC345B8C1B1B"
+		.addr4 = "shigure.eve.moe",
+		.addr6 = "shigure.eve.moe",
+		.port = 33445,
+		.idstr = "1A480A53FAF2CBBFCC382D786C43E69EEE23F22C7C23A7CFEB6180A373E23E54"
 	},
 	{
-		.addr4 = "toxnode.nek0.net",
-		.addr6 = "toxnode.nek0.net",
+		.addr4 = "81.4.110.149",
+		.addr6 = "2a00:d880:3:2::8bdc:f19",
 		.port = 33445,
-		.idstr = "20965721D32CE50C3E837DD75B33908B33037E6225110BFF209277AEAF3F9639"
+		.idstr = "9E7BD4793FFECA7F32238FA2361040C09025ED3333744483CA6F3039BFF0211E"
 	},
 	{
-		.addr4 = "91.121.66.124",
-		.addr6 = "2001:41d0:1:757c::1",
+		.addr4 = "192.99.168.140",
+		.addr6 = NULL,
 		.port = 33445,
-		.idstr = "4E3F7D37295664BBD0741B6DBCB6431D6CD77FC4105338C2FC31567BF5C8224A"
-	},
-	{
-		.addr4 = "tox.deadteam.org",
-		.addr6 = "tox.deadteam.org",
-		.port = 33445,
-		.idstr = "C7D284129E83877D63591F14B3F658D77FF9BA9BA7293AEB2BDFBFE1A803AF47"
+		.idstr = "6A4D0607A296838434A6A7DDF99F50EF9D60A2C510BBF31FE538A25CB6B4652F"
 	}
 };
