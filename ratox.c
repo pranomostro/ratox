@@ -249,6 +249,8 @@ static void canceltxtransfer(struct friend *);
 static void cancelrxtransfer(struct friend *);
 static void sendfriendtext(struct friend *);
 static void removefriend(struct friend *);
+static void invitefriend(struct conference *);
+static void sendconftext(struct conference *);
 static int readpass(const char *, uint8_t **, uint32_t *);
 static void dataload(struct Tox_Options *);
 static void datasave(void);
@@ -261,6 +263,7 @@ static void friendcreate(uint32_t);
 static void confcreate(uint32_t);
 static void friendload(void);
 static void frienddestroy(struct friend *);
+static void confdestroy(struct conference *);
 static void loop(void);
 static void initshutdown(int);
 static void toxshutdown(void);
@@ -504,7 +507,7 @@ cbconfinvite(Tox *m, uint32_t frnum, TOX_CONFERENCE_TYPE type, const uint8_t *co
 	if (!inv->cookie)
 		eprintf("malloc:");
 
-	namelen = 2 * TOX_PUBLIC_KEY_SIZE + 1 + 2 * clen + 1;
+	namelen = 2 * TOX_PUBLIC_KEY_SIZE + 1 + 2 * clen + 2;
 	inv->fifoname = malloc(namelen);
 	if (!inv->fifoname)
 		eprintf("malloc:");
@@ -527,7 +530,7 @@ cbconfinvite(Tox *m, uint32_t frnum, TOX_CONFERENCE_TYPE type, const uint8_t *co
 
 	TAILQ_INSERT_TAIL(&invhead, inv, entry);
 
-	logmsg("Invite: %s\n", inv->fifoname);
+	logmsg("Conference > Invite: %s\n", inv->fifoname);
 }
 
 static void
@@ -983,7 +986,8 @@ cbfilesendreq(Tox *m, uint32_t frnum, uint32_t fnum, uint32_t kind, uint64_t fsz
 }
 
 static void
-cbfiledata(Tox *m, uint32_t frnum, uint32_t fnum, uint64_t pos, const uint8_t *data, size_t len, void *udata)
+cbfiledata(Tox *m, uint32_t frnum, uint32_t fnum, uint64_t pos,
+	   const uint8_t *data, size_t len, void *udata)
 {
 	struct   friend *f;
 	ssize_t  n;
@@ -1083,6 +1087,51 @@ removefriend(struct friend *f)
 	datasave();
 	logmsg(": %s > Removed\n", f->name);
 	frienddestroy(f);
+}
+
+static void
+invitefriend(struct conference *c)
+{
+	ssize_t n;
+	char buf[2 * TOX_ADDRESS_SIZE + 1];
+	struct friend *f;
+	TOX_ERR_CONFERENCE_INVITE err;
+
+	n = fiforead(c->dirfd, &c->fd[CINVITE], cfiles[CINVITE], buf, sizeof(buf));
+
+	if (n > sizeof(buf) || n <= 0)
+		return;
+	if (buf[n - 1] == '\n')
+		buf[n - 1] = '\0';
+
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (!memcmp(buf, f->idstr, sizeof(f->idstr)))
+			break;
+	if (!f) {
+		logmsg("Conference > no friend with id %s found\n", buf);
+		return;
+	}
+	if (!tox_conference_invite(tox, f->num, c->num, &err))
+		weprintf("Failed to invite %s, error %d\n", buf, err);
+	else
+		logmsg("Conference > Invite %s\n", buf);
+}
+
+static void
+sendconftext(struct conference *c)
+{
+	ssize_t n;
+	uint8_t buf[TOX_MAX_MESSAGE_LENGTH];
+	TOX_ERR_CONFERENCE_SEND_MESSAGE err;
+
+	n = fiforead(c->dirfd, &c->fd[CTEXT_IN], cfiles[CTEXT_IN], buf, sizeof(buf));
+	if (n <= 0)
+		return;
+	if (buf[n - 1] == '\n' && n > 1)
+		n--;
+	if (!tox_conference_send_message(tox, c->num, TOX_MESSAGE_TYPE_NORMAL,
+	    buf, n, &err))
+		weprintf("Failed to send message to conference %s, error %d\n", c->numstr, err);
 }
 
 static int
@@ -1552,6 +1601,8 @@ confcreate(uint32_t cnum)
 	}
 
 	TAILQ_INSERT_TAIL(&confhead, c, entry);
+
+	logmsg("Conference > Created %s\n", c->numstr);
 }
 
 static void
@@ -1818,7 +1869,7 @@ loop(void)
 	struct file reqfifo, invfifo;
 	struct friend *f, *ftmp;
 	struct request *req, *rtmp;
-	struct conference *c;
+	struct conference *c, *ctmp;
 	struct invite *inv, *itmp;
 	struct timeval tv;
 	fd_set rfds;
@@ -1887,6 +1938,7 @@ loop(void)
 			FD_APPEND(c->fd[CLEAVE]);
 			FD_APPEND(c->fd[CTITLE_IN]);
 			FD_APPEND(c->fd[CTEXT_IN]);
+			FD_APPEND(c->fd[CINVITE]);
 		}
 
 		tv.tv_sec = 0;
@@ -2035,8 +2087,6 @@ loop(void)
 					weprintf("Failed to join conference\n");
 					fiforeset(gslots[CONF].fd[OUT], &inv->fd, invfifo);
 					continue;
-				} else {
-					logmsg("Invite : %d > Accepted\n", cnum);
 				}
 				confcreate(cnum);
 			}
@@ -2046,6 +2096,20 @@ loop(void)
 			free(inv->fifoname);
 			free(inv->cookie);
 			free(inv);
+		}
+
+		for (c = TAILQ_FIRST(&confhead); c; c = ctmp) {
+			ctmp = TAILQ_NEXT(c, entry);
+			if (FD_ISSET(c->fd[CINVITE], &rfds))
+				invitefriend(c);
+			if (FD_ISSET(c->fd[CLEAVE], &rfds)) {
+				logmsg("Conference > leave %s\n", c->numstr);
+				if (!tox_conference_delete(tox, c->num, NULL))
+					weprintf("Failed to leave conference %d\n", c->num);
+				confdestroy(c);
+			}
+			if (FD_ISSET(c->fd[CTEXT_IN], &rfds))
+				sendconftext(c);
 		}
 
 		for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
