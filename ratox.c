@@ -251,6 +251,7 @@ static void sendfriendtext(struct friend *);
 static void removefriend(struct friend *);
 static void invitefriend(struct conference *);
 static void sendconftext(struct conference *);
+static void updatetitle(struct conference *);
 static int readpass(const char *, uint8_t **, uint32_t *);
 static void dataload(struct Tox_Options *);
 static void datasave(void);
@@ -1095,7 +1096,6 @@ invitefriend(struct conference *c)
 	ssize_t n;
 	char buf[2 * TOX_ADDRESS_SIZE + 1];
 	struct friend *f;
-	TOX_ERR_CONFERENCE_INVITE err;
 
 	n = fiforead(c->dirfd, &c->fd[CINVITE], cfiles[CINVITE], buf, sizeof(buf));
 
@@ -1111,8 +1111,8 @@ invitefriend(struct conference *c)
 		logmsg("Conference > no friend with id %s found\n", buf);
 		return;
 	}
-	if (!tox_conference_invite(tox, f->num, c->num, &err))
-		weprintf("Failed to invite %s, error %d\n", buf, err);
+	if (!tox_conference_invite(tox, f->num, c->num, NULL))
+		weprintf("Failed to invite %s\n", buf);
 	else
 		logmsg("Conference > Invite %s\n", buf);
 }
@@ -1122,7 +1122,6 @@ sendconftext(struct conference *c)
 {
 	ssize_t n;
 	uint8_t buf[TOX_MAX_MESSAGE_LENGTH];
-	TOX_ERR_CONFERENCE_SEND_MESSAGE err;
 
 	n = fiforead(c->dirfd, &c->fd[CTEXT_IN], cfiles[CTEXT_IN], buf, sizeof(buf));
 	if (n <= 0)
@@ -1130,8 +1129,27 @@ sendconftext(struct conference *c)
 	if (buf[n - 1] == '\n' && n > 1)
 		n--;
 	if (!tox_conference_send_message(tox, c->num, TOX_MESSAGE_TYPE_NORMAL,
-	    buf, n, &err))
-		weprintf("Failed to send message to conference %s, error %d\n", c->numstr, err);
+	    buf, n, NULL))
+		weprintf("Failed to send message to conference %s, error %d\n", c->numstr);
+}
+
+static void
+updatetitle(struct conference *c)
+{
+	ssize_t n;
+	uint8_t title[TOX_MAX_STATUS_MESSAGE_LENGTH + 1];
+
+	n = fiforead(c->dirfd, &c->fd[CTITLE_IN], cfiles[CTITLE_IN], title, sizeof(title) - 1);
+	if (n <= 0)
+		return;
+	if (title[n - 1] == '\n')
+		n--;
+	title[n] = '\0';
+	if (!tox_conference_set_title(tox, c->num, title, n, NULL)) {
+		weprintf("Failed to set title to \"%s\" for %s\n", title, c->numstr);
+		return;
+	}
+	logmsg("Conference %s > Title > \"%s\"\n", c->numstr, title);
 }
 
 static int
@@ -1602,7 +1620,7 @@ confcreate(uint32_t cnum)
 
 	TAILQ_INSERT_TAIL(&confhead, c, entry);
 
-	logmsg("Conference > Created %s\n", c->numstr);
+	logmsg("Conference %s > Created\n", c->numstr);
 }
 
 static void
@@ -2103,13 +2121,14 @@ loop(void)
 			if (FD_ISSET(c->fd[CINVITE], &rfds))
 				invitefriend(c);
 			if (FD_ISSET(c->fd[CLEAVE], &rfds)) {
-				logmsg("Conference > leave %s\n", c->numstr);
-				if (!tox_conference_delete(tox, c->num, NULL))
-					weprintf("Failed to leave conference %d\n", c->num);
+				logmsg("Conference %s > Leave\n", c->numstr);
+				tox_conference_delete(tox, c->num, NULL);
 				confdestroy(c);
 			}
 			if (FD_ISSET(c->fd[CTEXT_IN], &rfds))
 				sendconftext(c);
+			if (FD_ISSET(c->fd[CTITLE_IN], &rfds))
+				updatetitle(c);
 		}
 
 		for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
