@@ -2042,8 +2042,10 @@ loop(void)
 			}
 			unlinkat(gslots[CONF].fd[OUT], inv->fifoname, 0);
 			close(inv->fd);
+			TAILQ_REMOVE(&invhead, inv, entry);
 			free(inv->fifoname);
 			free(inv->cookie);
+			free(inv);
 		}
 
 		for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
