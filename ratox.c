@@ -531,7 +531,7 @@ cbconfinvite(Tox *m, uint32_t frnum, TOX_CONFERENCE_TYPE type, const uint8_t *co
 
 	TAILQ_INSERT_TAIL(&invhead, inv, entry);
 
-	logmsg("Conference > Invite: %s\n", inv->fifoname);
+	logmsg("Invite > %s\n", inv->fifoname);
 }
 
 static void
@@ -556,7 +556,7 @@ cbconfmessage(Tox *m, uint32_t cnum, uint32_t pnum, TOX_MESSAGE_TYPE type, const
 			namt[tox_conference_peer_get_name_size(tox, c->num, pnum, NULL)] = '\0';
 			dprintf(c->fd[CTEXT_OUT], "%s <%s> %s\n", buft, namt, msg);
 			if (confmsg_log)
-				logmsg("%s <%s> %s\n", buft, namt, msg);
+				logmsg("%s: %s <%s> %s\n", c->numstr, buft, namt, msg);
 			break;
 		}
 	}
@@ -1111,13 +1111,17 @@ invitefriend(struct conference *c)
 		if (!memcmp(buf, f->idstr, sizeof(f->idstr)))
 			break;
 	if (!f) {
-		logmsg("Conference > no friend with id %s found\n", buf);
+		logmsg("Conference %s > no friend with id %s found\n", c->numstr, buf);
+		return;
+	}
+	if (tox_friend_get_connection_status(tox, f->num, NULL) == TOX_CONNECTION_NONE) {
+		logmsg("Conference %s > %s not online, can't be invited\n", c->numstr, buf);
 		return;
 	}
 	if (!tox_conference_invite(tox, f->num, c->num, NULL))
 		weprintf("Failed to invite %s\n", buf);
 	else
-		logmsg("Conference > Invite %s\n", buf);
+		logmsg("Conference %s > Invite %s\n", c->numstr, buf);
 }
 
 static void
@@ -1611,15 +1615,19 @@ confcreate(uint32_t cnum)
 
 	writemembers(c);
 
+	/* No warning is printed here in the case of an error
+	 * because this always fails when joining after an invite,
+	 * but cbconftitle() is called in the next iteration afterwards,
+	 * so it doesn't matter after all.
+	 */
+
 	i = tox_conference_get_title_size(tox, c->num, &err);
-	if (err != TOX_ERR_CONFERENCE_TITLE_OK) {
-		weprintf("Unable to obtain conference title for %d\n", cnum);
-	} else {
-		tox_conference_get_title(tox, c->num, title, NULL);
-		title[i] = '\0';
-		ftruncate(c->fd[CTITLE_OUT], 0);
-		dprintf(c->fd[CTITLE_OUT], "%s\n", title);
-	}
+	if (err != TOX_ERR_CONFERENCE_TITLE_OK)
+		i = 0;
+	tox_conference_get_title(tox, c->num, title, NULL);
+	title[i] = '\0';
+	ftruncate(c->fd[CTITLE_OUT], 0);
+	dprintf(c->fd[CTITLE_OUT], "%s\n", title);
 
 	TAILQ_INSERT_TAIL(&confhead, c, entry);
 
