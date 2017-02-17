@@ -555,6 +555,8 @@ cbconfmessage(Tox *m, uint32_t cnum, uint32_t pnum, TOX_MESSAGE_TYPE type, const
 			}
 			namt[tox_conference_peer_get_name_size(tox, c->num, pnum, NULL)] = '\0';
 			dprintf(c->fd[CTEXT_OUT], "%s <%s> %s\n", buft, namt, msg);
+			if (confmsg_log)
+				logmsg("%s <%s> %s\n", buft, namt, msg);
 			break;
 		}
 	}
@@ -744,7 +746,8 @@ cbfriendmessage(Tox *m, uint32_t frnum, TOX_MESSAGE_TYPE type, const uint8_t *da
 			t = time(NULL);
 			strftime(buft, sizeof(buft), "%F %R", localtime(&t));
 			dprintf(f->fd[FTEXT_OUT], "%s %s\n", buft, msg);
-			logmsg(": %s > %s\n", f->name, msg);
+			if (friendmsg_log)
+				logmsg(": %s > %s\n", f->name, msg);
 			break;
 		}
 	}
