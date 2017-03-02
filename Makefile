@@ -33,7 +33,7 @@ nodes.h:
 
 .o:
 	@echo LD $@
-	@$(LD) -o $@ $< util.a $(LDFLAGS)
+	@$(LD) -o $@ $< util.a $(LDFLAGS) $(LDLIBS)
 
 .c.o:
 	@echo CC $<
