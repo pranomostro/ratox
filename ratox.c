@@ -481,6 +481,7 @@ sendfriendcalldata(struct friend *f)
 		     framesize * sizeof(int16_t) - (f->av.state & INCOMPLETE ? f->av.n : 0));
 	if (n == 0) {
 		f->av.state &= ~OUTGOING;
+		f->av.state &= ~INCOMPLETE;
 		return;
 	} else if (n < 0 || f->av.state & RINGING) {
 		/* discard data as long as the call is not established */
