@@ -395,6 +395,7 @@ cbcallstate(ToxAV *av, uint32_t fnum, uint32_t state, void *udata)
 	if (f->av.state & RINGING) {
 		f->av.state &= ~RINGING;
 		f->av.state |= TRANSMITTING;
+		logmsg(": %s : Audio > Transmitting\n", f->name);
 	}
 }
 
@@ -1690,6 +1691,7 @@ loop(void)
 				}
 				f->av.state &= ~RINGING;
 				f->av.state |= TRANSMITTING;
+				logmsg(": %s : Audio > Answered\n", f->name);
 			}
 		}
 
