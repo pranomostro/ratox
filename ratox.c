@@ -1601,7 +1601,7 @@ loop(void)
 
 				if (f->tx.state == TRANSFER_NONE)
 					FD_APPEND(f->fd[FFILE_IN]);
-				if (!f->av.state || ((f->av.state & TRANSMITTING) && (f->av.state & OUTGOING)))
+				if (!f->av.state || (f->av.state & TRANSMITTING))
 					FD_APPEND(f->fd[FCALL_IN]);
 			}
 			FD_APPEND(f->fd[FREMOVE]);
@@ -1762,6 +1762,11 @@ loop(void)
 						fiforeset(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN]);
 						break;
 					}
+
+					f->av.state |= RINGING;
+					logmsg(": %s : Audio : Tx > Inviting\n", f->name);
+				}
+				if (!(f->av.state & OUTGOING)) {
 					c0 = time(NULL);
 					f->av.n = 0;
 					f->av.lastsent.tv_sec = 0;
@@ -1772,10 +1777,8 @@ loop(void)
 						eprintf("malloc:");
 
 					f->av.state |= OUTGOING;
-					f->av.state |= RINGING;
-					logmsg(": %s : Audio : Tx > Inviting\n", f->name);
 				} else {
-					if (f->av.state & OUTGOING)
+					if (f->av.state & TRANSMITTING)
 						sendfriendcalldata(f);
 				}
 			}
