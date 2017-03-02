@@ -1693,6 +1693,9 @@ loop(void)
 				f->av.state &= ~RINGING;
 				f->av.state |= TRANSMITTING;
 				logmsg(": %s : Audio > Answered\n", f->name);
+				ftruncate(f->fd[FCALL_STATE], 0);
+				lseek(f->fd[FCALL_STATE], 0, SEEK_SET);
+				dprintf(f->fd[FCALL_STATE], "transmitting\n");
 			}
 		}
 
