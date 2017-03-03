@@ -20,6 +20,9 @@
 #define VIDEOHEIGHT       720
 #define VIDEOBITRATE      2500
 
+static int   friendmsg_log = 1;
+static int   confmsg_log   = 0;
+
 static char *savefile        = ".ratox.tox";
 static int   encryptsavefile = 0;
 

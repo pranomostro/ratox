@@ -3,8 +3,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include <arpa/inet.h>
-
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -88,8 +86,9 @@ static void setstatus(void *);
 static void setuserstate(void *);
 static void sendfriendreq(void *);
 static void setnospam(void *);
+static void newconf(void *);
 
-enum { NAME, STATUS, STATE, REQUEST, NOSPAM };
+enum { NAME, STATUS, STATE, REQUEST, NOSPAM, CONF };
 
 static struct slot gslots[] = {
 	[NAME]    = { .name = "name",	 .cb = setname,	      .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
@@ -97,6 +96,7 @@ static struct slot gslots[] = {
 	[STATE]   = { .name = "state",	 .cb = setuserstate,  .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
 	[REQUEST] = { .name = "request", .cb = sendfriendreq, .outisfolder = 1, .dirfd = -1, .fd = {-1, -1, -1} },
 	[NOSPAM]  = { .name = "nospam",	 .cb = setnospam,     .outisfolder = 0, .dirfd = -1, .fd = {-1, -1, -1} },
+	[CONF]    = { .name = "conf",    .cb = newconf,       .outisfolder = 1, .dirfd = -1, .fd = {-1, -1, -1} },
 };
 
 enum { FTEXT_IN, FFILE_IN, FCALL_IN, FTEXT_OUT, FFILE_OUT, FCALL_OUT,
@@ -116,6 +116,18 @@ static struct file ffiles[] = {
 	[FSTATE]      = { .type = STATIC, .name = "state",	  .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 	[FFILE_STATE] = { .type = STATIC, .name = "file_pending", .flags = O_WRONLY | O_TRUNC  | O_CREAT },
 	[FCALL_STATE] = { .type = STATIC, .name = "call_state",	  .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+};
+
+enum { CMEMBERS, CINVITE, CLEAVE, CTITLE_IN, CTITLE_OUT, CTEXT_IN, CTEXT_OUT };
+
+static struct file cfiles[] = {
+	[CMEMBERS]    = { .type = STATIC, .name = "members",      .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[CINVITE]     = { .type = FIFO,	  .name = "invite",	  .flags = O_RDONLY | O_NONBLOCK	 },
+	[CLEAVE]      = { .type = FIFO,   .name = "leave",	  .flags = O_RDONLY | O_NONBLOCK	 },
+	[CTITLE_IN]   = { .type = FIFO,   .name = "title_in",	  .flags = O_RDONLY | O_NONBLOCK	 },
+	[CTITLE_OUT]  = { .type = STATIC, .name = "title_out",	  .flags = O_WRONLY | O_TRUNC  | O_CREAT },
+	[CTEXT_IN]    = { .type = FIFO,	  .name = "text_in",	  .flags = O_RDONLY | O_NONBLOCK	 },
+	[CTEXT_OUT]   = { .type = STATIC, .name = "text_out",	  .flags = O_WRONLY | O_APPEND | O_CREAT },
 };
 
 static char *ustate[] = {
@@ -162,6 +174,14 @@ struct friend {
 	TAILQ_ENTRY(friend) entry;
 };
 
+struct conference {
+	uint32_t num;
+	char     numstr[2 * sizeof(uint32_t) + 1];
+	int      dirfd;
+	int      fd[LEN(cfiles)];
+	TAILQ_ENTRY(conference) entry;
+};
+
 struct request {
 	uint8_t id[TOX_PUBLIC_KEY_SIZE];
 	char    idstr[2 * TOX_PUBLIC_KEY_SIZE + 1];
@@ -170,8 +190,19 @@ struct request {
 	TAILQ_ENTRY(request) entry;
 };
 
+struct invite {
+	char 	*fifoname;
+	uint8_t	*cookie;
+	size_t	 cookielen;
+	uint32_t inviter;
+	int	 fd;
+	TAILQ_ENTRY(invite) entry;
+};
+
 static TAILQ_HEAD(friendhead, friend) friendhead = TAILQ_HEAD_INITIALIZER(friendhead);
+static TAILQ_HEAD(confhead, conference) confhead = TAILQ_HEAD_INITIALIZER(confhead);
 static TAILQ_HEAD(reqhead, request) reqhead = TAILQ_HEAD_INITIALIZER(reqhead);
+static TAILQ_HEAD(invhead, invite) invhead = TAILQ_HEAD_INITIALIZER(invhead);
 
 static Tox *tox;
 static ToxAV *toxav;
@@ -197,6 +228,7 @@ static void cbcalldata(ToxAV *, uint32_t, const int16_t *, size_t, uint8_t, uint
 
 static void cancelcall(struct friend *, char *);
 static void sendfriendcalldata(struct friend *);
+static void writemembers(struct conference *);
 
 static void cbconnstatus(Tox *, uint32_t, TOX_CONNECTION, void *);
 static void cbfriendmessage(Tox *, uint32_t, TOX_MESSAGE_TYPE, const uint8_t *, size_t, void *);
@@ -208,10 +240,18 @@ static void cbfilecontrol(Tox *, uint32_t, uint32_t, TOX_FILE_CONTROL, void *);
 static void cbfilesendreq(Tox *, uint32_t, uint32_t, uint32_t, uint64_t, const uint8_t *, size_t, void *);
 static void cbfiledata(Tox *, uint32_t, uint32_t, uint64_t, const uint8_t *, size_t, void *);
 
+static void cbconfinvite(Tox *, uint32_t, TOX_CONFERENCE_TYPE, const uint8_t *, size_t, void *);
+static void cbconfmessage(Tox *, uint32_t, uint32_t, TOX_MESSAGE_TYPE, const uint8_t *, size_t, void *);
+static void cbconftitle(Tox *, uint32_t, uint32_t, const uint8_t *, size_t, void *);
+static void cbconfmembers(Tox *, uint32_t, uint32_t, TOX_CONFERENCE_STATE_CHANGE, void *);
+
 static void canceltxtransfer(struct friend *);
 static void cancelrxtransfer(struct friend *);
 static void sendfriendtext(struct friend *);
 static void removefriend(struct friend *);
+static void invitefriend(struct conference *);
+static void sendconftext(struct conference *);
+static void updatetitle(struct conference *);
 static int readpass(const char *, uint8_t **, uint32_t *);
 static void dataload(struct Tox_Options *);
 static void datasave(void);
@@ -221,8 +261,10 @@ static int toxconnect(void);
 static void id2str(uint8_t *, char *);
 static void str2id(char *, uint8_t *);
 static void friendcreate(uint32_t);
+static void confcreate(uint32_t);
 static void friendload(void);
 static void frienddestroy(struct friend *);
+static void confdestroy(struct conference *);
 static void loop(void);
 static void initshutdown(int);
 static void toxshutdown(void);
@@ -444,6 +486,122 @@ cbcalldata(ToxAV *av, uint32_t fnum, const int16_t *data, size_t len,
 }
 
 static void
+cbconfinvite(Tox *m, uint32_t frnum, TOX_CONFERENCE_TYPE type, const uint8_t *cookie, size_t clen, void * udata)
+{
+	size_t i, j, namelen;
+	struct file invfifo;
+	struct invite *inv;
+	uint8_t id[TOX_PUBLIC_KEY_SIZE];
+
+	if(type != TOX_CONFERENCE_TYPE_TEXT) {
+		weprintf(": %d : Only text conference supported at the moment\n");
+		return;
+	}
+
+	if (!tox_friend_get_public_key(tox, frnum, id, NULL)) {
+		weprintf(": %d : Key: Failed to get for invite\n", frnum);
+		return;
+	}
+
+	inv = calloc(1, sizeof(*inv));
+	if (!inv)
+		eprintf("calloc:");
+	inv->fd = -1;
+
+	inv->inviter = frnum;
+	inv->cookielen = clen;
+	inv->cookie = malloc(inv->cookielen);
+	if (!inv->cookie)
+		eprintf("malloc:");
+
+	memcpy(inv->cookie, cookie, clen);
+
+	namelen = 2 * TOX_PUBLIC_KEY_SIZE + 1 + 2 * clen + 2;
+	inv->fifoname = malloc(namelen);
+	if (!inv->fifoname)
+		eprintf("malloc:");
+
+	i = 0;
+	id2str(id, inv->fifoname);
+	i += 2 * TOX_PUBLIC_KEY_SIZE;
+	inv->fifoname[i] = '_';
+	i++;
+	for(j = 0; j < clen; i+=2, j++)
+		sprintf(inv->fifoname + i, "%02X", cookie[j]);
+	i++;
+	inv->fifoname[i] = '\0';
+
+	invfifo.name = inv->fifoname;
+	invfifo.flags = O_RDONLY | O_NONBLOCK;
+	fiforeset(gslots[CONF].fd[OUT], &inv->fd, invfifo);
+
+	TAILQ_INSERT_TAIL(&invhead, inv, entry);
+
+	logmsg("Invite > %s\n", inv->fifoname);
+}
+
+static void
+cbconfmessage(Tox *m, uint32_t cnum, uint32_t pnum, TOX_MESSAGE_TYPE type, const uint8_t *data, size_t len, void *udata)
+{
+	struct  conference *c;
+	time_t  t;
+	uint8_t msg[len + 1], namt[TOX_MAX_NAME_LENGTH + 1];
+	char    buft[64];
+
+	memcpy(msg, data, len);
+	msg[len] = '\0';
+
+	TAILQ_FOREACH(c, &confhead, entry) {
+		if (c->num == cnum) {
+			t = time(NULL);
+			strftime(buft, sizeof(buft), "%F %R", localtime(&t));
+			if (!tox_conference_peer_get_name(tox, c->num, pnum, namt, NULL)) {
+				weprintf("Unable to obtain name for peer %d in conference %s\n", pnum, c->numstr);
+				return;
+			}
+			namt[tox_conference_peer_get_name_size(tox, c->num, pnum, NULL)] = '\0';
+			dprintf(c->fd[CTEXT_OUT], "%s <%s> %s\n", buft, namt, msg);
+			if (confmsg_log)
+				logmsg("%s: %s <%s> %s\n", c->numstr, buft, namt, msg);
+			break;
+		}
+	}
+}
+
+static void
+cbconftitle(Tox *m, uint32_t cnum, uint32_t pnum, const uint8_t *data, size_t len, void * udata)
+{
+	struct  conference *c;
+	char    title[TOX_MAX_NAME_LENGTH + 1];
+
+	memcpy(title, data, len);
+	title[len] = '\0';
+
+	TAILQ_FOREACH(c, &confhead, entry) {
+		if (c->num == cnum) {
+			ftruncate(c->fd[CTITLE_OUT], 0);
+			lseek(c->fd[CTITLE_OUT], 0, SEEK_SET);
+			dprintf(c->fd[CTITLE_OUT], "%s\n", title);
+			logmsg(": %s : Title > %s\n", c->numstr, title);
+			break;
+		}
+	}
+}
+
+static void
+cbconfmembers(Tox *m, uint32_t cnum, uint32_t pnum, TOX_CONFERENCE_STATE_CHANGE type, void *udata)
+{
+	struct  conference *c;
+
+	TAILQ_FOREACH(c, &confhead, entry) {
+		if (c->num == cnum) {
+			writemembers(c);
+			break;
+		}
+	}
+}
+
+static void
 cancelcall(struct friend *f, char *action)
 {
 	logmsg(": %s : Audio > %s\n", f->name, action);
@@ -508,6 +666,33 @@ sendfriendcalldata(struct friend *f)
 }
 
 static void
+writemembers(struct conference *c)
+{
+	size_t i;
+	uint32_t peers, pnum;
+	uint8_t name[TOX_MAX_NAME_LENGTH + 1];
+	TOX_ERR_CONFERENCE_PEER_QUERY err;
+
+	/*The peer list is written when we invite the members by the callback*/
+	ftruncate(c->fd[CMEMBERS], 0);
+	peers = tox_conference_peer_count(tox, c->num, &err);
+
+	if (err != TOX_ERR_CONFERENCE_PEER_QUERY_OK) {
+		weprintf("Unable to obtain peer count for conference %d\n", c->num);
+		return;
+	}
+	for (pnum = 0; pnum < peers; pnum++) {
+		if (!tox_conference_peer_get_name(tox, c->num, pnum, name, NULL)) {
+			weprintf("Unable to obtain the name for peer %d\n", pnum);
+		} else {
+			i = tox_conference_peer_get_name_size(tox, c->num, pnum, NULL);
+			name[i] = '\0';
+			dprintf(c->fd[CMEMBERS], "%s\n", name);
+		}
+	}
+}
+
+static void
 cbconnstatus(Tox *m, uint32_t frnum, TOX_CONNECTION status, void *udata)
 {
 	struct friend *f;
@@ -568,7 +753,8 @@ cbfriendmessage(Tox *m, uint32_t frnum, TOX_MESSAGE_TYPE type, const uint8_t *da
 			t = time(NULL);
 			strftime(buft, sizeof(buft), "%F %R", localtime(&t));
 			dprintf(f->fd[FTEXT_OUT], "%s %s\n", buft, msg);
-			logmsg(": %s > %s\n", f->name, msg);
+			if (friendmsg_log)
+				logmsg(": %s > %s\n", f->name, msg);
 			break;
 		}
 	}
@@ -811,7 +997,8 @@ cbfilesendreq(Tox *m, uint32_t frnum, uint32_t fnum, uint32_t kind, uint64_t fsz
 }
 
 static void
-cbfiledata(Tox *m, uint32_t frnum, uint32_t fnum, uint64_t pos, const uint8_t *data, size_t len, void *udata)
+cbfiledata(Tox *m, uint32_t frnum, uint32_t fnum, uint64_t pos,
+	   const uint8_t *data, size_t len, void *udata)
 {
 	struct   friend *f;
 	ssize_t  n;
@@ -911,6 +1098,72 @@ removefriend(struct friend *f)
 	datasave();
 	logmsg(": %s > Removed\n", f->name);
 	frienddestroy(f);
+}
+
+static void
+invitefriend(struct conference *c)
+{
+	ssize_t n;
+	char buf[2 * TOX_ADDRESS_SIZE + 1];
+	struct friend *f;
+
+	n = fiforead(c->dirfd, &c->fd[CINVITE], cfiles[CINVITE], buf, sizeof(buf));
+
+	if (n > sizeof(buf) || n <= 0)
+		return;
+	if (buf[n - 1] == '\n')
+		buf[n - 1] = '\0';
+
+	TAILQ_FOREACH(f, &friendhead, entry)
+		if (!memcmp(buf, f->idstr, sizeof(f->idstr)))
+			break;
+	if (!f) {
+		logmsg("Conference %s > no friend with id %s found\n", c->numstr, buf);
+		return;
+	}
+	if (tox_friend_get_connection_status(tox, f->num, NULL) == TOX_CONNECTION_NONE) {
+		logmsg("Conference %s > %s not online, can't be invited\n", c->numstr, buf);
+		return;
+	}
+	if (!tox_conference_invite(tox, f->num, c->num, NULL))
+		weprintf("Failed to invite %s\n", buf);
+	else
+		logmsg("Conference %s > Invite %s\n", c->numstr, buf);
+}
+
+static void
+sendconftext(struct conference *c)
+{
+	ssize_t n;
+	uint8_t buf[TOX_MAX_MESSAGE_LENGTH];
+
+	n = fiforead(c->dirfd, &c->fd[CTEXT_IN], cfiles[CTEXT_IN], buf, sizeof(buf));
+	if (n <= 0)
+		return;
+	if (buf[n - 1] == '\n' && n > 1)
+		n--;
+	if (!tox_conference_send_message(tox, c->num, TOX_MESSAGE_TYPE_NORMAL,
+	    buf, n, NULL))
+		weprintf("%s: Message : Failed to send, error %d\n", c->numstr);
+}
+
+static void
+updatetitle(struct conference *c)
+{
+	ssize_t n;
+	uint8_t title[TOX_MAX_STATUS_MESSAGE_LENGTH + 1];
+
+	n = fiforead(c->dirfd, &c->fd[CTITLE_IN], cfiles[CTITLE_IN], title, sizeof(title) - 1);
+	if (n <= 0)
+		return;
+	if (title[n - 1] == '\n')
+		n--;
+	title[n] = '\0';
+	if (!tox_conference_set_title(tox, c->num, title, n, NULL)) {
+		weprintf("%s : Title : Failed to set to \"%s\"\n", title, c->numstr);
+		return;
+	}
+	logmsg("Conference %s > Title > %s\n", c->numstr, title);
 }
 
 static int
@@ -1120,7 +1373,7 @@ localinit(void)
 
 	/* Dump Nospam */
 	ftruncate(gslots[NOSPAM].fd[OUT], 0);
-	dprintf(gslots[NOSPAM].fd[OUT], "%08X\n", ntohl(tox_self_get_nospam(tox)));
+	dprintf(gslots[NOSPAM].fd[OUT], "%08X\n", tox_self_get_nospam(tox));
 
 	return 0;
 }
@@ -1158,21 +1411,26 @@ toxinit(void)
 
 	framesize = (AUDIOSAMPLERATE * AUDIOFRAME * AUDIOCHANNELS) / 1000;
 
-	tox_callback_friend_connection_status(tox, cbconnstatus, NULL);
-	tox_callback_friend_message(tox, cbfriendmessage, NULL);
-	tox_callback_friend_request(tox, cbfriendrequest, NULL);
-	tox_callback_friend_name(tox, cbnamechange, NULL);
-	tox_callback_friend_status_message(tox, cbstatusmessage, NULL);
-	tox_callback_friend_status(tox, cbfriendstate, NULL);
-	tox_callback_file_recv_control(tox, cbfilecontrol, NULL);
-	tox_callback_file_recv(tox, cbfilesendreq, NULL);
-	tox_callback_file_recv_chunk(tox, cbfiledata, NULL);
-	tox_callback_file_chunk_request(tox, cbfiledatareq, NULL);
+	tox_callback_friend_connection_status(tox, cbconnstatus);
+	tox_callback_friend_message(tox, cbfriendmessage);
+	tox_callback_friend_request(tox, cbfriendrequest);
+	tox_callback_friend_name(tox, cbnamechange);
+	tox_callback_friend_status_message(tox, cbstatusmessage);
+	tox_callback_friend_status(tox, cbfriendstate);
+	tox_callback_file_recv_control(tox, cbfilecontrol);
+	tox_callback_file_recv(tox, cbfilesendreq);
+	tox_callback_file_recv_chunk(tox, cbfiledata);
+	tox_callback_file_chunk_request(tox, cbfiledatareq);
 
 	toxav_callback_call(toxav, cbcallinvite, NULL);
 	toxav_callback_call_state(toxav, cbcallstate, NULL);
 
 	toxav_callback_audio_receive_frame(toxav, cbcalldata, NULL);
+
+	tox_callback_conference_invite(tox, cbconfinvite);
+	tox_callback_conference_message(tox, cbconfmessage);
+	tox_callback_conference_title(tox, cbconftitle);
+	tox_callback_conference_namelist_change(tox, cbconfmembers);
 
 	if (toxopt.savedata_data)
 		free((void *)toxopt.savedata_data);
@@ -1326,6 +1584,64 @@ friendcreate(uint32_t frnum)
 }
 
 static void
+confcreate(uint32_t cnum)
+{
+	struct conference *c;
+	DIR	 *d;
+	size_t	 i;
+	int	 r;
+	uint8_t	 title[TOX_MAX_NAME_LENGTH + 1];
+	TOX_ERR_CONFERENCE_TITLE err;
+
+	c = calloc(1, sizeof(*c));
+	if(!c)
+		eprintf("calloc:");
+	c->num = cnum;
+	sprintf(c->numstr, "%08X", c->num);
+	r = mkdir(c->numstr, 0777);
+	if(r < 0 && errno != EEXIST)
+		eprintf("mkdir %s:", c->numstr);
+
+	d = opendir(c->numstr);
+	if (!d)
+		eprintf("opendir %s:", c->numstr);
+
+	r = dirfd(d);
+	if (r < 0)
+		eprintf("dirfd %s:", c->numstr);
+	c->dirfd = r;
+
+	for (i = 0; i < LEN(cfiles); i++) {
+		c->fd[i] = -1;
+		if (cfiles[i].type == FIFO) {
+			fiforeset(c->dirfd, &c->fd[i], cfiles[i]);
+		} else if (cfiles[i].type == STATIC) {
+			c->fd[i] = fifoopen(c->dirfd, cfiles[i]);
+		}
+	}
+
+	writemembers(c);
+
+	/* No warning is printed here in the case of an error
+	 * because this always fails when joining after an invite,
+	 * but cbconftitle() is called in the next iteration afterwards,
+	 * so it doesn't matter after all.
+	 */
+
+	i = tox_conference_get_title_size(tox, c->num, &err);
+	if (err != TOX_ERR_CONFERENCE_TITLE_OK)
+		i = 0;
+	tox_conference_get_title(tox, c->num, title, NULL);
+	title[i] = '\0';
+	ftruncate(c->fd[CTITLE_OUT], 0);
+	dprintf(c->fd[CTITLE_OUT], "%s\n", title);
+
+	TAILQ_INSERT_TAIL(&confhead, c, entry);
+
+	logmsg("Conference %s > Created\n", c->numstr);
+}
+
+static void
 frienddestroy(struct friend *f)
 {
 	size_t i;
@@ -1343,6 +1659,22 @@ frienddestroy(struct friend *f)
 	}
 	rmdir(f->idstr);
 	TAILQ_REMOVE(&friendhead, f, entry);
+}
+
+static void
+confdestroy(struct conference *c)
+{
+	size_t i;
+
+	for (i = 0; i <LEN(cfiles); i++) {
+		if(c->dirfd != -1) {
+			unlinkat(c->dirfd, cfiles[i].name, 0);
+			if (c->fd[i] != -1)
+				close(c->fd[i]);
+		}
+	}
+	rmdir(c->numstr);
+	TAILQ_REMOVE(&confhead, c, entry);
 }
 
 static void
@@ -1526,7 +1858,7 @@ setnospam(void *data)
 	}
 
 	nsval = strtoul((char *)nospam, NULL, 16);
-	tox_self_set_nospam(tox, htonl(nsval));
+	tox_self_set_nospam(tox, nsval);
 	datasave();
 	logmsg("Nospam > %08X\n", nsval);
 	ftruncate(gslots[NOSPAM].fd[OUT], 0);
@@ -1544,18 +1876,44 @@ end:
 }
 
 static void
+newconf(void *data)
+{
+	uint32_t cnum;
+	size_t n;
+	char title[TOX_MAX_NAME_LENGTH + 1];
+
+	n = fiforead(gslots[CONF].dirfd, &gslots[CONF].fd[IN], gfiles[IN],
+		     title, sizeof(title) - 1);
+	if (n <= 0)
+		return;
+	if (title[n - 1] == '\n')
+		n--;
+	title[n] = '\0';
+	cnum = tox_conference_new(tox, NULL);
+	if (cnum == UINT32_MAX) {
+		weprintf("Failed to create new conference\n");
+		return;
+	}
+	if (!tox_conference_set_title(tox, cnum, (uint8_t *)title, n, NULL))
+		weprintf("Failed to set conference title to \"%s\"", title);
+	confcreate(cnum);
+}
+
+static void
 loop(void)
 {
-	struct file reqfifo;
+	struct file reqfifo, invfifo;
 	struct friend *f, *ftmp;
 	struct request *req, *rtmp;
+	struct conference *c, *ctmp;
+	struct invite *inv, *itmp;
 	struct timeval tv;
 	fd_set rfds;
 	time_t t0, t1, c0, c1;
 	size_t i;
 	int    connected = 0, n, r, fd, fdmax;
-	char   tstamp[64], c;
-	uint32_t frnum;
+	char   tstamp[64], ch;
+	uint32_t frnum, cnum;
 
 	t0 = time(NULL);
 	logmsg("DHT > Connecting\n");
@@ -1583,7 +1941,7 @@ loop(void)
 				toxconnect();
 			}
 		}
-		tox_iterate(tox);
+		tox_iterate(tox, NULL);
 		toxav_iterate(toxav);
 
 		/* Prepare select-fd-set */
@@ -1596,6 +1954,9 @@ loop(void)
 		TAILQ_FOREACH(req, &reqhead, entry)
 			FD_APPEND(req->fd);
 
+		TAILQ_FOREACH(inv, &invhead, entry)
+			FD_APPEND(inv->fd);
+
 		TAILQ_FOREACH(f, &friendhead, entry) {
 			/* Only monitor friends that are online */
 			if (tox_friend_get_connection_status(tox, f->num, NULL) != TOX_CONNECTION_NONE) {
@@ -1607,6 +1968,13 @@ loop(void)
 					FD_APPEND(f->fd[FCALL_IN]);
 			}
 			FD_APPEND(f->fd[FREMOVE]);
+		}
+
+		TAILQ_FOREACH(c, &confhead, entry) {
+			FD_APPEND(c->fd[CLEAVE]);
+			FD_APPEND(c->fd[CTITLE_IN]);
+			FD_APPEND(c->fd[CTEXT_IN]);
+			FD_APPEND(c->fd[CINVITE]);
 		}
 
 		tv.tv_sec = 0;
@@ -1654,6 +2022,7 @@ loop(void)
 				f->rxstate = TRANSFER_INPROGRESS;
 			}
 		}
+
 
 		/* Answer pending calls */
 		TAILQ_FOREACH(f, &friendhead, entry) {
@@ -1715,9 +2084,9 @@ loop(void)
 			reqfifo.name = req->idstr;
 			reqfifo.flags = O_RDONLY | O_NONBLOCK;
 			if (fiforead(gslots[REQUEST].fd[OUT], &req->fd, reqfifo,
-				     &c, 1) != 1)
+				     &ch, 1) != 1)
 				continue;
-			if (c != '0' && c != '1')
+			if (ch != '0' && ch != '1')
 				continue;
 			frnum = tox_friend_add_norequest(tox, req->id, NULL);
 			if (frnum == UINT32_MAX) {
@@ -1725,7 +2094,7 @@ loop(void)
 				fiforeset(gslots[REQUEST].fd[OUT], &req->fd, reqfifo);
 				continue;
 			}
-			if (c == '1') {
+			if (ch == '1') {
 				friendcreate(frnum);
 				logmsg("Request : %s > Accepted\n", req->idstr);
 				datasave();
@@ -1738,6 +2107,48 @@ loop(void)
 			TAILQ_REMOVE(&reqhead, req, entry);
 			free(req->msg);
 			free(req);
+		}
+
+		for (inv = TAILQ_FIRST(&invhead); inv; inv = itmp) {
+			itmp = TAILQ_NEXT(inv, entry);
+			if (FD_ISSET(inv->fd, &rfds) == 0)
+				continue;
+			invfifo.name = inv->fifoname;
+			invfifo.flags = O_RDONLY | O_NONBLOCK;
+			if (fiforead(gslots[CONF].fd[OUT], &inv->fd, invfifo,
+			    &ch, 1) != 1)
+				continue;
+			if (ch != '0' && ch != '1')
+				continue;
+			else if (ch == '1'){
+				cnum = tox_conference_join(tox, inv->inviter, (uint8_t *)inv->cookie,
+							   inv->cookielen, NULL);
+				if(cnum == UINT32_MAX)
+					weprintf("Failed to join conference\n");
+				else
+					confcreate(cnum);
+			}
+			unlinkat(gslots[CONF].fd[OUT], inv->fifoname, 0);
+			close(inv->fd);
+			TAILQ_REMOVE(&invhead, inv, entry);
+			free(inv->fifoname);
+			free(inv->cookie);
+			free(inv);
+		}
+
+		for (c = TAILQ_FIRST(&confhead); c; c = ctmp) {
+			ctmp = TAILQ_NEXT(c, entry);
+			if (FD_ISSET(c->fd[CINVITE], &rfds))
+				invitefriend(c);
+			if (FD_ISSET(c->fd[CLEAVE], &rfds)) {
+				logmsg("Conference %s > Leave\n", c->numstr);
+				tox_conference_delete(tox, c->num, NULL);
+				confdestroy(c);
+			}
+			if (FD_ISSET(c->fd[CTEXT_IN], &rfds))
+				sendconftext(c);
+			if (FD_ISSET(c->fd[CTITLE_IN], &rfds))
+				updatetitle(c);
 		}
 
 		for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
@@ -1805,7 +2216,9 @@ toxshutdown(void)
 {
 	struct friend *f, *ftmp;
 	struct request *r, *rtmp;
-	size_t    i, m;
+	struct conference *c, *ctmp;
+	struct invite *i, *itmp;
+	size_t    s, m;
 
 	logmsg("Shutdown\n");
 
@@ -1815,6 +2228,12 @@ toxshutdown(void)
 	for (f = TAILQ_FIRST(&friendhead); f; f = ftmp) {
 		ftmp = TAILQ_NEXT(f, entry);
 		frienddestroy(f);
+	}
+
+	/* Conferences */
+	for (c = TAILQ_FIRST(&confhead); c; c=ctmp) {
+		ctmp = TAILQ_NEXT(c, entry);
+		confdestroy(c);
 	}
 
 	/* Requests */
@@ -1831,18 +2250,33 @@ toxshutdown(void)
 		free(r);
 	}
 
-	/* Global files and slots */
-	for (i = 0; i < LEN(gslots); i++) {
-		for (m = 0; m < LEN(gfiles); m++) {
-			if (gslots[i].dirfd != -1) {
-				unlinkat(gslots[i].dirfd, gfiles[m].name,
-					 (gslots[i].outisfolder && m == OUT)
-					 ? AT_REMOVEDIR : 0);
-				if (gslots[i].fd[m] != -1)
-					close(gslots[i].fd[m]);
-			}
+	/* Invites */
+	for (i = TAILQ_FIRST(&invhead); i; i = itmp) {
+		itmp = TAILQ_NEXT(i, entry);
+
+		if(gslots[CONF].fd[OUT] != -1) {
+			unlinkat(gslots[CONF].fd[OUT], i->fifoname, 0);
+			if (i->fd != -1)
+				close(i->fd);
 		}
-		rmdir(gslots[i].name);
+		TAILQ_REMOVE(&invhead, i, entry);
+		free(i->fifoname);
+		free(i->cookie);
+		free(i);
+	}
+
+	/* Global files and slots */
+	for (s = 0; s < LEN(gslots); s++) {
+		for (m = 0; m < LEN(gfiles); m++) {
+			if (gslots[s].dirfd != -1) {
+				unlinkat(gslots[s].dirfd, gfiles[m].name,
+					 (gslots[s].outisfolder && m == OUT)
+					 ? AT_REMOVEDIR : 0);
+				if (gslots[s].fd[m] != -1)
+					close(gslots[s].fd[m]);
+			}
+			}
+		rmdir(gslots[s].name);
 	}
 	unlink("id");
 	if (idfd != -1)
