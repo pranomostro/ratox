@@ -492,8 +492,13 @@ cbconfinvite(Tox *m, uint32_t frnum, TOX_CONFERENCE_TYPE type, const uint8_t *co
 	struct invite *inv;
 	uint8_t id[TOX_PUBLIC_KEY_SIZE];
 
+	if(type != TOX_CONFERENCE_TYPE_TEXT) {
+		weprintf(": %d : Only text conference supported at the moment\n");
+		return;
+	}
+
 	if (!tox_friend_get_public_key(tox, frnum, id, NULL)) {
-		weprintf(": %d: Key: Failed to get for invite\n", frnum);
+		weprintf(": %d : Key: Failed to get for invite\n", frnum);
 		return;
 	}
 
