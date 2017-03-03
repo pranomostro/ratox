@@ -192,7 +192,7 @@ struct request {
 
 struct invite {
 	char 	*fifoname;
-	char	*cookie;
+	uint8_t	*cookie;
 	size_t	 cookielen;
 	uint32_t inviter;
 	int	 fd;
@@ -508,12 +508,12 @@ cbconfinvite(Tox *m, uint32_t frnum, TOX_CONFERENCE_TYPE type, const uint8_t *co
 	if (!inv->cookie)
 		eprintf("malloc:");
 
+	memcpy(inv->cookie, cookie, clen);
+
 	namelen = 2 * TOX_PUBLIC_KEY_SIZE + 1 + 2 * clen + 2;
 	inv->fifoname = malloc(namelen);
 	if (!inv->fifoname)
 		eprintf("malloc:");
-
-	memcpy(inv->cookie, cookie, clen);
 
 	i = 0;
 	id2str(id, inv->fifoname);
@@ -1137,7 +1137,7 @@ sendconftext(struct conference *c)
 		n--;
 	if (!tox_conference_send_message(tox, c->num, TOX_MESSAGE_TYPE_NORMAL,
 	    buf, n, NULL))
-		weprintf("Failed to send message to conference %s, error %d\n", c->numstr);
+		weprintf("%s: Message : Failed to send, error %d\n", c->numstr);
 }
 
 static void
@@ -1153,10 +1153,10 @@ updatetitle(struct conference *c)
 		n--;
 	title[n] = '\0';
 	if (!tox_conference_set_title(tox, c->num, title, n, NULL)) {
-		weprintf("Failed to set title to \"%s\" for %s\n", title, c->numstr);
+		weprintf("%s : Title : Failed to set to \"%s\"\n", title, c->numstr);
 		return;
 	}
-	logmsg("Conference %s > Title > \"%s\"\n", c->numstr, title);
+	logmsg("Conference %s > Title > %s\n", c->numstr, title);
 }
 
 static int
@@ -2112,12 +2112,10 @@ loop(void)
 			else if (ch == '1'){
 				cnum = tox_conference_join(tox, inv->inviter, (uint8_t *)inv->cookie,
 							   inv->cookielen, NULL);
-				if(cnum == UINT32_MAX) {
+				if(cnum == UINT32_MAX)
 					weprintf("Failed to join conference\n");
-					fiforeset(gslots[CONF].fd[OUT], &inv->fd, invfifo);
-					continue;
-				}
-				confcreate(cnum);
+				else
+					confcreate(cnum);
 			}
 			unlinkat(gslots[CONF].fd[OUT], inv->fifoname, 0);
 			close(inv->fd);
