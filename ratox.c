@@ -1561,11 +1561,12 @@ friendcreate(uint32_t frnum)
 		tox_friend_get_connection_status(tox, frnum, NULL));
 
 	/* Dump status */
-	i = tox_friend_get_status_message(tox, frnum, status, NULL);
+	i = tox_friend_get_status_message_size(tox, frnum, NULL);
 	if (i == SIZE_MAX) {
 		weprintf(": %s : Status : Failed to get\n", f->name);
 		i = 0;
 	}
+	tox_friend_get_status_message(tox, frnum, status, NULL);
 	status[i] = '\0';
 	ftruncate(f->fd[FSTATUS], 0);
 	dprintf(f->fd[FSTATUS], "%s\n", status);
