@@ -494,12 +494,12 @@ cbconfinvite(Tox *m, uint32_t frnum, TOX_CONFERENCE_TYPE type, const uint8_t *co
 	uint8_t id[TOX_PUBLIC_KEY_SIZE];
 
 	if(type != TOX_CONFERENCE_TYPE_TEXT) {
-		weprintf(": %d : Only text conference supported at the moment\n");
+		logmsg(": Conference : Only text conference supported at the moment\n");
 		return;
 	}
 
 	if (!tox_friend_get_public_key(tox, frnum, id, NULL)) {
-		weprintf(": %d : Key: Failed to get for invite\n", frnum);
+		weprintf("Failed to get key by friend %i for invite\n", frnum);
 		return;
 	}
 
@@ -1115,7 +1115,7 @@ invitefriend(struct conference *c)
 		buf[n - 1] = '\0';
 
 	TAILQ_FOREACH(f, &friendhead, entry)
-		if (!memcmp(buf, f->idstr, sizeof(f->idstr)))
+		if (!memcmp(buf, f->idstr, sizeof(f->idstr)-1))
 			break;
 	if (!f) {
 		logmsg("Conference %s > no friend with id %s found\n", c->numstr, buf);
@@ -1128,7 +1128,7 @@ invitefriend(struct conference *c)
 	if (!tox_conference_invite(tox, f->num, c->num, NULL))
 		weprintf("Failed to invite %s\n", buf);
 	else
-		logmsg("Conference %s > Invite %s\n", c->numstr, buf);
+		logmsg("Conference %s > Invited %s\n", c->numstr, buf);
 }
 
 static void
@@ -1163,6 +1163,9 @@ updatetitle(struct conference *c)
 		weprintf("%s : Title : Failed to set to \"%s\"\n", title, c->numstr);
 		return;
 	}
+	ftruncate(c->fd[CTITLE_OUT], 0);
+	lseek(c->fd[CTITLE_OUT], 0, SEEK_SET);
+	dprintf(c->fd[CTITLE_OUT], "%s\n", title);
 	logmsg("Conference %s > Title > %s\n", c->numstr, title);
 }
 

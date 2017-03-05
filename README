@@ -64,6 +64,11 @@ to help explain the semantics of the individual files.
 |
 |-- id				# 'cat id' to show your own ID, you can give this to your friends
 |
+|-- conf			# managing conferences
+|   |-- err			# conference related errors
+|   |-- in			# 'echo "group title" >in' for creating a new group
+|   |-- out			# 'echo 1 >out/ID_COOKIE' for joining a conference
+|
 |-- name			# changing your nick
 |   |-- err			# nickname related errors
 |   |-- in			# 'echo my-new-nick > in' to change your name
