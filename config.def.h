@@ -30,6 +30,7 @@ static int                 ipv6        = 0;
 static int                 tcp         = 0;
 static int                 proxy       = 0;
 static TOX_PROXY_TYPE      proxytype   = TOX_PROXY_TYPE_SOCKS5; /* NONE, HTTP, SOCKS5 */
+static int                 quiet       = 0;
 static char     proxyaddr[] = "localhost";
 static uint16_t proxyport   = 8080;
 

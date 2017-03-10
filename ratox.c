@@ -2293,7 +2293,7 @@ toxshutdown(void)
 static void
 usage(void)
 {
-	eprintf("usage: %s [-4|-6] [-E|-e] [-T|-t] [-P|-p] [savefile]\n", argv0);
+	eprintf("usage: %s [-4|-6] [-E|-e] [-T|-t] [-P|-p] [-q] [savefile]\n", argv0);
 }
 
 int
@@ -2324,6 +2324,9 @@ main(int argc, char *argv[])
 	case 'p':
 		proxy = 0;
 		break;
+	case 'q':
+		quiet = 1;
+		break;
 	default:
 		usage();
 	} ARGEND;
@@ -2341,7 +2344,8 @@ main(int argc, char *argv[])
 	signal(SIGTERM, initshutdown);
 	signal(SIGPIPE, SIG_IGN);
 
-	printrat();
+	if (!quiet)
+		printrat();
 	toxinit();
 	localinit();
 	friendload();
