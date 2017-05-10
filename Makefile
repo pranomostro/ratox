@@ -3,10 +3,17 @@ include config.mk
 .POSIX:
 .SUFFIXES: .c .o
 
-HDR = arg.h config.h nodes.h readpassphrase.h util.h
+HDR = \
+	arg.h \
+	config.h \
+	nodes.h \
+	readpassphrase.h \
+	util.h
+
 LIB = \
 	eprintf.o \
 	readpassphrase.o
+
 SRC = \
 	ratox.c
 
