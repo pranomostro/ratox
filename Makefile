@@ -21,13 +21,9 @@ OBJ = $(SRC:.c=.o) $(LIB)
 BIN = $(SRC:.c=)
 MAN = $(SRC:.c=.1)
 
-all: binlib
+all: $(BIN)
 
-binlib: util.a
-	$(MAKE) bin
-
-bin: $(BIN)
-
+$(BIN): $(OBJ) util.a
 $(OBJ): $(HDR) config.mk
 
 config.h:
