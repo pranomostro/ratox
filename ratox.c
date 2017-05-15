@@ -494,7 +494,7 @@ cbconfinvite(Tox *m, uint32_t frnum, TOX_CONFERENCE_TYPE type, const uint8_t *co
 	uint8_t id[TOX_PUBLIC_KEY_SIZE];
 
 	if(type != TOX_CONFERENCE_TYPE_TEXT) {
-		logmsg(": Conference : Only text conference supported at the moment\n");
+		weprintf("Only text conferences supported at the moment\n");
 		return;
 	}
 
@@ -1708,6 +1708,9 @@ setname(void *data)
 	int     r;
 	char    name[TOX_MAX_NAME_LENGTH + 1];
 
+	ftruncate(gslots[NAME].fd[ERR], 0);
+	lseek(gslots[NAME].fd[ERR], 0, SEEK_SET);
+
 	n = fiforead(gslots[NAME].dirfd, &gslots[NAME].fd[IN],
 		     gfiles[IN], name, sizeof(name) - 1);
 	if (n <= 0)
@@ -1717,6 +1720,7 @@ setname(void *data)
 	name[n] = '\0';
 	r = tox_self_set_name(tox, (uint8_t *)name, n, NULL);
 	if (r < 0) {
+		dprintf(gslots[STATE].fd[ERR], "Failed to set name to \"%s\"\n", name);
 		weprintf("Failed to set name to \"%s\"\n", name);
 		return;
 	}
@@ -1734,6 +1738,9 @@ setstatus(void *data)
 	int     r;
 	uint8_t status[TOX_MAX_STATUS_MESSAGE_LENGTH + 1];
 
+	ftruncate(gslots[STATUS].fd[ERR], 0);
+	lseek(gslots[STATUS].fd[ERR], 0, SEEK_SET);
+
 	n = fiforead(gslots[STATUS].dirfd, &gslots[STATUS].fd[IN], gfiles[IN],
 		     status, sizeof(status) - 1);
 	if (n <= 0)
@@ -1743,6 +1750,7 @@ setstatus(void *data)
 	status[n] = '\0';
 	r = tox_self_set_status_message(tox, status, n, NULL);
 	if (r < 0) {
+		dprintf(gslots[STATUS].fd[ERR], "Failed so set status message to \"%s\"\n", status);
 		weprintf("Failed to set status message to \"%s\"\n", status);
 		return;
 	}
@@ -1760,6 +1768,9 @@ setuserstate(void *data)
 	ssize_t n;
 	char    buf[PIPE_BUF];
 
+	ftruncate(gslots[STATE].fd[ERR], 0);
+	lseek(gslots[STATE].fd[ERR], 0, SEEK_SET);
+
 	n = fiforead(gslots[STATE].dirfd, &gslots[STATE].fd[IN], gfiles[IN],
 		     buf, sizeof(buf) - 1);
 	if (n <= 0)
@@ -1774,12 +1785,11 @@ setuserstate(void *data)
 		}
 	}
 	if (i == LEN(ustate)) {
-		ftruncate(gslots[STATE].fd[ERR], 0);
-		lseek(gslots[STATE].fd[ERR], 0, SEEK_SET);
-		dprintf(gslots[STATE].fd[ERR], "invalid\n");
+		dprintf(gslots[STATE].fd[ERR], "Invalid state: %s\n", buf);
 		weprintf("Invalid state: %s\n", buf);
 		return;
 	}
+
 	ftruncate(gslots[STATE].fd[OUT], 0);
 	lseek(gslots[STATE].fd[OUT], 0, SEEK_SET);
 	dprintf(gslots[STATE].fd[OUT], "%s\n", buf);
@@ -1796,6 +1806,9 @@ sendfriendreq(void *data)
 	char   *msg = "ratox is awesome!";
 	uint8_t id[TOX_ADDRESS_SIZE];
 	TOX_ERR_FRIEND_ADD err;
+
+	ftruncate(gslots[REQUEST].fd[ERR], 0);
+	lseek(gslots[REQUEST].fd[ERR], 0, SEEK_SET);
 
 	n = fiforead(gslots[REQUEST].dirfd, &gslots[REQUEST].fd[IN], gfiles[IN],
 		     buf, sizeof(buf) - 1);
@@ -1818,19 +1831,17 @@ sendfriendreq(void *data)
 	}
 out:
 	if (strlen(buf) != sizeof(id) * 2) {
-		ftruncate(gslots[REQUEST].fd[ERR], 0);
-		lseek(gslots[REQUEST].fd[ERR], 0, SEEK_SET);
 		dprintf(gslots[REQUEST].fd[ERR], "Invalid friend ID\n");
+		weprintf("Invalid friend ID\n");
 		return;
 	}
 	str2id(buf, id);
 
 	r = tox_friend_add(tox, id, (uint8_t *)msg, strlen(msg), &err);
-	ftruncate(gslots[REQUEST].fd[ERR], 0);
-	lseek(gslots[REQUEST].fd[ERR], 0, SEEK_SET);
 
 	if (err != TOX_ERR_FRIEND_ADD_OK) {
 		dprintf(gslots[REQUEST].fd[ERR], "%s\n", reqerr[err]);
+		weprintf("%s\n", reqerr[err]);
 		return;
 	}
 	friendcreate(r);
@@ -1846,6 +1857,9 @@ setnospam(void *data)
 	uint8_t  nospam[2 * sizeof(uint32_t) + 1];
 	uint8_t  address[TOX_ADDRESS_SIZE];
 
+	ftruncate(gslots[NOSPAM].fd[ERR], 0);
+	lseek(gslots[NOSPAM].fd[ERR], 0, SEEK_SET);
+
 	n = fiforead(gslots[NOSPAM].dirfd, &gslots[NOSPAM].fd[IN], gfiles[IN],
 		     nospam, sizeof(nospam) - 1);
 	if (n <= 0)
@@ -1857,6 +1871,7 @@ setnospam(void *data)
 	for (i = 0; i < n; i++) {
 		if (nospam[i] < '0' || (nospam[i] > '9' && nospam[i] < 'A') || nospam[i] > 'F') {
 			dprintf(gslots[NOSPAM].fd[ERR], "Input contains invalid characters ![0-9, A-F]\n");
+			weprintf("Input contains invalid characters ![0-9, A-F]\n");
 			goto end;
 		}
 	}
@@ -1886,6 +1901,9 @@ newconf(void *data)
 	size_t n;
 	char *title, input[TOX_MAX_NAME_LENGTH + 2 + 1];
 
+	ftruncate(gslots[CONF].fd[ERR], 0);
+	lseek(gslots[CONF].fd[ERR], 0, SEEK_SET);
+
 	n = fiforead(gslots[CONF].dirfd, &gslots[CONF].fd[IN], gfiles[IN],
 		     input, sizeof(input) - 1);
 	if (n <= 0)
@@ -1894,10 +1912,12 @@ newconf(void *data)
 		n--;
 	input[n] = '\0';
 	if(!((input[0] == 't' || input[0] == 'a' || input[0] == 'v') && input[1] == ' ')) {
+		dprintf(gslots[CONF].fd[ERR], "No flag t|a|v found in input \"%s\"\n", input);
 		weprintf("No flag found in input\n");
 		return;
 	}
 	if(input[0] == 'a' || input[0] == 'v') {
+		dprintf(gslots[CONF].fd[ERR], "Conferences other than text not supported yet\n");
 		weprintf("Conferences other than text not supported yet\n");
 		return;
 	}
@@ -1905,6 +1925,7 @@ newconf(void *data)
 	n -= 2;
 	cnum = tox_conference_new(tox, NULL);
 	if (cnum == UINT32_MAX) {
+		dprintf(gslots[CONF].fd[ERR], "Failed to create new conference\n");
 		weprintf("Failed to create new conference\n");
 		return;
 	}
