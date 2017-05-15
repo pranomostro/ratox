@@ -62,9 +62,12 @@ Request slot.  Send a friend request by piping the Tox ID to \fBin\fR.  Incoming
 requests are listed as FIFOs in \fBout/\fR.  Echo \fB1\fR | \fB0\fR to
 accept | reject them.
 .It Ar conf/
-Conference management slot.  A conference is created by writing its title to \fBin\fR.  Invites
-to conferences are FIFOs in \fBout/\fR.  Their name is id_cookie (the cookie is random data).
-They behave like request FIFOs.
+Conference management slot.  A conference is created by writing and flag
+and its title to \fBin\fR. The flag is \fBt\fR | \fBa\fR | \fBv\fR for an
+text, audio  and video conference, followed by a space character. Only
+text conferences work at the moment. Invites to conferences are FIFOs
+in \fBout/\fR. Their name is id_cookie (the cookie is random data). They
+behave like request FIFOs.
 .El
 .Ss Friend slots
 Each friend is represented with a directory in the base-directory named after
@@ -126,7 +129,7 @@ Write here to change the title of the conference.
 .It Ar title_out
 Contains the title of the conference.
 .It Ar text_in
-Echo \fBmessage\fR to send a text message to the conference.
+Echo message to send a text message to the conference.
 .It Ar text_out
 Contains the messages send in the conference so far.
 .El

@@ -1884,15 +1884,25 @@ newconf(void *data)
 {
 	uint32_t cnum;
 	size_t n;
-	char title[TOX_MAX_NAME_LENGTH + 1];
+	char *title, input[TOX_MAX_NAME_LENGTH + 2 + 1];
 
 	n = fiforead(gslots[CONF].dirfd, &gslots[CONF].fd[IN], gfiles[IN],
-		     title, sizeof(title) - 1);
+		     input, sizeof(input) - 1);
 	if (n <= 0)
 		return;
-	if (title[n - 1] == '\n')
+	if (input[n - 1] == '\n')
 		n--;
-	title[n] = '\0';
+	input[n] = '\0';
+	if(!((input[0] == 't' || input[0] == 'a' || input[0] == 'v') && input[1] == ' ')) {
+		weprintf("No flag found in input\n");
+		return;
+	}
+	if(input[0] == 'a' || input[0] == 'v') {
+		weprintf("Conferences other than text not supported yet\n");
+		return;
+	}
+	title = input + 2;
+	n -= 2;
 	cnum = tox_conference_new(tox, NULL);
 	if (cnum == UINT32_MAX) {
 		weprintf("Failed to create new conference\n");
