@@ -562,7 +562,7 @@ cbconfmessage(Tox *m, uint32_t cnum, uint32_t pnum, TOX_MESSAGE_TYPE type, const
 			namt[tox_conference_peer_get_name_size(tox, c->num, pnum, NULL)] = '\0';
 			dprintf(c->fd[CTEXT_OUT], "%s <%s> %s\n", buft, namt, msg);
 			if (confmsg_log)
-				logmsg("%s: %s <%s> %s\n", c->numstr, buft, namt, msg);
+				logmsg("%s : %s <%s> %s\n", c->numstr, buft, namt, msg);
 			break;
 		}
 	}
@@ -712,7 +712,7 @@ cbconnstatus(Tox *m, uint32_t frnum, TOX_CONNECTION status, void *udata)
 		name[r] = '\0';
 	}
 
-	logmsg(": %s > %s\n", name, status == TOX_CONNECTION_NONE ? "Offline" : "Online");
+	logmsg(": %s : Connection > %s\n", name, status == TOX_CONNECTION_NONE ? "Offline" : "Online");
 
 	TAILQ_FOREACH(f, &friendhead, entry) {
 		if (f->num == frnum) {
@@ -790,7 +790,7 @@ cbfriendrequest(Tox *m, const uint8_t *id, const uint8_t *data, size_t len, void
 
 	TAILQ_INSERT_TAIL(&reqhead, req, entry);
 
-	logmsg("Request : %s > %s\n",
+	logmsg("Request > %s : %s\n",
 	       req->idstr, req->msg);
 }
 
@@ -933,7 +933,7 @@ cbfiledatareq(Tox *m, uint32_t frnum, uint32_t fnum, uint64_t pos, size_t flen, 
 
 	if (f->tx.n < 0) {
 		if (errno != EWOULDBLOCK)
-			weprintf("fiforead:");
+			weprintf("Reading data for file sending would block\n");
 		return;
 	}
 
@@ -1118,17 +1118,17 @@ invitefriend(struct conference *c)
 		if (!memcmp(buf, f->idstr, sizeof(f->idstr)-1))
 			break;
 	if (!f) {
-		logmsg("Conference %s > no friend with id %s found\n", c->numstr, buf);
+		weprintf("No friend with id %s found for %s\n", buf, c->numstr);
 		return;
 	}
 	if (tox_friend_get_connection_status(tox, f->num, NULL) == TOX_CONNECTION_NONE) {
-		logmsg("Conference %s > %s not online, can't be invited\n", c->numstr, buf);
+		weprintf("%s not online, can't be invited to %s\n", buf, c->numstr);
 		return;
 	}
 	if (!tox_conference_invite(tox, f->num, c->num, NULL))
 		weprintf("Failed to invite %s\n", buf);
 	else
-		logmsg("Conference %s > Invited %s\n", c->numstr, buf);
+		logmsg("- %s : Invited > %s\n", c->numstr, buf);
 }
 
 static void
@@ -1144,7 +1144,7 @@ sendconftext(struct conference *c)
 		n--;
 	if (!tox_conference_send_message(tox, c->num, TOX_MESSAGE_TYPE_NORMAL,
 	    buf, n, NULL))
-		weprintf("%s: Message : Failed to send, error %d\n", c->numstr);
+		weprintf("Failed to send message to %s\n", c->numstr);
 }
 
 static void
@@ -1160,13 +1160,13 @@ updatetitle(struct conference *c)
 		n--;
 	title[n] = '\0';
 	if (!tox_conference_set_title(tox, c->num, title, n, NULL)) {
-		weprintf("%s : Title : Failed to set to \"%s\"\n", title, c->numstr);
+		weprintf("Failed to set title for %s to \"%s\"\n", c->numstr, title);
 		return;
 	}
 	ftruncate(c->fd[CTITLE_OUT], 0);
 	lseek(c->fd[CTITLE_OUT], 0, SEEK_SET);
 	dprintf(c->fd[CTITLE_OUT], "%s\n", title);
-	logmsg("Conference %s > Title > %s\n", c->numstr, title);
+	logmsg("- %s : Title > %s\n", c->numstr, title);
 }
 
 static int
@@ -1176,7 +1176,7 @@ readpass(const char *prompt, uint8_t **target, uint32_t *len)
 
 	p = readpassphrase(prompt, pass, sizeof(pass), RPP_ECHO_OFF);
 	if (!p) {
-		weprintf("readpassphrase:");
+		weprintf("Could not read passphrase");
 		return -1;
 	}
 	if (p[0] == '\0')
@@ -1205,7 +1205,7 @@ reprompt1:
 			while (readpass("Data : Re-enter passphrase > ", &passphrase2, &pp2len) < 0);
 
 			if (pplen != pp2len || memcmp(passphrase, passphrase2, pplen)) {
-				weprintf("Data : Passphrase mismatch\n");
+				weprintf("Data passphrase mismatch\n");
 				goto reprompt1;
 			}
 			free(passphrase2);
@@ -1217,7 +1217,7 @@ reprompt1:
 	lseek(fd, 0, SEEK_SET);
 
 	if (sz == 0) {
-		weprintf("Data : %s > Empty\n", savefile);
+		weprintf("Datafile is empty\n", savefile);
 		return;
 	}
 
@@ -1250,7 +1250,7 @@ reprompt2:
 			while (readpass("Data : Re-enter passphrase > ", &passphrase2, &pp2len) < 0);
 
 			if (pplen != pp2len || memcmp(passphrase, passphrase2, pplen)) {
-				weprintf("Data : Passphrase mismatch\n");
+				weprintf("Data passphrase mismatch\n");
 				goto reprompt2;
 			}
 			free(passphrase2);
@@ -1343,7 +1343,7 @@ localinit(void)
 	/* Dump current name */
 	r = tox_self_get_name_size(tox);
 	if (r == 0) {
-		weprintf("Name : Empty\n");
+		logmsg("Name > Empty\n");
 	}
 	tox_self_get_name(tox, name);
 	name[r] = '\0';
@@ -1353,7 +1353,7 @@ localinit(void)
 	/* Dump status */
 	r = tox_self_get_status_message_size(tox);
 	if (r == 0) {
-		weprintf("Status : Empty\n");
+		logmsg("Status > Empty\n");
 	}
 	tox_self_get_status_message(tox, status);
 	status[r] = '\0';
@@ -1467,7 +1467,7 @@ toxconnect(void)
 		str2id(n->idstr, id);
 		r = tox_bootstrap(tox, ipv6 ? n->addr6 : n->addr4, n->port, id, NULL);
 		if (!r)
-			weprintf("Net : %s > Bootstrap failed\n", ipv6 ? n->addr6 : n->addr4);
+			weprintf("Bootstrap failed for %s\n", ipv6 ? n->addr6 : n->addr4);
 	}
 	return 0;
 }
@@ -1513,7 +1513,7 @@ friendcreate(uint32_t frnum)
 
 	i = tox_friend_get_name_size(tox, frnum, &err);
 	if (err != TOX_ERR_FRIEND_QUERY_OK) {
-		weprintf(": %ld : Name : Failed to get\n", (long)frnum);
+		weprintf("Failed to get name for %ld\n", (long)frnum);
 		return;
 	} else if (i == 0) {
 		snprintf(f->name, sizeof(f->name), "Anonymous");
@@ -1524,7 +1524,7 @@ friendcreate(uint32_t frnum)
 
 	f->num = frnum;
 	if (!tox_friend_get_public_key(tox, f->num, f->id, NULL)) {
-		weprintf(": %s: Key : Failed to get\n", f->name);
+		weprintf("Failed to get key for %s\n", f->name);
 		return;
 	}
 	id2str(f->id, f->idstr);
@@ -1563,7 +1563,7 @@ friendcreate(uint32_t frnum)
 	/* Dump status */
 	i = tox_friend_get_status_message_size(tox, frnum, NULL);
 	if (i == SIZE_MAX) {
-		weprintf(": %s : Status : Failed to get\n", f->name);
+		weprintf("Failed to get status for %s\n", f->name);
 		i = 0;
 	}
 	tox_friend_get_status_message(tox, frnum, status, NULL);
@@ -1642,7 +1642,7 @@ confcreate(uint32_t cnum)
 
 	TAILQ_INSERT_TAIL(&confhead, c, entry);
 
-	logmsg("Conference %s > Created\n", c->numstr);
+	logmsg("- %s > Created\n", c->numstr);
 }
 
 static void
@@ -1785,8 +1785,8 @@ setuserstate(void *data)
 		}
 	}
 	if (i == LEN(ustate)) {
-		dprintf(gslots[STATE].fd[ERR], "Invalid state: %s\n", buf);
-		weprintf("Invalid state: %s\n", buf);
+		dprintf(gslots[STATE].fd[ERR], "Invalid state %s\n", buf);
+		weprintf("Invalid state %s\n", buf);
 		return;
 	}
 
@@ -1794,7 +1794,7 @@ setuserstate(void *data)
 	lseek(gslots[STATE].fd[OUT], 0, SEEK_SET);
 	dprintf(gslots[STATE].fd[OUT], "%s\n", buf);
 	datasave();
-	logmsg(": State > %s\n", buf);
+	logmsg("State > %s\n", buf);
 }
 
 static void
@@ -2176,7 +2176,7 @@ loop(void)
 			if (FD_ISSET(c->fd[CINVITE], &rfds))
 				invitefriend(c);
 			if (FD_ISSET(c->fd[CLEAVE], &rfds)) {
-				logmsg("Conference %s > Leave\n", c->numstr);
+				logmsg("- %s > Leave\n", c->numstr);
 				tox_conference_delete(tox, c->num, NULL);
 				confdestroy(c);
 			}
@@ -2216,7 +2216,7 @@ loop(void)
 					}
 
 					f->av.state |= RINGING;
-					logmsg(": %s : Audio : Tx > Inviting\n", f->name);
+					logmsg(": %s : Audio > Tx Inviting\n", f->name);
 				}
 				if (!(f->av.state & OUTGOING)) {
 					c0 = time(NULL);
