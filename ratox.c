@@ -2310,7 +2310,7 @@ toxshutdown(void)
 				if (gslots[s].fd[m] != -1)
 					close(gslots[s].fd[m]);
 			}
-			}
+		}
 		rmdir(gslots[s].name);
 	}
 	unlink("id");
