@@ -132,12 +132,6 @@ static struct node nodes[] = {
 		.idstr = "672DBE27B4ADB9D5FB105A6BB648B2F8FDB89B3323486A7A21968316E012023C"
 	},
 	{
-		.addr4 = "tox.dzenspace.ru",
-		.addr6 = "tox.dzenspace.ru",
-		.port = 33445,
-		.idstr = "80EF8660D9C5ACE1577BAB031375A0F08284CBFD9F810A857955DCC87377FC4D"
-	},
-	{
 		.addr4 = "163.172.136.118",
 		.addr6 = "2001:bc8:4400:2100::1c:50f",
 		.port = 33445,
@@ -210,18 +204,6 @@ static struct node nodes[] = {
 		.idstr = "2555763C8C460495B14157D234DD56B86300A2395554BCAE4621AC345B8C1B1B"
 	},
 	{
-		.addr4 = "77.37.160.178",
-		.addr6 = NULL,
-		.port = 33440,
-		.idstr = "CE678DEAFA29182EFD1B0C5B9BC6999E5A20B50A1A6EC18B91C8EBB591712416"
-	},
-	{
-		.addr4 = "77.37.142.179",
-		.addr6 = NULL,
-		.port = 33445,
-		.idstr = "98F5830A426C6BF165F895F04B897AFC4F57331B4BE0561F583C9F323194227B"
-	},
-	{
 		.addr4 = "85.21.144.224",
 		.addr6 = NULL,
 		.port = 33445,
@@ -238,12 +220,6 @@ static struct node nodes[] = {
 		.addr6 = NULL,
 		.port = 33445,
 		.idstr = "BEB71F97ED9C99C04B8489BB75579EB4DC6AB6F441B603D63533122F1858B51D"
-	},
-	{
-		.addr4 = "plfgr.eu.org",
-		.addr6 = "plfgr.eu.org",
-		.port = 33445,
-		.idstr = "F5A2E533EC720927FA970F508D949D5958F37889F039F50C905010244842656E"
 	},
 	{
 		.addr4 = "completelyunoriginal.moe",
@@ -274,5 +250,29 @@ static struct node nodes[] = {
 		.addr6 = "2a03:b0c0:3:d0::ac:5001",
 		.port = 443,
 		.idstr = "CD133B521159541FB1D326DE9850F5E56A6C724B5B8E5EB5CD8D950408E95707"
+	},
+	{
+		.addr4 = "77.37.160.178",
+		.addr6 = NULL,
+		.port = 33440,
+		.idstr = "CE678DEAFA29182EFD1B0C5B9BC6999E5A20B50A1A6EC18B91C8EBB591712416"
+	},
+	{
+		.addr4 = "77.37.142.179",
+		.addr6 = NULL,
+		.port = 33445,
+		.idstr = "98F5830A426C6BF165F895F04B897AFC4F57331B4BE0561F583C9F323194227B"
+	},
+	{
+		.addr4 = "plfgr.eu.org",
+		.addr6 = "plfgr.eu.org",
+		.port = 33445,
+		.idstr = "F5A2E533EC720927FA970F508D949D5958F37889F039F50C905010244842656E"
+	},
+	{
+		.addr4 = "51.15.54.207",
+		.addr6 = "2001:bc8:4700:2300::28:80d",
+		.port = 33445,
+		.idstr = "1E64DBA45EC810C0BF3A96327DC8A9D441AB262C14E57FCE11ECBCE355305239"
 	}
 };
