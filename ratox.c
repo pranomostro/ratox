@@ -1218,7 +1218,10 @@ reprompt1:
 	lseek(fd, 0, SEEK_SET);
 
 	if (sz == 0) {
-		weprintf("Datafile is empty\n", savefile);
+		weprintf("Datafile %s is empty\n", savefile);
+		return;
+	} else if (sz < 0) {
+		weprintf("Datafile %s can't be seeked\n", savefile);
 		return;
 	}
 
@@ -1369,7 +1372,7 @@ localinit(void)
 	/* Dump ID */
 	idfd = open("id", O_WRONLY | O_CREAT, 0666);
 	if (idfd < 0)
-		eprintf("open %s:", "id");
+		eprintf("open id:");
 	tox_self_get_address(tox, address);
 	for (i = 0; i < TOX_ADDRESS_SIZE; i++)
 		dprintf(idfd, "%02X", address[i]);
