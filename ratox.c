@@ -50,7 +50,8 @@ const char *callerr[] = {
 struct node {
 	char    *addr4;
 	char    *addr6;
-	uint16_t port;
+	uint16_t udp_port;
+	uint16_t tcp_port;
 	char    *idstr;
 };
 
@@ -1465,9 +1466,13 @@ toxconnect(void)
 		if (ipv6 && !n->addr6)
 			continue;
 		str2id(n->idstr, id);
-		r = tox_bootstrap(tox, ipv6 ? n->addr6 : n->addr4, n->port, id, NULL);
+		r = tox_bootstrap(tox, ipv6 ? n->addr6 : n->addr4, n->udp_port, id, NULL);
 		if (!r)
 			weprintf("Bootstrap failed for %s\n", ipv6 ? n->addr6 : n->addr4);
+		str2id(n->idstr, id);
+		r += tox_add_tcp_relay(tox, ipv6 ? n->addr6 : n->addr4, n->tcp_port, id, NULL);
+		if (!r)
+			weprintf("Adding a relay failed for %s\n", ipv6 ? n->addr6 : n->addr4);
 	}
 	return 0;
 }

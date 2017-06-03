@@ -3,7 +3,10 @@
 echo 'static struct node nodes[] = {'
 
 curl -s https://nodes.tox.chat/json |
-jq --tab '[.nodes[] | select(.last_ping > 0) | {".addr4": .ipv4, ".addr6": .ipv6, ".port": .port, ".idstr": .public_key}]' |
-sed 's/"-"/NULL/; s/"\(\.[0-9a-z]\+\)":/\1 =/; 1d; $d'
+jq --tab '[.nodes[] |
+	select(.last_ping > 0) |
+	select(.tcp_ports | length > 0) |
+	{".addr4": .ipv4, ".addr6": .ipv6, ".udp_port": .port, ".tcp_port": .tcp_ports[0], ".idstr": .public_key}]' |
+sed 's/"-"/NULL/; s/"\(\.[0-9a-z_]\+\)":/\1 =/; 1d; $d'
 
 echo '};'
