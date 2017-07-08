@@ -1075,6 +1075,8 @@ static void
 sendfriendtext(struct friend *f)
 {
 	ssize_t n;
+	time_t  t;
+	char buft[64];
 	uint8_t buf[TOX_MAX_MESSAGE_LENGTH];
 	TOX_ERR_FRIEND_SEND_MESSAGE err;
 
@@ -1086,6 +1088,11 @@ sendfriendtext(struct friend *f)
 	tox_friend_send_message(tox, f->num, TOX_MESSAGE_TYPE_NORMAL, buf, n, &err);
 	if (err != TOX_ERR_FRIEND_SEND_MESSAGE_OK)
 		weprintf("Failed to send message\n");
+
+	buf[n]='\0';
+	t = time(NULL);
+	strftime(buft, sizeof(buft), "%F %R", localtime(&t));
+	dprintf(f->fd[FTEXT_OUT], "me %s %s\n", buft, buf);
 }
 
 static void
