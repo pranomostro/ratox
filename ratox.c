@@ -1077,10 +1077,10 @@ sendfriendtext(struct friend *f)
 	ssize_t n;
 	time_t  t;
 	char buft[64];
-	uint8_t buf[TOX_MAX_MESSAGE_LENGTH];
+	uint8_t buf[TOX_MAX_MESSAGE_LENGTH + 1];
 	TOX_ERR_FRIEND_SEND_MESSAGE err;
 
-	n = fiforead(f->dirfd, &f->fd[FTEXT_IN], ffiles[FTEXT_IN], buf, sizeof(buf));
+	n = fiforead(f->dirfd, &f->fd[FTEXT_IN], ffiles[FTEXT_IN], buf, sizeof(buf) - 1);
 	if (n <= 0)
 		return;
 	if (buf[n - 1] == '\n' && n > 1)
@@ -1143,9 +1143,11 @@ static void
 sendconftext(struct conference *c)
 {
 	ssize_t n;
-	uint8_t buf[TOX_MAX_MESSAGE_LENGTH];
+	time_t  t;
+	char    buft[64];
+	uint8_t buf[TOX_MAX_MESSAGE_LENGTH + 1], me[TOX_MAX_NAME_LENGTH + 1];
 
-	n = fiforead(c->dirfd, &c->fd[CTEXT_IN], cfiles[CTEXT_IN], buf, sizeof(buf));
+	n = fiforead(c->dirfd, &c->fd[CTEXT_IN], cfiles[CTEXT_IN], buf, sizeof(buf) - 1);
 	if (n <= 0)
 		return;
 	if (buf[n - 1] == '\n' && n > 1)
@@ -1153,6 +1155,13 @@ sendconftext(struct conference *c)
 	if (!tox_conference_send_message(tox, c->num, TOX_MESSAGE_TYPE_NORMAL,
 	    buf, n, NULL))
 		weprintf("Failed to send message to %s\n", c->numstr);
+
+	buf[n] = '\0';
+	t = time(NULL);
+	strftime(buft, sizeof(buft), "%F %R", localtime(&t));
+	tox_self_get_name(tox, me);
+	me[tox_self_get_name_size(tox)] = '\0';
+	dprintf(c->fd[CTEXT_OUT], "%s <%s> %s\n", buft, me, buf);
 }
 
 static void
