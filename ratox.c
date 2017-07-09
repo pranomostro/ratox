@@ -1937,7 +1937,7 @@ newconf(void *data)
 	input[n] = '\0';
 	if(!((input[0] == 't' || input[0] == 'a' || input[0] == 'v') && input[1] == ' ')) {
 		dprintf(gslots[CONF].fd[ERR], "No flag t|a|v found in input \"%s\"\n", input);
-		weprintf("No flag found in input\n");
+		weprintf("No flag t|a|v found in input\n");
 		return;
 	}
 	if(input[0] == 'a' || input[0] == 'v') {
