@@ -149,6 +149,9 @@ On the receiver side (the server):
 Now on the client run the following:
 ssh -o ProxyCommand="nc %h 1234" user@localhost
 
+This can of course be more easily achieved by using
+[tuntox](https://github.com/gjedeer/tuntox).
+
 Screencasting using ffmpeg and mplayer
 --------------------------------------
 
