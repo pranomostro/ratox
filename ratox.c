@@ -2214,21 +2214,17 @@ loop(void)
 			ftmp = TAILQ_NEXT(f, entry);
 			if (FD_ISSET(f->fd[FTEXT_IN], &rfds))
 				sendfriendtext(f);
-			if (FD_ISSET(f->fd[FFILE_IN], &rfds)) {
-				switch (f->tx.state) {
-				case TRANSFER_NONE:
-					/* Prepare a new transfer */
-					snprintf(tstamp, sizeof(tstamp), "%lu", (unsigned long)time(NULL));
-					f->tx.fnum = tox_file_send(tox, f->num, TOX_FILE_KIND_DATA, UINT64_MAX,
-					                           NULL, (uint8_t *)tstamp, strlen(tstamp), NULL);
-					if (f->tx.fnum == UINT32_MAX) {
-						weprintf("Failed to initiate new transfer\n");
-						fiforeset(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN]);
-					} else {
-						f->tx.state = TRANSFER_INITIATED;
-						logmsg(": %s : Tx > Initiated\n", f->name);
-					}
-					break;
+			if (FD_ISSET(f->fd[FFILE_IN], &rfds) && f->tx.state == TRANSFER_NONE) {
+				/* Prepare a new transfer */
+				snprintf(tstamp, sizeof(tstamp), "%lu", (unsigned long)time(NULL));
+				f->tx.fnum = tox_file_send(tox, f->num, TOX_FILE_KIND_DATA, UINT64_MAX,
+				                           NULL, (uint8_t *)tstamp, strlen(tstamp), NULL);
+				if (f->tx.fnum == UINT32_MAX) {
+					weprintf("Failed to initiate new transfer\n");
+					fiforeset(f->dirfd, &f->fd[FFILE_IN], ffiles[FFILE_IN]);
+				} else {
+					f->tx.state = TRANSFER_INITIATED;
+					logmsg(": %s : Tx > Initiated\n", f->name);
 				}
 			}
 			if (FD_ISSET(f->fd[FCALL_IN], &rfds)) {
