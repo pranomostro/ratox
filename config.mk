@@ -8,6 +8,6 @@ MANPREFIX = $(PREFIX)/share/man
 CC = cc
 LD = $(CC)
 CPPFLAGS = -DVERSION=\"${VERSION}\"
-CFLAGS   = -I/usr/local/include -Wall -Wunused $(CPPFLAGS)
-LDFLAGS  = -L/usr/local/lib
-LDLIBS   = -ltoxcore -ltoxav -ltoxencryptsave -lsodium -lopus -lvpx -lm -lpthread
+CFLAGS   = -I/usr/local/include -Wall -Wunused $(CPPFLAGS) -g
+LDFLAGS  = -L/usr/local/lib64 -g
+LDLIBS   = -ltoxcore -lsodium -lopus -lvpx -lm -lpthread
