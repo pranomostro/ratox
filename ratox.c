@@ -244,7 +244,7 @@ static void cbfiledata(Tox *, uint32_t, uint32_t, uint64_t, const uint8_t *, siz
 static void cbconfinvite(Tox *, uint32_t, TOX_CONFERENCE_TYPE, const uint8_t *, size_t, void *);
 static void cbconfmessage(Tox *, uint32_t, uint32_t, TOX_MESSAGE_TYPE, const uint8_t *, size_t, void *);
 static void cbconftitle(Tox *, uint32_t, uint32_t, const uint8_t *, size_t, void *);
-static void cbconfmembers(Tox *, uint32_t, uint32_t, TOX_CONFERENCE_STATE_CHANGE, void *);
+static void cbconfmembers(Tox *, uint32_t, void *);
 
 static void canceltxtransfer(struct friend *);
 static void cancelrxtransfer(struct friend *);
@@ -590,7 +590,7 @@ cbconftitle(Tox *m, uint32_t cnum, uint32_t pnum, const uint8_t *data, size_t le
 }
 
 static void
-cbconfmembers(Tox *m, uint32_t cnum, uint32_t pnum, TOX_CONFERENCE_STATE_CHANGE type, void *udata)
+cbconfmembers(Tox *m, uint32_t cnum, void *udata)
 {
 	struct  conference *c;
 
@@ -1453,7 +1453,7 @@ toxinit(void)
 	tox_callback_conference_invite(tox, cbconfinvite);
 	tox_callback_conference_message(tox, cbconfmessage);
 	tox_callback_conference_title(tox, cbconftitle);
-	tox_callback_conference_namelist_change(tox, cbconfmembers);
+	tox_callback_conference_peer_list_changed(tox, cbconfmembers);
 
 	if (toxopt.savedata_data)
 		free((void *)toxopt.savedata_data);
