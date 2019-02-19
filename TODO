@@ -1,0 +1,2 @@
+Find out whether one can prevent linux from writing the arguments into /proc/pid/cmdline.
+Or if they can be overwritten.
