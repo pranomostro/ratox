@@ -2350,6 +2350,8 @@ usage(void)
 int
 main(int argc, char *argv[])
 {
+	char* pwd;
+	passphrase=NULL;
 	ARGBEGIN {
 	case '4':
 		ipv6 = 0;
@@ -2378,6 +2380,12 @@ main(int argc, char *argv[])
 	case 'q':
 		quiet = 1;
 		break;
+	case 'r':
+		pwd=EARGF(usage);
+		passphrase=malloc(sizeof(uint8_t)*strlen(pwd));
+		memcpy(passphrase, pwd, 1+strlen(pwd));
+		memset(pwd, 0, strlen(pwd));
+		break;
 	default:
 		usage();
 	} ARGEND;
@@ -2402,5 +2410,8 @@ main(int argc, char *argv[])
 	friendload();
 	loop();
 	toxshutdown();
+
+	free(passphrase);
+
 	return 0;
 }
