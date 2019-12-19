@@ -10,15 +10,15 @@ static struct node nodes[] = {
 		.addr4 = "85.143.221.42",
 		.addr6 = "2a04:ac00:1:9f00:5054:ff:fe01:becd",
 		.udp_port = 33445,
-		.tcp_port = 3389,
+		.tcp_port = 33445,
 		.idstr = "DA4E4ED4B697F2E9B000EEFE3A34B554ACD3F45F5C96EAEA2516DD7FF9AF7B43"
 	},
 	{
-		.addr4 = "163.172.136.118",
-		.addr6 = "2001:bc8:4400:2100::13:41d",
+		.addr4 = "tox.verdict.gg",
+		.addr6 = NULL,
 		.udp_port = 33445,
-		.tcp_port = 3389,
-		.idstr = "2C289F9F37C20D09DA83565588BF496FAB3764853FA38141817A72E3F18ACA0B"
+		.tcp_port = 33445,
+		.idstr = "1C5293AEF2114717547B39DA8EA6F1E331E5E358B35F9B6B5F19317911C5F976"
 	},
 	{
 		.addr4 = "78.46.73.141",
@@ -26,13 +26,6 @@ static struct node nodes[] = {
 		.udp_port = 33445,
 		.tcp_port = 33445,
 		.idstr = "02807CF4F8BB8FB390CC3794BDF1E8449E9A8392C5D3F2200019DA9F1E812E46"
-	},
-	{
-		.addr4 = "tox.initramfs.io",
-		.addr6 = "tox.initramfs.io",
-		.udp_port = 33445,
-		.tcp_port = 3389,
-		.idstr = "3F0A45A268367C1BEA652F258C85F4A66DA76BCAA667A49E770BCC4917AB6A25"
 	},
 	{
 		.addr4 = "tox.neuland.technology",
@@ -59,14 +52,14 @@ static struct node nodes[] = {
 		.addr4 = "37.48.122.22",
 		.addr6 = "2001:1af8:4700:a115:6::b",
 		.udp_port = 33445,
-		.tcp_port = 3389,
+		.tcp_port = 33445,
 		.idstr = "1B5A8AB25FFFB66620A531C4646B47F0F32B74C547B30AF8BD8266CA50A3AB59"
 	},
 	{
 		.addr4 = "tox.novg.net",
 		.addr6 = NULL,
 		.udp_port = 33445,
-		.tcp_port = 3389,
+		.tcp_port = 33445,
 		.idstr = "D527E5847F8330D628DAB1814F0A422F6DC9D0A300E6C357634EE2DA88C35463"
 	},
 	{
@@ -75,6 +68,13 @@ static struct node nodes[] = {
 		.udp_port = 33445,
 		.tcp_port = 33445,
 		.idstr = "257744DBF57BE3E117FE05D145B5F806089428D4DCE4E3D0D50616AA16D9417E"
+	},
+	{
+		.addr4 = "185.14.30.213",
+		.addr6 = "2a00:1ca8:a7::e8b",
+		.udp_port = 443,
+		.tcp_port = 33445,
+		.idstr = "2555763C8C460495B14157D234DD56B86300A2395554BCAE4621AC345B8C1B1B"
 	},
 	{
 		.addr4 = "198.199.98.108",
@@ -98,13 +98,6 @@ static struct node nodes[] = {
 		.idstr = "82EF82BA33445A1F91A7DB27189ECFC0C013E06E3DA71F588ED692BED625EC23"
 	},
 	{
-		.addr4 = "116.196.77.132",
-		.addr6 = NULL,
-		.udp_port = 33445,
-		.tcp_port = 3389,
-		.idstr = "040326E850DDCB49B1B2D9E3E2789D425774E4C5D783A55C09A024D05D2A8A66"
-	},
-	{
 		.addr4 = "87.118.126.207",
 		.addr6 = NULL,
 		.udp_port = 33445,
@@ -115,14 +108,35 @@ static struct node nodes[] = {
 		.addr4 = "81.169.136.229",
 		.addr6 = "2a01:238:4254:2a00:7aca:fe8c:68e0:27ec",
 		.udp_port = 33445,
-		.tcp_port = 3389,
-		.idstr = "D031DAC44F00464D3C9636F9850BF0064BC37FEB55789A13B6F59052CAE8A958"
+		.tcp_port = 33445,
+		.idstr = "E0DB78116AC6500398DDBA2AEEF3220BB116384CAB714C5D1FCD61EA2B69D75E"
 	},
 	{
 		.addr4 = "205.185.115.131",
 		.addr6 = NULL,
 		.udp_port = 53,
-		.tcp_port = 33445,
+		.tcp_port = 53,
 		.idstr = "3091C6BEB2A993F1C6300C16549FABA67098FF3D62C6D253828B531470B53D68"
+	},
+	{
+		.addr4 = "tox2.abilinski.com",
+		.addr6 = "tox2.abilinski.com",
+		.udp_port = 33445,
+		.tcp_port = 33445,
+		.idstr = "7A6098B590BDC73F9723FC59F82B3F9085A64D1B213AAF8E610FD351930D052D"
+	},
+	{
+		.addr4 = "floki.blog",
+		.addr6 = NULL,
+		.udp_port = 33445,
+		.tcp_port = 33445,
+		.idstr = "6C6AF2236F478F8305969CCFC7A7B67C6383558FF87716D38D55906E08E72667"
+	},
+	{
+		.addr4 = "51.158.146.76",
+		.addr6 = "2001:bc8:6010:213:208:a2ff:fe0c:7fee",
+		.udp_port = 33445,
+		.tcp_port = 33445,
+		.idstr = "E940D8FA9B07C1D13EA4ECF9F06B66F565F1CF61F094F60C67FDC8ADD3F4BA59"
 	}
 };
