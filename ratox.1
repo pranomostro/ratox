@@ -1,4 +1,4 @@
-.Dd March 10, 2017
+.Dd December 20, 2019
 .Dt RATOX 1
 .Os
 .Sh NAME
@@ -10,6 +10,7 @@
 .Op Fl E | Fl e
 .Op Fl T | Fl t
 .Op Fl P | Fl p
+.Op Fl r Ar pwd
 .Op Fl q
 .Op Ar savefile
 .Sh DESCRIPTION
@@ -27,6 +28,10 @@ Enable/Disable TCP mode.  Avoiding UDP in tox implies certain security
 considerations.
 .It Fl P p
 Enable/Disable TCP HTTP/SOCKS5 proxy as specified in \fIconfig.h\fR.
+.It Fl r Ar pwd
+Use
+.Ar pwd
+as the password for encrypting/decrypting the savefile.
 .It Fl q
 Enable quiet mode.
 .It Ar savefile
