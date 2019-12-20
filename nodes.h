@@ -10,14 +10,14 @@ static struct node nodes[] = {
 		.addr4 = "85.143.221.42",
 		.addr6 = "2a04:ac00:1:9f00:5054:ff:fe01:becd",
 		.udp_port = 33445,
-		.tcp_port = 33445,
+		.tcp_port = 3389,
 		.idstr = "DA4E4ED4B697F2E9B000EEFE3A34B554ACD3F45F5C96EAEA2516DD7FF9AF7B43"
 	},
 	{
 		.addr4 = "tox.verdict.gg",
 		.addr6 = NULL,
 		.udp_port = 33445,
-		.tcp_port = 33445,
+		.tcp_port = 3389,
 		.idstr = "1C5293AEF2114717547B39DA8EA6F1E331E5E358B35F9B6B5F19317911C5F976"
 	},
 	{
@@ -38,7 +38,7 @@ static struct node nodes[] = {
 		.addr4 = "144.217.167.73",
 		.addr6 = NULL,
 		.udp_port = 33445,
-		.tcp_port = 3389,
+		.tcp_port = 33445,
 		.idstr = "7E5668E0EE09E19F320AD47902419331FFEE147BB3606769CFBE921A2A2FD34C"
 	},
 	{
@@ -52,7 +52,7 @@ static struct node nodes[] = {
 		.addr4 = "37.48.122.22",
 		.addr6 = "2001:1af8:4700:a115:6::b",
 		.udp_port = 33445,
-		.tcp_port = 33445,
+		.tcp_port = 3389,
 		.idstr = "1B5A8AB25FFFB66620A531C4646B47F0F32B74C547B30AF8BD8266CA50A3AB59"
 	},
 	{
@@ -82,13 +82,6 @@ static struct node nodes[] = {
 		.udp_port = 33445,
 		.tcp_port = 3389,
 		.idstr = "BEF0CFB37AF874BD17B9A8F9FE64C75521DB95A37D33C5BDB00E9CF58659C04F"
-	},
-	{
-		.addr4 = "52.53.185.100",
-		.addr6 = NULL,
-		.udp_port = 33445,
-		.tcp_port = 33445,
-		.idstr = "A04F5FE1D006871588C8EC163676458C1EC75B20B4A147433D271E1E85DAF839"
 	},
 	{
 		.addr4 = "tox.kurnevsky.net",
