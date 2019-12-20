@@ -254,6 +254,7 @@ static void invitefriend(struct conference *);
 static void sendconftext(struct conference *);
 static void updatetitle(struct conference *);
 static int readpass(const char *, uint8_t **, uint32_t *);
+static void getnewpass(void);
 static void dataload(struct Tox_Options *);
 static void datasave(void);
 static int localinit(void);
@@ -1207,26 +1208,32 @@ readpass(const char *prompt, uint8_t **target, uint32_t *len)
 }
 
 static void
+getnewpass(void)
+{
+	uint32_t pp2len = 0;
+	uint8_t	*passphrase2 = NULL;
+reprompt:
+	while (readpass("Data : New passphrase > ", &passphrase, &pplen) < 0);
+	while (readpass("Data : Re-enter passphrase > ", &passphrase2, &pp2len) < 0);
+
+	if (pplen != pp2len || memcmp(passphrase, passphrase2, pplen)) {
+		weprintf("Data passphrase mismatch\n");
+		goto reprompt;
+	}
+	free(passphrase2);
+}
+
+static void
 dataload(struct Tox_Options *toxopt)
 {
 	off_t    sz;
-	uint32_t pp2len = 0;
-	int      fd;
-	uint8_t *data, * intermediate, *passphrase2 = NULL;
+	int      fd, cmdpass = (passphrase != NULL);
+	uint8_t *data, * intermediate;
 
 	fd = open(savefile, O_RDONLY);
 	if (fd < 0) {
-		if (encryptsavefile) {
-reprompt1:
-			while (readpass("Data : New passphrase > ", &passphrase, &pplen) < 0);
-			while (readpass("Data : Re-enter passphrase > ", &passphrase2, &pp2len) < 0);
-
-			if (pplen != pp2len || memcmp(passphrase, passphrase2, pplen)) {
-				weprintf("Data passphrase mismatch\n");
-				goto reprompt1;
-			}
-			free(passphrase2);
-		}
+		if (encryptsavefile && !cmdpass)
+			getnewpass();
 		return;
 	}
 
@@ -1255,8 +1262,14 @@ reprompt1:
 			eprintf("malloc:");
 		if (!encryptsavefile)
 			logmsg("Data : %s > Encrypted, but saving unencrypted\n", savefile);
-		while (readpass("Data : Passphrase > ", &passphrase, &pplen) < 0 ||
-		       !tox_pass_decrypt(intermediate, sz, passphrase, pplen, data, NULL));
+
+		while ((!cmdpass && readpass("Data : Passphrase > ", &passphrase, &pplen) < 0) ||
+			!tox_pass_decrypt(intermediate, sz, passphrase, pplen, data, NULL)) {
+			if (cmdpass) {
+				weprintf("Datafile %s can't be decrypted\n", savefile);
+				return;
+			}
+		}
 	} else {
 		toxopt->savedata_length = sz;
 		data = malloc(sz);
@@ -1265,15 +1278,8 @@ reprompt1:
 		memcpy(data, intermediate, sz);
 		if (encryptsavefile) {
 			logmsg("Data : %s > Not encrypted, but saving encrypted\n", savefile);
-reprompt2:
-			while (readpass("Data : New passphrase > ", &passphrase, &pplen) < 0);
-			while (readpass("Data : Re-enter passphrase > ", &passphrase2, &pp2len) < 0);
-
-			if (pplen != pp2len || memcmp(passphrase, passphrase2, pplen)) {
-				weprintf("Data passphrase mismatch\n");
-				goto reprompt2;
-			}
-			free(passphrase2);
+			if(!cmdpass)
+				getnewpass();
 		}
 	}
 
@@ -2382,9 +2388,11 @@ main(int argc, char *argv[])
 		break;
 	case 'r':
 		pwd=EARGF(usage);
-		passphrase=malloc(sizeof(uint8_t)*strlen(pwd));
+		passphrase = malloc(sizeof(uint8_t)*strlen(pwd));
+		pplen = sizeof(uint8_t)*strlen(pwd);
 		memcpy(passphrase, pwd, 1+strlen(pwd));
 		memset(pwd, 0, strlen(pwd));
+		encryptsavefile = 1;
 		break;
 	default:
 		usage();
