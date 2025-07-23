@@ -227,6 +227,7 @@ static void cbcallinvite(ToxAV *, uint32_t, bool, bool, void *);
 static void cbcallstate(ToxAV *, uint32_t, uint32_t, void *);
 static void cbcalldata(ToxAV *, uint32_t, const int16_t *, size_t, uint8_t, uint32_t, void *);
 
+static void cleanupcall(struct friend *);
 static void cancelcall(struct friend *, char *);
 static void sendfriendcalldata(struct friend *);
 static void writemembers(struct conference *);
@@ -427,7 +428,8 @@ cbcallstate(ToxAV *av, uint32_t fnum, uint32_t state, void *udata)
 	if ((state & TOXAV_FRIEND_CALL_STATE_ERROR)
 	    || (state & TOXAV_FRIEND_CALL_STATE_FINISHED)) {
 		f->av.state &= ~TRANSMITTING;
-		cancelcall(f, "Finished");
+		logmsg(": %s : Audio > Finished\n", f->name);
+		cleanupcall(f);
 		return;
 	}
 
@@ -604,14 +606,8 @@ cbconfmembers(Tox *m, uint32_t cnum, void *udata)
 }
 
 static void
-cancelcall(struct friend *f, char *action)
+cleanupcall(struct friend *f)
 {
-	logmsg(": %s : Audio > %s\n", f->name, action);
-
-	if (f->av.state & TRANSMITTING || f->av.state & RINGING) {
-		if (!toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, NULL))
-			weprintf("Failed to terminate call\n");
-	}
 	f->av.state = 0;
 
 	/* Cancel Rx side of the call */
@@ -627,6 +623,18 @@ cancelcall(struct friend *f, char *action)
 	free(f->av.frame);
 	f->av.frame = NULL;
 	fiforeset(f->dirfd, &f->fd[FCALL_IN], ffiles[FCALL_IN]);
+}
+
+static void
+cancelcall(struct friend *f, char *action)
+{
+	logmsg(": %s : Audio > %s\n", f->name, action);
+
+	if (f->av.state & TRANSMITTING || f->av.state & RINGING) {
+		if (!toxav_call_control(toxav, f->num, TOXAV_CALL_CONTROL_CANCEL, NULL))
+			weprintf("Failed to terminate call\n");
+	}
+	cleanupcall(f);
 }
 
 static void
